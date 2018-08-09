@@ -16,7 +16,7 @@ pub struct Header {
     miner: Option<Address>,
 }
 
-pub trait Base {
+pub trait Rooted {
     fn get_merkle_root(&self) -> Vec<u8>;
     fn get_time_stamp(&self) -> u64;
     fn get_difficulty(&self) -> f64;
@@ -51,7 +51,7 @@ impl Header {
                    }
     }
 
-    pub fn prehash<Header: Base + Raw>(header: Header) -> Result<Vec<u8>, String> {
+    pub fn prehash<Header: Rooted + Raw>(header: Header) -> Result<Vec<u8>, String> {
         let mut proto_header = HeaderPrehash::new();
         proto_header.set_merkleRoot(header.get_merkle_root());
         proto_header.set_timeStamp(header.get_time_stamp());
@@ -69,7 +69,7 @@ impl Header {
 }
 
 impl Encode for Header 
-    where Header: Base + Raw + Mined {
+    where Header: Rooted + Raw + Mined {
     fn encode(&self) -> Result<Vec<u8>, String> {
         let mut proto_block_header = BlockHeader::new();
         let merkle_root = self.merkle_root.clone();
@@ -92,7 +92,7 @@ impl Encode for Header
     }
 }
 
-impl Base for Header {
+impl Rooted for Header {
     fn get_merkle_root(&self) -> Vec<u8> {
         self.merkle_root.clone()
     }

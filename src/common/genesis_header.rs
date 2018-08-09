@@ -1,4 +1,4 @@
-use common::header::{Base, Header};
+use common::header::{Rooted, Header};
 use common::Encode;
 use serialization::blockHeader::BlockHeader;
 use protobuf::Message;
@@ -6,7 +6,7 @@ use protobuf::Message;
 pub struct GenesisHeader<T>(T);
 
 impl Encode for GenesisHeader<Header> 
-    where Header: Base {
+    where Header: Rooted {
     fn encode(&self) -> Result<Vec<u8>, String> {
         let mut proto_genesis_block_header = BlockHeader::new();
         proto_genesis_block_header.set_merkleRoot(self.0.get_merkle_root());
@@ -25,6 +25,22 @@ impl Encode for GenesisHeader<Header>
         }
     }
 }
+
+impl Rooted for GenesisHeader<Header> 
+    where Header: Rooted {
+        fn get_merkle_root(&self) -> Vec<u8> {
+            self.0.get_merkle_root()
+        }
+        fn get_state_root(&self) -> Vec<u8> {
+            self.0.get_state_root()
+        }
+        fn get_difficulty(&self) -> f64 {
+            self.0.get_difficulty()
+        }
+        fn get_time_stamp(&self) -> u64 {
+            self.0.get_time_stamp()
+        }
+    }
 
 #[cfg(test)]
 mod tests {

@@ -16,7 +16,7 @@ pub struct Tx {
     recovery: Option<RecoveryId>,
 }
 
-pub trait Base {
+pub trait Quantifiable {
     fn get_amount(&self) -> u64;
 }
 
@@ -35,7 +35,7 @@ pub trait Signed {
     fn get_recovery(&self) -> RecoveryId;
 }
 pub trait Valid {
-    fn verify(encoding: Vec<u8>, sender: Address, prehash: RecoverableSignature) -> Result<bool, Error>;
+    fn verify(&self) -> Result<bool, Error>;
 }
 
 impl Tx {
@@ -67,6 +67,21 @@ impl Tx {
         let nonce = proto_tx.nonce;
         Tx::new(Some(from), Some(to), amount, Some(fee), Some(nonce), None, None)
     }
+
+    pub fn verify(encoding: Vec<u8>, sender: Address, signature: RecoverableSignature) -> Result<bool, Error> {
+            let message = Message::from_slice(&hash(&encoding[..], 32))?;
+            let secp = Secp256k1::verification_only();
+            let pubkey = secp.recover(&message, &signature)?;
+            let address = Address::from_pubkey(pubkey);
+            if address != sender {
+                return Err(Error::InvalidSignature);
+            }
+            let standard_signature = signature.to_standard(&secp);
+            match secp.verify(&message, &standard_signature, &pubkey) {
+                Ok(_) => return Ok(true),
+                Err(e) => return Err(e)
+            }
+        }
 
     pub fn equals(&self, other_tx: Tx) -> bool {
         if self.from != other_tx.from {
@@ -125,7 +140,7 @@ impl Encode for Tx {
     }
 }
 
-impl Base for Tx {
+impl Quantifiable for Tx {
     fn get_amount(&self) -> u64 {
         self.amount
     }
@@ -161,23 +176,14 @@ impl Signed for Tx {
 }
 
 impl Valid for Tx 
-    where Tx: Signed + Encode {
-        fn verify(encoding: Vec<u8>, sender: Address, signature: RecoverableSignature) -> Result<bool, Error> {
-            let message = Message::from_slice(&hash(&encoding[..], 32))?;
-            let secp = Secp256k1::verification_only();
-            let pubkey = secp.recover(&message, &signature)?;
-            let address = Address::from_pubkey(pubkey);
-            if address != sender {
-                return Err(Error::InvalidSignature);
-            }
-            let standard_signature = signature.to_standard(&secp);
-            match secp.verify(&message, &standard_signature, &pubkey) {
-                Ok(_) => return Ok(true),
-                Err(e) => return Err(e)
-            }
-        }
+    where Tx: Encode + Countable {
+    fn verify(&self) -> Result<bool, Error> {
+        let encoding = self.encode().unwrap();
+        let sender = self.get_from();
+        let signature = self.get_signature();
+        Tx::verify(encoding, sender, signature)
+    }
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,5 @@
 use common::address::Address;
-use common::tx::{Tx, Base, Sendable, Countable, Signed, Valid};
+use common::tx::{Tx, Quantifiable, Sendable, Countable, Signed, Valid};
 use common::Encode;
 
 use serialization;
@@ -9,7 +9,8 @@ use secp256k1::{Error, RecoverableSignature, RecoveryId, Secp256k1};
 
 pub struct SignedTx<T>(T);
 
-impl SignedTx<Tx> {
+impl SignedTx<Tx> 
+    where Tx: Quantifiable + Sendable + Countable + Signed + Valid {
     pub fn decode(proto_tx: serialization::tx::SignedTx) -> Result<SignedTx<Tx>, Error> {
         let mut from: Address = [0; 20];
         from.clone_from_slice(&proto_tx.from[..]);
@@ -36,7 +37,7 @@ impl SignedTx<Tx> {
 }
 
 impl Encode for SignedTx<Tx>
-    where Tx: Base + Sendable + Countable + Signed {
+    where Tx: Quantifiable + Sendable + Countable + Signed {
         fn encode(&self) -> Result<Vec<u8>, String> {
             let mut itx = serialization::tx::SignedTx::new();
             let secp = Secp256k1::without_caps();
@@ -52,6 +53,43 @@ impl Encode for SignedTx<Tx>
                 Ok(data) => return Ok(data),
                 Err(e) => return Err(e.to_string())
             }
+        }
+    }
+
+impl Quantifiable for SignedTx<Tx>
+    where Tx: Quantifiable {
+    fn get_amount(&self) -> u64 {
+        self.0.get_amount()
+    }
+}
+
+impl Sendable for SignedTx<Tx>
+    where Tx: Sendable {
+        fn get_to(&self) -> Address {
+            self.0.get_to()
+        }
+    }
+
+impl Countable for SignedTx<Tx>
+    where Tx: Countable {
+        fn get_from(&self) -> Address {
+            self.0.get_from()
+        }
+        fn get_fee(&self) -> u64 {
+            self.0.get_fee()
+        }
+        fn get_nonce(&self) -> u32 {
+            self.0.get_nonce()
+        }
+    }
+
+impl Signed for SignedTx<Tx>
+    where Tx: Signed {
+        fn get_signature(&self) -> RecoverableSignature {
+            self.0.get_signature()
+        }
+        fn get_recovery(&self) -> RecoveryId {
+            self.0.get_recovery()
         }
     }
 

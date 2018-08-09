@@ -1,6 +1,6 @@
 use common::Encode;
 use common::address::Address;
-use common::tx::{Tx, Base, Sendable};
+use common::tx::{Tx, Quantifiable, Sendable};
 use serialization::tx::GenesisTx as ProtoGenesisTx;
 
 use protobuf::Message;
@@ -18,7 +18,7 @@ impl GenesisTx<Tx> {
 }
 
 impl Encode for GenesisTx<Tx>
-    where Tx: Base + Sendable {
+    where Tx: Quantifiable + Sendable {
     fn encode(&self) -> Result<Vec<u8>, String> {
         let mut itx = ProtoGenesisTx::new();
         itx.set_to(self.0.get_to().to_vec());
@@ -28,6 +28,20 @@ impl Encode for GenesisTx<Tx>
             Ok(data) => return Ok(data),
             Err(e) => return Err(e.to_string())
         }
+    }
+}
+
+impl Quantifiable for GenesisTx<Tx> 
+    where Tx: Quantifiable {
+    fn get_amount(&self) -> u64 {
+        self.0.get_amount()
+    }
+}
+
+impl Sendable for GenesisTx<Tx> 
+    where Tx: Sendable {
+    fn get_to(&self) -> Address {
+        self.0.get_to()
     }
 }
 
@@ -43,8 +57,8 @@ mod tests {
         let amount = 123456789;
         let tx = Tx::new(None, Some(to), amount, None, None, None, None);
         let genesis_tx = GenesisTx(tx);
-        assert_eq!(genesis_tx.0.get_to(), to);
-        assert_eq!(genesis_tx.0.get_amount(), amount);
+        assert_eq!(genesis_tx.get_to(), to);
+        assert_eq!(genesis_tx.get_amount(), amount);
     }
 
     #[test]
@@ -59,8 +73,8 @@ mod tests {
         itx.set_amount(amount);
 
         let genesis_tx = GenesisTx::decode(itx);
-        assert_eq!(genesis_tx.0.get_to(), to);
-        assert_eq!(genesis_tx.0.get_amount(), amount);
+        assert_eq!(genesis_tx.get_to(), to);
+        assert_eq!(genesis_tx.get_amount(), amount);
     }
 
     #[test]
