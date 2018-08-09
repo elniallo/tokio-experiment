@@ -1,14 +1,5 @@
 syntax = "proto3";
 
-
-message GenesisBlockHeader {
-    // Consensus Critical
-    bytes merkleRoot = 2;
-    bytes stateRoot = 3; 
-    uint32 difficulty = 4;
-    uint64 timeStamp = 5; 
-}
-
 message BlockHeader {
     // Consensus Critical
     repeated bytes previousHash = 1;

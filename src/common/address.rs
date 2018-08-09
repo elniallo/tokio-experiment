@@ -5,8 +5,7 @@ use util::hash::hash;
 use std::result::Result;
 
 fn check_sum(arr: &[u8; 20]) -> String {
-    let arr_hash = hash(arr);
-    println!("{:?}", arr_hash);
+    let arr_hash = hash(arr, 32);
     let string = arr_hash.to_base58();
     format!("{}", &string[0..4])
 }
@@ -69,7 +68,7 @@ impl ValidAddress for Address {
     }
 
     fn from_pubkey(pubkey: PublicKey) -> Address {
-        let pub_key_hash = hash(&pubkey.serialize());
+        let pub_key_hash = hash(&pubkey.serialize(), 32);
         let mut addr = [0; 20];
         for i in 12..32 {
             addr[i - 12] = pub_key_hash[i];

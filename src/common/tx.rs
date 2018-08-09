@@ -163,7 +163,7 @@ impl Signed for Tx {
 impl Valid for Tx 
     where Tx: Signed + Encode {
         fn verify(encoding: Vec<u8>, sender: Address, signature: RecoverableSignature) -> Result<bool, Error> {
-            let message = Message::from_slice(&hash(&encoding[..]))?;
+            let message = Message::from_slice(&hash(&encoding[..], 32))?;
             let secp = Secp256k1::verification_only();
             let pubkey = secp.recover(&message, &signature)?;
             let address = Address::from_pubkey(pubkey);
