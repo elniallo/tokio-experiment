@@ -7,13 +7,13 @@ use protobuf::{Message as ProtoMessage};
 use secp256k1::{Message, RecoverableSignature, RecoveryId, Secp256k1, Error};
 
 pub struct Tx {
-    pub from: Option<Address>,
-    pub to: Option<Address>,
-    pub amount: u64,
-    pub fee: Option<u64>,
-    pub nonce: Option<u32>,
-    pub signature: Option<RecoverableSignature>,
-    pub recovery: Option<RecoveryId>,
+    from: Option<Address>,
+    to: Option<Address>,
+    amount: u64,
+    fee: Option<u64>,
+    nonce: Option<u32>,
+    signature: Option<RecoverableSignature>,
+    recovery: Option<RecoveryId>,
 }
 
 pub trait Base {

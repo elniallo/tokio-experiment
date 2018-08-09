@@ -7,13 +7,13 @@ use serialization::blockHeader::BlockHeader;
 use protobuf::{Message, RepeatedField};
 
 pub struct Header {
-    pub merkle_root: Vec<u8>,
-    pub time_stamp: u64,
-    pub difficulty: f64,
-    pub state_root: Vec<u8>,
-    pub previous_hash: Option<Vec<Vec<u8>>>,
-    pub nonce: Option<u64>,
-    pub miner: Option<Address>,
+    merkle_root: Vec<u8>,
+    time_stamp: u64,
+    difficulty: f64,
+    state_root: Vec<u8>,
+    previous_hash: Option<Vec<Vec<u8>>>,
+    nonce: Option<u64>,
+    miner: Option<Address>,
 }
 
 pub trait Base {
@@ -128,15 +128,25 @@ impl Mined for Header {
 mod tests {
     use super::*;
     use common::address::ValidAddress;
-    use rust_base58::{FromBase58, ToBase58};
+    use rust_base58::FromBase58;
 
     #[test]
-    fn it_makes_a_raw_header() {
+    fn it_makes_a_header() {
         let merkle_root = vec![218,175,98,56,136,59,157,43,178,250,66,194,50,129,87,37,147,54,157,79,238,83,118,209,92,202,25,32,246,230,153,39];
         let state_root = vec![121,132,139,154,165,229,182,152,126,204,58,142,150,220,236,119,144,1,181,107,19,130,67,220,241,192,46,94,69,215,134,11];
         let time_stamp = 1515003305000;
         let difficulty = 0 as f64;
-        let miner = Address::from_string(&"H3yGUaF38TxQxoFrqCqPdB2pN9jyBHnaj".to_string());
-    }
+        let nonce = 0;
+        let miner = Address::from_string(&"H3yGUaF38TxQxoFrqCqPdB2pN9jyBHnaj".to_string()).unwrap();
+        let previous_hash = vec!["G4qXusbRyXmf62c8Tsha7iZoyLsVGfka7ynkvb3Esd1d".from_base58().unwrap()];
 
+        let header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), Some(previous_hash.clone()), Some(nonce), Some(miner));
+        assert_eq!(header.get_merkle_root(), merkle_root);
+        assert_eq!(header.get_state_root(), state_root);
+        assert_eq!(header.get_time_stamp(), time_stamp);
+        assert_eq!(header.get_difficulty(), difficulty);
+        assert_eq!(header.get_nonce(), nonce);
+        assert_eq!(header.get_miner(), miner);
+        assert_eq!(header.get_previous_hash(), previous_hash);
+    }
 }

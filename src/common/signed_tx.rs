@@ -28,8 +28,8 @@ impl SignedTx<Tx> {
 
     pub fn verify(&self) -> Result<bool, Error> {
         let encoding = self.0.encode().unwrap();
-        let sender = self.0.from.unwrap();
-        let signature = self.0.signature.unwrap();
+        let sender = self.0.get_from();
+        let signature = self.0.get_signature();
         Tx::verify(encoding, sender, signature)
 
     }

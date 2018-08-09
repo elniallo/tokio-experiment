@@ -43,8 +43,8 @@ mod tests {
         let amount = 123456789;
         let tx = Tx::new(None, Some(to), amount, None, None, None, None);
         let genesis_tx = GenesisTx(tx);
-        assert_eq!(genesis_tx.0.to.unwrap(), to);
-        assert_eq!(genesis_tx.0.amount, amount);
+        assert_eq!(genesis_tx.0.get_to(), to);
+        assert_eq!(genesis_tx.0.get_amount(), amount);
     }
 
     #[test]
@@ -59,8 +59,8 @@ mod tests {
         itx.set_amount(amount);
 
         let genesis_tx = GenesisTx::decode(itx);
-        assert_eq!(genesis_tx.0.to.unwrap(), to);
-        assert_eq!(genesis_tx.0.amount, amount);
+        assert_eq!(genesis_tx.0.get_to(), to);
+        assert_eq!(genesis_tx.0.get_amount(), amount);
     }
 
     #[test]

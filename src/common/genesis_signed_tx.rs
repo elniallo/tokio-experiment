@@ -24,11 +24,11 @@ impl GenesisSignedTx<Tx> {
     }
     
     pub fn verify(&self) -> Result<bool, Error> {
-        let sender = self.0.to.unwrap();
-        let tx = Tx::new(None, Some(sender), self.0.amount, None, None, None, None);
+        let sender = self.0.get_to();
+        let tx = Tx::new(None, Some(sender), self.0.get_amount(), None, None, None, None);
         let genesis_tx = genesis_tx::GenesisTx(tx);
         let encoding = genesis_tx.encode().unwrap();
-        let signature = self.0.signature.unwrap();
+        let signature = self.0.get_signature();
 
         Tx::verify(encoding, sender, signature)
     }
@@ -70,10 +70,10 @@ mod tests {
             RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
         let tx = Tx::new(None, Some(to), amount, None, None, Some(signature), Some(recovery));
         let gen_sign_tx = GenesisSignedTx(tx);
-        assert_eq!(to, gen_sign_tx.0.to.unwrap());
-        assert_eq!(amount, gen_sign_tx.0.amount);
-        assert_eq!(signature, gen_sign_tx.0.signature.unwrap());
-        assert_eq!(recovery, gen_sign_tx.0.recovery.unwrap());
+        assert_eq!(to, gen_sign_tx.0.get_to());
+        assert_eq!(amount, gen_sign_tx.0.get_amount());
+        assert_eq!(signature, gen_sign_tx.0.get_signature());
+        assert_eq!(recovery, gen_sign_tx.0.get_recovery());
     }
 
     #[test]
