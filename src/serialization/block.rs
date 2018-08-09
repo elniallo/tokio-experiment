@@ -736,32 +736,32 @@ impl ::protobuf::Message for BlockDB {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.height != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(1, self.height, ::protobuf::wire_format::WireTypeVarint);
         }
         if let Some(ref v) = self.header.as_ref() {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
         }
-        if self.fileNumber != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(3, self.fileNumber, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.offset != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(4, self.offset, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.length != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(5, self.length, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.tEMA != 0. {
+        if true {
             my_size += 9;
         }
-        if self.pEMA != 0. {
+        if true {
             my_size += 9;
         }
-        if self.nextDifficulty != 0. {
+        if true {
             my_size += 9;
         }
-        if self.totalWork != 0. {
+        if true {
             my_size += 9;
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -770,7 +770,7 @@ impl ::protobuf::Message for BlockDB {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.height != 0 {
+        if true {
             os.write_uint32(1, self.height)?;
         }
         if let Some(ref v) = self.header.as_ref() {
@@ -778,25 +778,25 @@ impl ::protobuf::Message for BlockDB {
             os.write_raw_varint32(v.get_cached_size())?;
             v.write_to_with_cached_sizes(os)?;
         }
-        if self.fileNumber != 0 {
+        if true {
             os.write_uint32(3, self.fileNumber)?;
         }
-        if self.offset != 0 {
+        if true {
             os.write_uint32(4, self.offset)?;
         }
-        if self.length != 0 {
+        if true {
             os.write_uint32(5, self.length)?;
         }
-        if self.tEMA != 0. {
+        if true {
             os.write_double(6, self.tEMA)?;
         }
-        if self.pEMA != 0. {
+        if true {
             os.write_double(7, self.pEMA)?;
         }
-        if self.nextDifficulty != 0. {
+        if true {
             os.write_double(8, self.nextDifficulty)?;
         }
-        if self.totalWork != 0. {
+        if true {
             os.write_double(9, self.totalWork)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;

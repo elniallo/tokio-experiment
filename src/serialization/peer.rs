@@ -250,25 +250,25 @@ impl ::protobuf::Message for Peer {
         if !self.host.is_empty() {
             my_size += ::protobuf::rt::string_size(1, &self.host);
         }
-        if self.port != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(2, self.port, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.lastSeen != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(3, self.lastSeen, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.failCount != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(4, self.failCount, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.lastAttempt != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(5, self.lastAttempt, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.active != false {
+        if true {
             my_size += 2;
         }
-        if self.currentQueue != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(7, self.currentQueue, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.successCount != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(8, self.successCount, ::protobuf::wire_format::WireTypeVarint);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -280,25 +280,25 @@ impl ::protobuf::Message for Peer {
         if !self.host.is_empty() {
             os.write_string(1, &self.host)?;
         }
-        if self.port != 0 {
+        if true {
             os.write_uint32(2, self.port)?;
         }
-        if self.lastSeen != 0 {
+        if true {
             os.write_uint64(3, self.lastSeen)?;
         }
-        if self.failCount != 0 {
+        if true {
             os.write_uint32(4, self.failCount)?;
         }
-        if self.lastAttempt != 0 {
+        if true {
             os.write_uint64(5, self.lastAttempt)?;
         }
-        if self.active != false {
+        if true {
             os.write_bool(6, self.active)?;
         }
-        if self.currentQueue != 0 {
+        if true {
             os.write_int32(7, self.currentQueue)?;
         }
-        if self.successCount != 0 {
+        if true {
             os.write_uint32(8, self.successCount)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;

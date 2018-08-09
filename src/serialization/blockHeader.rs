@@ -24,13 +24,10 @@ use protobuf::ProtobufEnum as ProtobufEnum_imported_for_functions;
 #[derive(PartialEq,Clone,Default)]
 pub struct GenesisBlockHeader {
     // message fields
-    pub previousHash: ::protobuf::RepeatedField<::std::vec::Vec<u8>>,
     pub merkleRoot: ::std::vec::Vec<u8>,
     pub stateRoot: ::std::vec::Vec<u8>,
     pub difficulty: u32,
     pub timeStamp: u64,
-    pub nonce: u64,
-    pub miner: ::std::vec::Vec<u8>,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
     cached_size: ::protobuf::CachedSize,
@@ -39,31 +36,6 @@ pub struct GenesisBlockHeader {
 impl GenesisBlockHeader {
     pub fn new() -> GenesisBlockHeader {
         ::std::default::Default::default()
-    }
-
-    // repeated bytes previousHash = 1;
-
-    pub fn clear_previousHash(&mut self) {
-        self.previousHash.clear();
-    }
-
-    // Param is passed by value, moved
-    pub fn set_previousHash(&mut self, v: ::protobuf::RepeatedField<::std::vec::Vec<u8>>) {
-        self.previousHash = v;
-    }
-
-    // Mutable pointer to the field.
-    pub fn mut_previousHash(&mut self) -> &mut ::protobuf::RepeatedField<::std::vec::Vec<u8>> {
-        &mut self.previousHash
-    }
-
-    // Take field
-    pub fn take_previousHash(&mut self) -> ::protobuf::RepeatedField<::std::vec::Vec<u8>> {
-        ::std::mem::replace(&mut self.previousHash, ::protobuf::RepeatedField::new())
-    }
-
-    pub fn get_previousHash(&self) -> &[::std::vec::Vec<u8>] {
-        &self.previousHash
     }
 
     // bytes merkleRoot = 2;
@@ -147,47 +119,6 @@ impl GenesisBlockHeader {
     pub fn get_timeStamp(&self) -> u64 {
         self.timeStamp
     }
-
-    // uint64 nonce = 6;
-
-    pub fn clear_nonce(&mut self) {
-        self.nonce = 0;
-    }
-
-    // Param is passed by value, moved
-    pub fn set_nonce(&mut self, v: u64) {
-        self.nonce = v;
-    }
-
-    pub fn get_nonce(&self) -> u64 {
-        self.nonce
-    }
-
-    // bytes miner = 7;
-
-    pub fn clear_miner(&mut self) {
-        self.miner.clear();
-    }
-
-    // Param is passed by value, moved
-    pub fn set_miner(&mut self, v: ::std::vec::Vec<u8>) {
-        self.miner = v;
-    }
-
-    // Mutable pointer to the field.
-    // If field is not initialized, it is initialized with default value first.
-    pub fn mut_miner(&mut self) -> &mut ::std::vec::Vec<u8> {
-        &mut self.miner
-    }
-
-    // Take field
-    pub fn take_miner(&mut self) -> ::std::vec::Vec<u8> {
-        ::std::mem::replace(&mut self.miner, ::std::vec::Vec::new())
-    }
-
-    pub fn get_miner(&self) -> &[u8] {
-        &self.miner
-    }
 }
 
 impl ::protobuf::Message for GenesisBlockHeader {
@@ -199,9 +130,6 @@ impl ::protobuf::Message for GenesisBlockHeader {
         while !is.eof()? {
             let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
-                1 => {
-                    ::protobuf::rt::read_repeated_bytes_into(wire_type, is, &mut self.previousHash)?;
-                },
                 2 => {
                     ::protobuf::rt::read_singular_proto3_bytes_into(wire_type, is, &mut self.merkleRoot)?;
                 },
@@ -222,16 +150,6 @@ impl ::protobuf::Message for GenesisBlockHeader {
                     let tmp = is.read_uint64()?;
                     self.timeStamp = tmp;
                 },
-                6 => {
-                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
-                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
-                    }
-                    let tmp = is.read_uint64()?;
-                    self.nonce = tmp;
-                },
-                7 => {
-                    ::protobuf::rt::read_singular_proto3_bytes_into(wire_type, is, &mut self.miner)?;
-                },
                 _ => {
                     ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
@@ -244,26 +162,17 @@ impl ::protobuf::Message for GenesisBlockHeader {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        for value in &self.previousHash {
-            my_size += ::protobuf::rt::bytes_size(1, &value);
-        };
         if !self.merkleRoot.is_empty() {
             my_size += ::protobuf::rt::bytes_size(2, &self.merkleRoot);
         }
         if !self.stateRoot.is_empty() {
             my_size += ::protobuf::rt::bytes_size(3, &self.stateRoot);
         }
-        if self.difficulty != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(4, self.difficulty, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.timeStamp != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(5, self.timeStamp, ::protobuf::wire_format::WireTypeVarint);
-        }
-        if self.nonce != 0 {
-            my_size += ::protobuf::rt::value_size(6, self.nonce, ::protobuf::wire_format::WireTypeVarint);
-        }
-        if !self.miner.is_empty() {
-            my_size += ::protobuf::rt::bytes_size(7, &self.miner);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
         self.cached_size.set(my_size);
@@ -271,26 +180,17 @@ impl ::protobuf::Message for GenesisBlockHeader {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        for v in &self.previousHash {
-            os.write_bytes(1, &v)?;
-        };
         if !self.merkleRoot.is_empty() {
             os.write_bytes(2, &self.merkleRoot)?;
         }
         if !self.stateRoot.is_empty() {
             os.write_bytes(3, &self.stateRoot)?;
         }
-        if self.difficulty != 0 {
+        if true {
             os.write_uint32(4, self.difficulty)?;
         }
-        if self.timeStamp != 0 {
+        if true {
             os.write_uint64(5, self.timeStamp)?;
-        }
-        if self.nonce != 0 {
-            os.write_uint64(6, self.nonce)?;
-        }
-        if !self.miner.is_empty() {
-            os.write_bytes(7, &self.miner)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -334,11 +234,6 @@ impl ::protobuf::Message for GenesisBlockHeader {
         unsafe {
             descriptor.get(|| {
                 let mut fields = ::std::vec::Vec::new();
-                fields.push(::protobuf::reflect::accessor::make_repeated_field_accessor::<_, ::protobuf::types::ProtobufTypeBytes>(
-                    "previousHash",
-                    |m: &GenesisBlockHeader| { &m.previousHash },
-                    |m: &mut GenesisBlockHeader| { &mut m.previousHash },
-                ));
                 fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeBytes>(
                     "merkleRoot",
                     |m: &GenesisBlockHeader| { &m.merkleRoot },
@@ -358,16 +253,6 @@ impl ::protobuf::Message for GenesisBlockHeader {
                     "timeStamp",
                     |m: &GenesisBlockHeader| { &m.timeStamp },
                     |m: &mut GenesisBlockHeader| { &mut m.timeStamp },
-                ));
-                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeUint64>(
-                    "nonce",
-                    |m: &GenesisBlockHeader| { &m.nonce },
-                    |m: &mut GenesisBlockHeader| { &mut m.nonce },
-                ));
-                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeBytes>(
-                    "miner",
-                    |m: &GenesisBlockHeader| { &m.miner },
-                    |m: &mut GenesisBlockHeader| { &mut m.miner },
                 ));
                 ::protobuf::reflect::MessageDescriptor::new::<GenesisBlockHeader>(
                     "GenesisBlockHeader",
@@ -391,13 +276,10 @@ impl ::protobuf::Message for GenesisBlockHeader {
 
 impl ::protobuf::Clear for GenesisBlockHeader {
     fn clear(&mut self) {
-        self.clear_previousHash();
         self.clear_merkleRoot();
         self.clear_stateRoot();
         self.clear_difficulty();
         self.clear_timeStamp();
-        self.clear_nonce();
-        self.clear_miner();
         self.unknown_fields.clear();
     }
 }
@@ -646,13 +528,13 @@ impl ::protobuf::Message for BlockHeader {
         if !self.stateRoot.is_empty() {
             my_size += ::protobuf::rt::bytes_size(3, &self.stateRoot);
         }
-        if self.difficulty != 0. {
+        if true {
             my_size += 9;
         }
-        if self.timeStamp != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(5, self.timeStamp, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.nonce != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(6, self.nonce, ::protobuf::wire_format::WireTypeVarint);
         }
         if !self.miner.is_empty() {
@@ -673,13 +555,13 @@ impl ::protobuf::Message for BlockHeader {
         if !self.stateRoot.is_empty() {
             os.write_bytes(3, &self.stateRoot)?;
         }
-        if self.difficulty != 0. {
+        if true {
             os.write_double(4, self.difficulty)?;
         }
-        if self.timeStamp != 0 {
+        if true {
             os.write_uint64(5, self.timeStamp)?;
         }
-        if self.nonce != 0 {
+        if true {
             os.write_uint64(6, self.nonce)?;
         }
         if !self.miner.is_empty() {
@@ -808,19 +690,16 @@ impl ::protobuf::reflect::ProtobufValue for BlockHeader {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x11blockHeader.proto\"\xe0\x01\n\x12GenesisBlockHeader\x12\"\n\x0cpre\
-    viousHash\x18\x01\x20\x03(\x0cR\x0cpreviousHash\x12\x1e\n\nmerkleRoot\
-    \x18\x02\x20\x01(\x0cR\nmerkleRoot\x12\x1c\n\tstateRoot\x18\x03\x20\x01(\
-    \x0cR\tstateRoot\x12\x1e\n\ndifficulty\x18\x04\x20\x01(\rR\ndifficulty\
-    \x12\x1c\n\ttimeStamp\x18\x05\x20\x01(\x04R\ttimeStamp\x12\x14\n\x05nonc\
-    e\x18\x06\x20\x01(\x04R\x05nonce\x12\x14\n\x05miner\x18\x07\x20\x01(\x0c\
-    R\x05miner\"\xd9\x01\n\x0bBlockHeader\x12\"\n\x0cpreviousHash\x18\x01\
-    \x20\x03(\x0cR\x0cpreviousHash\x12\x1e\n\nmerkleRoot\x18\x02\x20\x01(\
-    \x0cR\nmerkleRoot\x12\x1c\n\tstateRoot\x18\x03\x20\x01(\x0cR\tstateRoot\
-    \x12\x1e\n\ndifficulty\x18\x04\x20\x01(\x01R\ndifficulty\x12\x1c\n\ttime\
-    Stamp\x18\x05\x20\x01(\x04R\ttimeStamp\x12\x14\n\x05nonce\x18\x06\x20\
-    \x01(\x04R\x05nonce\x12\x14\n\x05miner\x18\x07\x20\x01(\x0cR\x05minerb\
-    \x06proto3\
+    \n\x11blockHeader.proto\"\x90\x01\n\x12GenesisBlockHeader\x12\x1e\n\nmer\
+    kleRoot\x18\x02\x20\x01(\x0cR\nmerkleRoot\x12\x1c\n\tstateRoot\x18\x03\
+    \x20\x01(\x0cR\tstateRoot\x12\x1e\n\ndifficulty\x18\x04\x20\x01(\rR\ndif\
+    ficulty\x12\x1c\n\ttimeStamp\x18\x05\x20\x01(\x04R\ttimeStamp\"\xd9\x01\
+    \n\x0bBlockHeader\x12\"\n\x0cpreviousHash\x18\x01\x20\x03(\x0cR\x0cprevi\
+    ousHash\x12\x1e\n\nmerkleRoot\x18\x02\x20\x01(\x0cR\nmerkleRoot\x12\x1c\
+    \n\tstateRoot\x18\x03\x20\x01(\x0cR\tstateRoot\x12\x1e\n\ndifficulty\x18\
+    \x04\x20\x01(\x01R\ndifficulty\x12\x1c\n\ttimeStamp\x18\x05\x20\x01(\x04\
+    R\ttimeStamp\x12\x14\n\x05nonce\x18\x06\x20\x01(\x04R\x05nonce\x12\x14\n\
+    \x05miner\x18\x07\x20\x01(\x0cR\x05minerb\x06proto3\
 ";
 
 static mut file_descriptor_proto_lazy: ::protobuf::lazy::Lazy<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::lazy::Lazy {

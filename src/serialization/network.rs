@@ -2447,19 +2447,19 @@ impl ::protobuf::Message for Status {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.version != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(1, self.version, ::protobuf::wire_format::WireTypeVarint);
         }
         if !self.networkid.is_empty() {
             my_size += ::protobuf::rt::string_size(2, &self.networkid);
         }
-        if self.port != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(5, self.port, ::protobuf::wire_format::WireTypeVarint);
         }
         if !self.guid.is_empty() {
             my_size += ::protobuf::rt::string_size(6, &self.guid);
         }
-        if self.publicPort != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(7, self.publicPort, ::protobuf::wire_format::WireTypeVarint);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -2468,19 +2468,19 @@ impl ::protobuf::Message for Status {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.version != 0 {
+        if true {
             os.write_uint32(1, self.version)?;
         }
         if !self.networkid.is_empty() {
             os.write_string(2, &self.networkid)?;
         }
-        if self.port != 0 {
+        if true {
             os.write_int32(5, self.port)?;
         }
         if !self.guid.is_empty() {
             os.write_string(6, &self.guid)?;
         }
-        if self.publicPort != 0 {
+        if true {
             os.write_int32(7, self.publicPort)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -2693,7 +2693,7 @@ impl ::protobuf::Message for StatusReturn {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.success != false {
+        if true {
             my_size += 2;
         }
         if let Some(ref v) = self.status.as_ref() {
@@ -2706,7 +2706,7 @@ impl ::protobuf::Message for StatusReturn {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.success != false {
+        if true {
             os.write_bool(1, self.success)?;
         }
         if let Some(ref v) = self.status.as_ref() {
@@ -2864,7 +2864,7 @@ impl ::protobuf::Message for Ping {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.nonce != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(1, self.nonce, ::protobuf::wire_format::WireTypeVarint);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -2873,7 +2873,7 @@ impl ::protobuf::Message for Ping {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.nonce != 0 {
+        if true {
             os.write_uint64(1, self.nonce)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -3020,7 +3020,7 @@ impl ::protobuf::Message for PingReturn {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.nonce != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(1, self.nonce, ::protobuf::wire_format::WireTypeVarint);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -3029,7 +3029,7 @@ impl ::protobuf::Message for PingReturn {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.nonce != 0 {
+        if true {
             os.write_uint64(1, self.nonce)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -3346,7 +3346,7 @@ impl ::protobuf::Message for PutTxReturn {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.success != false {
+        if true {
             my_size += 2;
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -3355,7 +3355,7 @@ impl ::protobuf::Message for PutTxReturn {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.success != false {
+        if true {
             os.write_bool(1, self.success)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -4046,7 +4046,7 @@ impl ::protobuf::Message for GetTxs {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.minFee != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(1, self.minFee, ::protobuf::wire_format::WireTypeVarint);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -4055,7 +4055,7 @@ impl ::protobuf::Message for GetTxs {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.minFee != 0 {
+        if true {
             os.write_uint64(1, self.minFee)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -4236,7 +4236,7 @@ impl ::protobuf::Message for GetTxsReturn {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.success != false {
+        if true {
             my_size += 2;
         }
         for value in &self.txs {
@@ -4249,7 +4249,7 @@ impl ::protobuf::Message for GetTxsReturn {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.success != false {
+        if true {
             os.write_bool(1, self.success)?;
         }
         for v in &self.txs {
@@ -5283,7 +5283,7 @@ impl ::protobuf::Message for GetBlocksByHashReturn {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.success != false {
+        if true {
             my_size += 2;
         }
         for value in &self.blocks {
@@ -5296,7 +5296,7 @@ impl ::protobuf::Message for GetBlocksByHashReturn {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.success != false {
+        if true {
             os.write_bool(1, self.success)?;
         }
         for v in &self.blocks {
@@ -5650,7 +5650,7 @@ impl ::protobuf::Message for GetHeadersByHashReturn {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.success != false {
+        if true {
             my_size += 2;
         }
         for value in &self.headers {
@@ -5663,7 +5663,7 @@ impl ::protobuf::Message for GetHeadersByHashReturn {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.success != false {
+        if true {
             os.write_bool(1, self.success)?;
         }
         for v in &self.headers {
@@ -5844,10 +5844,10 @@ impl ::protobuf::Message for GetBlocksByRange {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.fromHeight != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(1, self.fromHeight, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.count != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(2, self.count, ::protobuf::wire_format::WireTypeVarint);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -5856,10 +5856,10 @@ impl ::protobuf::Message for GetBlocksByRange {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.fromHeight != 0 {
+        if true {
             os.write_uint64(1, self.fromHeight)?;
         }
-        if self.count != 0 {
+        if true {
             os.write_uint64(2, self.count)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -6046,7 +6046,7 @@ impl ::protobuf::Message for GetBlocksByRangeReturn {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.success != false {
+        if true {
             my_size += 2;
         }
         for value in &self.blocks {
@@ -6059,7 +6059,7 @@ impl ::protobuf::Message for GetBlocksByRangeReturn {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.success != false {
+        if true {
             os.write_bool(1, self.success)?;
         }
         for v in &self.blocks {
@@ -6240,10 +6240,10 @@ impl ::protobuf::Message for GetHeadersByRange {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.fromHeight != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(1, self.fromHeight, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.count != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(2, self.count, ::protobuf::wire_format::WireTypeVarint);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -6252,10 +6252,10 @@ impl ::protobuf::Message for GetHeadersByRange {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.fromHeight != 0 {
+        if true {
             os.write_uint64(1, self.fromHeight)?;
         }
-        if self.count != 0 {
+        if true {
             os.write_uint64(2, self.count)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -6442,7 +6442,7 @@ impl ::protobuf::Message for GetHeadersByRangeReturn {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.success != false {
+        if true {
             my_size += 2;
         }
         for value in &self.headers {
@@ -6455,7 +6455,7 @@ impl ::protobuf::Message for GetHeadersByRangeReturn {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.success != false {
+        if true {
             os.write_bool(1, self.success)?;
         }
         for v in &self.headers {
@@ -6613,7 +6613,7 @@ impl ::protobuf::Message for GetPeers {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.count != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(2, self.count, ::protobuf::wire_format::WireTypeVarint);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -6622,7 +6622,7 @@ impl ::protobuf::Message for GetPeers {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.count != 0 {
+        if true {
             os.write_uint32(2, self.count)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -6803,7 +6803,7 @@ impl ::protobuf::Message for GetPeersReturn {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.success != false {
+        if true {
             my_size += 2;
         }
         for value in &self.peers {
@@ -6816,7 +6816,7 @@ impl ::protobuf::Message for GetPeersReturn {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.success != false {
+        if true {
             os.write_bool(1, self.success)?;
         }
         for v in &self.peers {
@@ -6997,10 +6997,10 @@ impl ::protobuf::Message for GetTip {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.dummy != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(1, self.dummy, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.header != false {
+        if true {
             my_size += 2;
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -7009,10 +7009,10 @@ impl ::protobuf::Message for GetTip {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.dummy != 0 {
+        if true {
             os.write_uint64(1, self.dummy)?;
         }
-        if self.header != false {
+        if true {
             os.write_bool(2, self.header)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -7241,16 +7241,16 @@ impl ::protobuf::Message for GetTipReturn {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.success != false {
+        if true {
             my_size += 2;
         }
         if !self.hash.is_empty() {
             my_size += ::protobuf::rt::bytes_size(2, &self.hash);
         }
-        if self.height != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(3, self.height, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.totalwork != 0. {
+        if true {
             my_size += 9;
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -7259,16 +7259,16 @@ impl ::protobuf::Message for GetTipReturn {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.success != false {
+        if true {
             os.write_bool(1, self.success)?;
         }
         if !self.hash.is_empty() {
             os.write_bytes(2, &self.hash)?;
         }
-        if self.height != 0 {
+        if true {
             os.write_uint64(3, self.height)?;
         }
-        if self.totalwork != 0. {
+        if true {
             os.write_double(4, self.totalwork)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -7773,7 +7773,7 @@ impl ::protobuf::Message for GetHash {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.height != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(1, self.height, ::protobuf::wire_format::WireTypeVarint);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -7782,7 +7782,7 @@ impl ::protobuf::Message for GetHash {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.height != 0 {
+        if true {
             os.write_uint64(1, self.height)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -7959,7 +7959,7 @@ impl ::protobuf::Message for GetHashReturn {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.success != false {
+        if true {
             my_size += 2;
         }
         if !self.hash.is_empty() {
@@ -7971,7 +7971,7 @@ impl ::protobuf::Message for GetHashReturn {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.success != false {
+        if true {
             os.write_bool(1, self.success)?;
         }
         if !self.hash.is_empty() {
@@ -8150,10 +8150,10 @@ impl ::protobuf::Message for StatusChange {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.status != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(1, self.status, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.oldStatus != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(2, self.oldStatus, ::protobuf::wire_format::WireTypeVarint);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -8162,10 +8162,10 @@ impl ::protobuf::Message for StatusChange {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.status != 0 {
+        if true {
             os.write_int32(1, self.status)?;
         }
-        if self.oldStatus != 0 {
+        if true {
             os.write_int32(2, self.oldStatus)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;

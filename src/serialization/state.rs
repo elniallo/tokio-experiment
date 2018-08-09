@@ -432,10 +432,10 @@ impl ::protobuf::Message for Account {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.balance != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(1, self.balance, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.nonce != 0 {
+        if true {
             my_size += ::protobuf::rt::value_size(2, self.nonce, ::protobuf::wire_format::WireTypeVarint);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -444,10 +444,10 @@ impl ::protobuf::Message for Account {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.balance != 0 {
+        if true {
             os.write_uint64(1, self.balance)?;
         }
-        if self.nonce != 0 {
+        if true {
             os.write_uint32(2, self.nonce)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
