@@ -4,7 +4,7 @@ import "blockHeader.proto";
 
 message Block {
     BlockHeader header = 1;
-    repeated Tx txs = 2;
+    repeated SignedTx txs = 2;
 }
 
 message BlockDB {

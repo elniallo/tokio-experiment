@@ -25,8 +25,20 @@ impl GenesisSignedTx<Tx>
     }
 }
 
+impl Clone for GenesisSignedTx<Tx>
+    where Tx: Quantifiable + Sendable + Signed {
+        fn clone(&self) -> GenesisSignedTx<Tx> {
+            let to = self.get_to();
+            let amount = self.get_amount();
+            let signature = self.get_signature();
+            let recovery = self.get_recovery();
+            let tx = Tx::new(None, Some(to), amount, None, None, Some(signature), Some(recovery));
+            GenesisSignedTx(tx)
+        }
+    }
+
 impl Encode for GenesisSignedTx<Tx> 
-where Tx: Quantifiable + Sendable + Signed {
+    where Tx: Quantifiable + Sendable + Signed {
     fn encode(&self) -> Result<Vec<u8>, String> {
         let mut itx = serialization::tx::GenesisSignedTx::new();
         let secp = Secp256k1::without_caps();

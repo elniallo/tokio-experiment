@@ -25,7 +25,7 @@ use protobuf::ProtobufEnum as ProtobufEnum_imported_for_functions;
 pub struct Block {
     // message fields
     pub header: ::protobuf::SingularPtrField<super::blockHeader::BlockHeader>,
-    pub txs: ::protobuf::RepeatedField<super::tx::Tx>,
+    pub txs: ::protobuf::RepeatedField<super::tx::SignedTx>,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
     cached_size: ::protobuf::CachedSize,
@@ -69,28 +69,28 @@ impl Block {
         self.header.as_ref().unwrap_or_else(|| super::blockHeader::BlockHeader::default_instance())
     }
 
-    // repeated .Tx txs = 2;
+    // repeated .SignedTx txs = 2;
 
     pub fn clear_txs(&mut self) {
         self.txs.clear();
     }
 
     // Param is passed by value, moved
-    pub fn set_txs(&mut self, v: ::protobuf::RepeatedField<super::tx::Tx>) {
+    pub fn set_txs(&mut self, v: ::protobuf::RepeatedField<super::tx::SignedTx>) {
         self.txs = v;
     }
 
     // Mutable pointer to the field.
-    pub fn mut_txs(&mut self) -> &mut ::protobuf::RepeatedField<super::tx::Tx> {
+    pub fn mut_txs(&mut self) -> &mut ::protobuf::RepeatedField<super::tx::SignedTx> {
         &mut self.txs
     }
 
     // Take field
-    pub fn take_txs(&mut self) -> ::protobuf::RepeatedField<super::tx::Tx> {
+    pub fn take_txs(&mut self) -> ::protobuf::RepeatedField<super::tx::SignedTx> {
         ::std::mem::replace(&mut self.txs, ::protobuf::RepeatedField::new())
     }
 
-    pub fn get_txs(&self) -> &[super::tx::Tx] {
+    pub fn get_txs(&self) -> &[super::tx::SignedTx] {
         &self.txs
     }
 }
@@ -203,7 +203,7 @@ impl ::protobuf::Message for Block {
                     |m: &Block| { &m.header },
                     |m: &mut Block| { &mut m.header },
                 ));
-                fields.push(::protobuf::reflect::accessor::make_repeated_field_accessor::<_, ::protobuf::types::ProtobufTypeMessage<super::tx::Tx>>(
+                fields.push(::protobuf::reflect::accessor::make_repeated_field_accessor::<_, ::protobuf::types::ProtobufTypeMessage<super::tx::SignedTx>>(
                     "txs",
                     |m: &Block| { &m.txs },
                     |m: &mut Block| { &mut m.txs },
@@ -707,16 +707,16 @@ impl ::protobuf::reflect::ProtobufValue for BlockDB {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x0bblock.proto\x1a\x08tx.proto\x1a\x11blockHeader.proto\"D\n\x05Block\
+    \n\x0bblock.proto\x1a\x08tx.proto\x1a\x11blockHeader.proto\"J\n\x05Block\
     \x12$\n\x06header\x18\x01\x20\x01(\x0b2\x0c.BlockHeaderR\x06header\x12\
-    \x15\n\x03txs\x18\x02\x20\x03(\x0b2\x03.TxR\x03txs\"\x85\x02\n\x07BlockD\
-    B\x12\x16\n\x06height\x18\x01\x20\x01(\rR\x06height\x12$\n\x06header\x18\
-    \x02\x20\x01(\x0b2\x0c.BlockHeaderR\x06header\x12\x1e\n\nfileNumber\x18\
-    \x03\x20\x01(\rR\nfileNumber\x12\x16\n\x06offset\x18\x04\x20\x01(\rR\x06\
-    offset\x12\x16\n\x06length\x18\x05\x20\x01(\rR\x06length\x12\x12\n\x04tE\
-    MA\x18\x06\x20\x01(\x01R\x04tEMA\x12\x12\n\x04pEMA\x18\x07\x20\x01(\x01R\
-    \x04pEMA\x12&\n\x0enextDifficulty\x18\x08\x20\x01(\x01R\x0enextDifficult\
-    y\x12\x1c\n\ttotalWork\x18\t\x20\x01(\x01R\ttotalWorkb\x06proto3\
+    \x1b\n\x03txs\x18\x02\x20\x03(\x0b2\t.SignedTxR\x03txs\"\x85\x02\n\x07Bl\
+    ockDB\x12\x16\n\x06height\x18\x01\x20\x01(\rR\x06height\x12$\n\x06header\
+    \x18\x02\x20\x01(\x0b2\x0c.BlockHeaderR\x06header\x12\x1e\n\nfileNumber\
+    \x18\x03\x20\x01(\rR\nfileNumber\x12\x16\n\x06offset\x18\x04\x20\x01(\rR\
+    \x06offset\x12\x16\n\x06length\x18\x05\x20\x01(\rR\x06length\x12\x12\n\
+    \x04tEMA\x18\x06\x20\x01(\x01R\x04tEMA\x12\x12\n\x04pEMA\x18\x07\x20\x01\
+    (\x01R\x04pEMA\x12&\n\x0enextDifficulty\x18\x08\x20\x01(\x01R\x0enextDif\
+    ficulty\x12\x1c\n\ttotalWork\x18\t\x20\x01(\x01R\ttotalWorkb\x06proto3\
 ";
 
 static mut file_descriptor_proto_lazy: ::protobuf::lazy::Lazy<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::lazy::Lazy {

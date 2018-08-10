@@ -1,11 +1,12 @@
 use common::Encode;
 use common::address::{Address, ValidAddress};
 use util::hash::hash;
-use serialization;
+use serialization::tx::Tx as ProtoTx;
 
 use protobuf::{Message as ProtoMessage};
 use secp256k1::{Message, RecoverableSignature, RecoveryId, Secp256k1, Error};
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct Tx {
     from: Option<Address>,
     to: Option<Address>,
@@ -57,7 +58,7 @@ impl Tx {
         }
     }
 
-    pub fn decode(proto_tx: serialization::tx::Tx) -> Tx {
+    pub fn decode(proto_tx: ProtoTx) -> Tx {
         let mut from: Address = [0; 20];
         from.clone_from_slice(&proto_tx.from);
         let mut to: Address = [0; 20];
@@ -69,19 +70,41 @@ impl Tx {
     }
 
     pub fn verify(encoding: Vec<u8>, sender: Address, signature: RecoverableSignature) -> Result<bool, Error> {
-            let message = Message::from_slice(&hash(&encoding[..], 32))?;
-            let secp = Secp256k1::verification_only();
-            let pubkey = secp.recover(&message, &signature)?;
-            let address = Address::from_pubkey(pubkey);
-            if address != sender {
-                return Err(Error::InvalidSignature);
-            }
-            let standard_signature = signature.to_standard(&secp);
-            match secp.verify(&message, &standard_signature, &pubkey) {
-                Ok(_) => return Ok(true),
-                Err(e) => return Err(e)
-            }
+        let message = Message::from_slice(&hash(&encoding[..], 32))?;
+        let secp = Secp256k1::verification_only();
+        let pubkey = secp.recover(&message, &signature)?;
+        let address = Address::from_pubkey(pubkey);
+        if address != sender {
+            return Err(Error::InvalidSignature);
         }
+        let standard_signature = signature.to_standard(&secp);
+        match secp.verify(&message, &standard_signature, &pubkey) {
+            Ok(_) => return Ok(true),
+            Err(e) => return Err(e)
+        }
+    }
+
+    pub fn to_proto_tx(&self) -> ProtoTx {
+        let mut proto_tx = ProtoTx::new();
+        match self.from {
+            Some(from) => proto_tx.set_from(from.to_vec()),
+            None => proto_tx.set_from(vec![])
+        }
+        match self.to {
+            Some(to) => proto_tx.set_to(to.to_vec()),
+            None => proto_tx.set_to(vec![])
+        }
+        proto_tx.set_amount(self.amount);
+        match self.fee {
+            Some(fee) => proto_tx.set_fee(fee),
+            None => proto_tx.set_fee(0)
+        }
+        match self.nonce {
+            Some(nonce) => proto_tx.set_nonce(nonce),
+            None => proto_tx.set_nonce(0)
+        }
+        proto_tx
+    }
 
     pub fn equals(&self, other_tx: Tx) -> bool {
         if self.from != other_tx.from {
@@ -102,37 +125,8 @@ impl Tx {
 
 impl Encode for Tx {
     fn encode(&self) -> Result<Vec<u8>, String> {
-        let from: Address;
-        match self.from {
-            Some(addr) => from = addr,
-            None => return Err("Tried to encode a Tx without a from address".to_string())
-        }
-        let to: Address;
-        match self.to {
-            Some(addr) => to = addr,
-            None => return Err("Tried to encode a Tx without a to address".to_string())
-        }
-
-        let fee: u64;
-        match self.fee {
-            Some(txfee) => fee = txfee,
-            None => return Err("Tried to encode a Tx without a tx fee".to_string())
-        }
-
-        let nonce: u32;
-        match self.nonce {
-            Some(txnonce) => nonce = txnonce,
-            None => return Err("Tried to encode a Tx without a nonce".to_string())
-        }
-
-
-        let mut itx = serialization::tx::Tx::new();
-        itx.set_from(from.to_vec());
-        itx.set_to(to.to_vec());
-        itx.set_amount(self.amount);
-        itx.set_fee(fee);
-        itx.set_nonce(nonce);
-        let encoding = itx.write_to_bytes();
+        let proto_tx = self.to_proto_tx();
+        let encoding = proto_tx.write_to_bytes();
         match encoding {
             Ok(data) => return Ok(data),
             Err(e) => return Err(e.to_string())
@@ -224,7 +218,7 @@ mod tests {
         let amount = 123456789;
         let fee = 1;
         let nonce = 3;
-        let mut itx = serialization::tx::Tx::new();
+        let mut itx = ProtoTx::new();
         itx.set_from(from.to_vec());
         itx.set_to(to.to_vec());
         itx.set_amount(amount);

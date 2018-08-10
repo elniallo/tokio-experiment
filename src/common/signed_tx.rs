@@ -2,16 +2,17 @@ use common::address::Address;
 use common::tx::{Tx, Quantifiable, Sendable, Countable, Signed, Valid};
 use common::Encode;
 
-use serialization;
+use serialization::tx::SignedTx as ProtoTx;
 
 use protobuf::Message as ProtoMessage;
 use secp256k1::{Error, RecoverableSignature, RecoveryId, Secp256k1};
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct SignedTx<T>(T);
 
 impl SignedTx<Tx> 
     where Tx: Quantifiable + Sendable + Countable + Signed + Valid {
-    pub fn decode(proto_tx: serialization::tx::SignedTx) -> Result<SignedTx<Tx>, Error> {
+    pub fn decode(proto_tx: ProtoTx) -> Result<SignedTx<Tx>, Error> {
         let mut from: Address = [0; 20];
         from.clone_from_slice(&proto_tx.from[..]);
         let mut to: Address = [0; 20];
@@ -32,23 +33,27 @@ impl SignedTx<Tx>
         let sender = self.0.get_from();
         let signature = self.0.get_signature();
         Tx::verify(encoding, sender, signature)
+    }
 
+    pub fn to_proto_signed_tx(&self) -> ProtoTx {
+        let mut proto_tx = ProtoTx::new();
+        let secp = Secp256k1::without_caps();
+        proto_tx.set_from(self.0.get_from().to_vec());
+        proto_tx.set_to(self.0.get_to().to_vec());
+        proto_tx.set_amount(self.0.get_amount());
+        proto_tx.set_fee(self.0.get_fee());
+        proto_tx.set_nonce(self.0.get_nonce());
+        proto_tx.set_signature(self.0.get_signature().serialize_compact(&secp).1.to_vec());
+        proto_tx.set_recovery(self.0.get_recovery().to_i32() as u32);
+        proto_tx
     }
 }
 
 impl Encode for SignedTx<Tx>
     where Tx: Quantifiable + Sendable + Countable + Signed {
         fn encode(&self) -> Result<Vec<u8>, String> {
-            let mut itx = serialization::tx::SignedTx::new();
-            let secp = Secp256k1::without_caps();
-            itx.set_from(self.0.get_from().to_vec());
-            itx.set_to(self.0.get_to().to_vec());
-            itx.set_amount(self.0.get_amount());
-            itx.set_fee(self.0.get_fee());
-            itx.set_nonce(self.0.get_nonce());
-            itx.set_signature(self.0.get_signature().serialize_compact(&secp).1.to_vec());
-            itx.set_recovery(self.0.get_recovery().to_i32() as u32);
-            let encoding = itx.write_to_bytes();
+            let proto_tx = self.to_proto_signed_tx();
+            let encoding = proto_tx.write_to_bytes();
             match encoding {
                 Ok(data) => return Ok(data),
                 Err(e) => return Err(e.to_string())

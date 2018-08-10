@@ -6,6 +6,7 @@ use serialization::blockHeader::{BlockHeader, HeaderPrehash};
 
 use protobuf::{Message, RepeatedField};
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct Header {
     merkle_root: Vec<u8>,
     time_stamp: u64,
@@ -66,25 +67,29 @@ impl Header {
         }
         Ok(hash(&encoding, 64))
     }
+
+    pub fn to_proto_header(&self) -> BlockHeader {
+        let mut proto_header = BlockHeader::new();
+        let merkle_root = self.merkle_root.clone();
+        proto_header.set_merkleRoot(merkle_root);
+        proto_header.set_timeStamp(self.time_stamp);
+        proto_header.set_difficulty(self.difficulty);
+        let state_root = self.state_root.clone();
+        proto_header.set_stateRoot(state_root);
+        let previous_hash_option = Option::as_ref(&self.previous_hash);
+        let previous_hash_ref = previous_hash_option.unwrap();
+        let previous_hash = previous_hash_ref.clone();
+        proto_header.set_previousHash(RepeatedField::from(previous_hash));
+        proto_header.set_nonce(self.nonce.unwrap());
+        proto_header.set_miner(self.miner.unwrap().to_vec());
+        proto_header
+    }
 }
 
 impl Encode for Header 
     where Header: Rooted + Raw + Mined {
     fn encode(&self) -> Result<Vec<u8>, String> {
-        let mut proto_block_header = BlockHeader::new();
-        let merkle_root = self.merkle_root.clone();
-        proto_block_header.set_merkleRoot(merkle_root);
-        proto_block_header.set_timeStamp(self.time_stamp);
-        proto_block_header.set_difficulty(self.difficulty);
-        let state_root = self.state_root.clone();
-        proto_block_header.set_stateRoot(state_root);
-
-        let previous_hash_option = Option::as_ref(&self.previous_hash);
-        let previous_hash_ref = previous_hash_option.unwrap();
-        let previous_hash = previous_hash_ref.clone();
-        proto_block_header.set_previousHash(RepeatedField::from(previous_hash));
-        proto_block_header.set_nonce(self.nonce.unwrap());
-        proto_block_header.set_miner(self.miner.unwrap().to_vec());
+        let proto_block_header = self.to_proto_header();
         match proto_block_header.write_to_bytes() {
             Ok(data) => return Ok(data),
             Err(e) => return Err(e.to_string())
