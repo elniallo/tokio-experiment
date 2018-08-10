@@ -9,7 +9,6 @@ extern crate uuid;
 extern crate openssl;
 extern crate hex;
 extern crate tiny_keccak;
-
 #[macro_use] extern crate serde_derive;
 extern crate serde_json;
 extern crate serde;
