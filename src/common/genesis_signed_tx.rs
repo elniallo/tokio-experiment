@@ -8,6 +8,7 @@ use serialization;
 use protobuf::Message as ProtoMessage;
 use secp256k1::{Error, RecoverableSignature, RecoveryId, Secp256k1};
 
+#[derive(Debug, PartialEq)]
 pub struct GenesisSignedTx<T>(pub T);
 
 impl GenesisSignedTx<Tx> 

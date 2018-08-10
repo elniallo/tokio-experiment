@@ -1,6 +1,6 @@
 use common::header::{Rooted, Header};
-use common::Encode;
-use serialization::blockHeader::BlockHeader;
+use common::{Encode, Proto};
+use serialization::blockHeader::BlockHeader as ProtoHeader;
 use protobuf::Message;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -9,11 +9,7 @@ pub struct GenesisHeader<T>(pub T);
 impl Encode for GenesisHeader<Header> 
     where Header: Rooted {
     fn encode(&self) -> Result<Vec<u8>, String> {
-        let mut proto_genesis_block_header = BlockHeader::new();
-        proto_genesis_block_header.set_merkleRoot(self.0.get_merkle_root());
-        proto_genesis_block_header.set_stateRoot(self.0.get_state_root());
-        proto_genesis_block_header.set_timeStamp(self.0.get_time_stamp());
-        proto_genesis_block_header.set_difficulty(self.0.get_difficulty());
+        let proto_genesis_block_header: ProtoHeader = self.to_proto();
         match proto_genesis_block_header.write_to_bytes() {
             Ok(data) => {
                 // The typescript protobufs for some reason elides the nonce on the encoding of the genesis block header
@@ -24,6 +20,17 @@ impl Encode for GenesisHeader<Header>
             },
             Err(e) => return Err(e.to_string())
         }
+    }
+}
+
+impl Proto for GenesisHeader<Header> {
+    fn to_proto<ProtoHeader>(&self) -> ProtoHeader {
+        let mut proto_genesis_block_header = ProtoHeader::new();
+        proto_genesis_block_header.set_merkleRoot(self.0.get_merkle_root());
+        proto_genesis_block_header.set_stateRoot(self.0.get_state_root());
+        proto_genesis_block_header.set_timeStamp(self.0.get_time_stamp());
+        proto_genesis_block_header.set_difficulty(self.0.get_difficulty());
+        proto_genesis_block_header
     }
 }
 

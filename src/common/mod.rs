@@ -12,3 +12,7 @@ pub mod meta_info;
 pub trait Encode {
     fn encode(&self) -> Result<Vec<u8>, String>;
 }
+
+pub trait Proto<T> {
+    fn to_proto(&self) -> T;
+}

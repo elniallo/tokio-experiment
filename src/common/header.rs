@@ -1,10 +1,10 @@
 use common::address::Address;
-use common::Encode;
+use common::{Encode, Proto};
 use util::hash::hash;
 
-use serialization::blockHeader::{BlockHeader, HeaderPrehash};
+use serialization::blockHeader::HeaderPrehash;
 
-use protobuf::{Message, RepeatedField};
+use protobuf::{Message as ProtoMessage, RepeatedField};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Header {
@@ -17,6 +17,15 @@ pub struct Header {
     miner: Option<Address>,
 }
 
+pub trait SetProtoHeader {
+    fn set_merkleRoot(&self, merkle_root: Vec<u8>);
+    fn set_difficulty(&self, difficulty: f64);
+    fn set_timeStamp(&self, timeStamp: u64);
+    fn set_stateRoot(&self, state_root: Vec<u8>);
+    fn set_previousHash(&self, previous_hash: RepeatedField<Vec<u8>>);
+    fn set_nonce(&self, nonce: u64);
+    fn set_miner(&self, Vec<u8>);
+}
 pub trait Rooted {
     fn get_merkle_root(&self) -> Vec<u8>;
     fn get_time_stamp(&self) -> u64;
@@ -67,35 +76,40 @@ impl Header {
         }
         Ok(hash(&encoding, 64))
     }
-
-    pub fn to_proto_header(&self) -> BlockHeader {
-        let mut proto_header = BlockHeader::new();
-        let merkle_root = self.merkle_root.clone();
-        proto_header.set_merkleRoot(merkle_root);
-        proto_header.set_timeStamp(self.time_stamp);
-        proto_header.set_difficulty(self.difficulty);
-        let state_root = self.state_root.clone();
-        proto_header.set_stateRoot(state_root);
-        let previous_hash_option = Option::as_ref(&self.previous_hash);
-        let previous_hash_ref = previous_hash_option.unwrap();
-        let previous_hash = previous_hash_ref.clone();
-        proto_header.set_previousHash(RepeatedField::from(previous_hash));
-        proto_header.set_nonce(self.nonce.unwrap());
-        proto_header.set_miner(self.miner.unwrap().to_vec());
-        proto_header
-    }
 }
 
-impl Encode for Header 
-    where Header: Rooted + Raw + Mined {
+impl<T> Encode for Header 
+    where Header: Rooted + Raw + Mined + Proto<T>,
+          T: ProtoMessage {
     fn encode(&self) -> Result<Vec<u8>, String> {
-        let proto_block_header = self.to_proto_header();
+        let proto_block_header: T = self.to_proto();
         match proto_block_header.write_to_bytes() {
             Ok(data) => return Ok(data),
             Err(e) => return Err(e.to_string())
         }
     }
 }
+
+impl<T> Proto<T> for Header
+    where Header: Rooted,
+        T: ProtoMessage + SetProtoHeader {
+        fn to_proto(&self) -> T  {
+            let mut proto_header = T::new();
+            let merkle_root = self.merkle_root.clone();
+            proto_header.set_merkleRoot(merkle_root);
+            proto_header.set_timeStamp(self.time_stamp);
+            proto_header.set_difficulty(self.difficulty);
+            let state_root = self.state_root.clone();
+            proto_header.set_stateRoot(state_root);
+            let previous_hash_option = Option::as_ref(&self.previous_hash);
+            let previous_hash_ref = previous_hash_option.unwrap();
+            let previous_hash = previous_hash_ref.clone();
+            proto_header.set_previousHash(RepeatedField::from(previous_hash));
+            proto_header.set_nonce(self.nonce.unwrap());
+            proto_header.set_miner(self.miner.unwrap().to_vec());
+            proto_header
+        }
+    }
 
 impl Rooted for Header {
     fn get_merkle_root(&self) -> Vec<u8> {

@@ -2,10 +2,11 @@ use common::meta_info::MetaInfo;
 use common::signed_tx::SignedTx;
 use common::tx::{Quantifiable, Countable, Signed, Tx};
 use common::header::{Rooted, Header, Mined, Raw};
-use common::Encode;
+use common::{Encode, Proto};
 
 use serialization::block::Block as ProtoBlock;
 use serialization::tx::SignedTx as ProtoTx;
+use serialization::blockHeader::BlockHeader as ProtoHeader;
 
 use protobuf::{Message, RepeatedField};
 
@@ -49,15 +50,17 @@ impl<T, U> Block<T, U>
     }
 }
 
-impl Encode for Block<Header, SignedTx<Tx>> 
-    where Block<Header, SignedTx<Tx>>: Headed<Header> + Embodied<SignedTx<Tx>> + Meta{
+impl<T, U> Encode for Block<T, U> 
+    where Block<T, U>: Headed<T> + Embodied<U> + Meta,
+          T: Rooted,
+          U: Quantifiable + Signed {
     fn encode(&self) -> Result<Vec<u8>, String> {
         let mut proto_block = ProtoBlock::new();
-        proto_block.set_header(self.get_header().to_proto_header());
+        proto_block.set_header(self.get_header().to_proto());
         let txs = self.get_txs();
         match txs {
             Ok(tx_vec) => {
-                let proto_txs: Vec<ProtoTx> = tx_vec.into_iter().map(|x| -> ProtoTx {x.to_proto_signed_tx()}).collect();
+                let proto_txs: Vec<ProtoTx> = tx_vec.into_iter().map(|x| -> ProtoTx {x.to_proto()}).collect();
                 proto_block.set_txs(RepeatedField::from(proto_txs));
             },
             _ => {}
@@ -71,7 +74,26 @@ impl Encode for Block<Header, SignedTx<Tx>>
     }
 }
 
+impl<HeaderType, TxType> Proto for Block<HeaderType, TxType> 
+    where HeaderType: Rooted + Proto,
+          TxType: Quantifiable + Signed + Proto,
+          Block<HeaderType, TxType>: Headed<HeaderType> + Embodied<TxType> {
 
+    fn to_proto<ProtoHeaderType, ProtoTxType>(&self) -> ProtoBlock {
+        let mut proto_block = ProtoBlock::new();
+        let proto_header = self.get_header().to_proto();
+        proto_block.set_header(proto_header);
+        let txs = self.get_txs();
+        match txs {
+            Ok(tx_vec) => {
+                let proto_txs: Vec<ProtoTx> = tx_vec.into_iter().map(|x| -> ProtoTx {x.to_proto()}).collect();
+                proto_block.set_txs(RepeatedField::from(proto_txs));
+            },
+            _ => {}
+        }
+        proto_block
+    }
+}
 
 impl Headed<Header> for Block<Header, SignedTx<Tx>>
     where Header: Rooted + Raw + Mined,
