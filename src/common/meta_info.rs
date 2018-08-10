@@ -15,6 +15,21 @@ pub trait Saved {
     fn get_length(&self) -> u32;
 }
 
+impl MetaInfo {
+    pub fn new(height: u32, t_ema: f64, p_ema: f64, next_difficulty: f64, total_work: f64, file_number: Option<u32>, offset: Option<u32>, length: Option<u32>) -> MetaInfo {
+        MetaInfo {
+            height,
+            t_ema,
+            p_ema,
+            next_difficulty,
+            total_work,
+            file_number,
+            offset,
+            length
+        }
+    }
+}
+
 impl Clone for MetaInfo {
     fn clone(&self) -> MetaInfo {
         let height = self.height;
