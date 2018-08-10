@@ -29,18 +29,18 @@ pub trait Meta {
     fn get_meta(&self) -> Result<MetaInfo, String>;
 }
 
-impl Block<Header, SignedTx<Tx>>
-    where Header: Rooted + Raw + Mined,
-          SignedTx<Tx>: Quantifiable + Countable + Signed {
+impl<T, U> Block<T, U>
+    where T: Rooted,
+          U: Quantifiable + Signed {
 
-    fn new(header: Header, txs: Option<Vec<SignedTx<Tx>>>, meta: Option<MetaInfo>) -> Block<Header, SignedTx<Tx>> {
+    pub fn new(header: T, txs: Option<Vec<U>>, meta: Option<MetaInfo>) -> Block<T, U> {
         Block {
             header,
             txs,
             meta
         }
     }
-    fn from_header(header: Header)-> Block<Header, SignedTx<Tx>> {
+    pub fn from_header(header: T)-> Block<T, U> {
         Block {
             header,
             txs: None,

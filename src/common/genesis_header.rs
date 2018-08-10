@@ -3,7 +3,8 @@ use common::Encode;
 use serialization::blockHeader::BlockHeader;
 use protobuf::Message;
 
-pub struct GenesisHeader<T>(T);
+#[derive(Clone, Debug, PartialEq)]
+pub struct GenesisHeader<T>(pub T);
 
 impl Encode for GenesisHeader<Header> 
     where Header: Rooted {
