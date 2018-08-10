@@ -32,6 +32,14 @@ pub trait Meta {
 impl Block<Header, SignedTx<Tx>>
     where Header: Rooted + Raw + Mined,
           SignedTx<Tx>: Quantifiable + Countable + Signed {
+
+    fn new(header: Header, txs: Option<Vec<SignedTx<Tx>>>, meta: Option<MetaInfo>) -> Block<Header, SignedTx<Tx>> {
+        Block {
+            header,
+            txs,
+            meta
+        }
+    }
     fn from_header(header: Header)-> Block<Header, SignedTx<Tx>> {
         Block {
             header,
@@ -100,7 +108,9 @@ impl Meta for Block<Header, SignedTx<Tx>>
 mod tests {
     use super::*;
     use common::address::{Address, ValidAddress};
+    use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
     use rust_base58::FromBase58;
+
 
     #[test]
     fn it_makes_a_block_from_header() {
@@ -127,8 +137,48 @@ mod tests {
         }
         assert_eq!(block.get_header(), &header);
     }
-
+    
+    #[test]
     fn it_makes_a_block_with_txs() {
-        
+        // Set up header
+        let previous_hash = vec![vec![74,248,206,224,124,114,100,237,205,62,60,165,
+            198,225,77,241,138,87,77,236,55,60,183,46,88,192,18,199,125,23,169,171]];
+        let merkle_root = vec![213,169,1,8,101,229,19,22,130,84,151,145,203,
+            76,212,233,112,233,14,158,72,47,144,205,35,39,124,171,111,208,24,178];
+        let state_root = vec![55,0,90,28,144,19,210,55,242,210,228,153,10,
+            149,25,138,245,207,148,195,66,155,204,100,46,118,70,150,151,113,71,7];
+        let difficulty = 5.570758908578445e-7;
+        let block_nonce = 430;
+        let miner = Address::from_string(&"H3yGUaF38TxQxoFrqCqPdB2pN9jyBHnaj".to_string()).unwrap();
+        let time_stamp = 1533891416560;
+        let header = Header::new(merkle_root, time_stamp, difficulty, state_root, Some(previous_hash), Some(block_nonce), Some(miner));
+
+        // Set up transaction
+        let from = Address::from_string(&"H2aorYbNUbmwvsbupWKLZW7ZUD6VTAc65".to_string()).unwrap();
+        let to = Address::from_string(&"H2eztpq215SA3k7bLsnUdriT5MXDMBYEg".to_string()).unwrap();
+        let amount = 792673;
+        let fee = 97;
+        let nonce = 147;
+        let signature_bytes = vec![232,181,248,214,104,238,209,39,141,146,180,89,155,42,
+            167,166,4,172,51,166,189,138,7,35,100,76,86,242,143,165,171,178,73,219,
+            2,255,123,68,168,35,104,15,200,149,92,37,38,242,0,132,2,201,195,19,85,
+            25,93,229,34,4,173,6,48,46];
+        let recovery = RecoveryId::from_i32(0 as i32).unwrap();
+        let secp = Secp256k1::without_caps();
+        let signature = RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
+        let tx = Tx::new(Some(from), Some(to), amount, Some(fee), Some(nonce), Some(signature), Some(recovery));
+        let signed_tx = SignedTx(tx);
+        let txs = vec![signed_tx];
+
+        // Set up block
+        let block = Block::new(header.clone(), Some(txs.clone()), None);
+
+        match block.get_meta() {
+            Ok(_) => panic!("Only a header and txs were provided, but block has meta info!"),
+            Err(_) => {}
+        }
+
+        assert_eq!(block.get_header(), &header);
+        assert_eq!(&block.get_txs().unwrap(), &txs);
     }
 }

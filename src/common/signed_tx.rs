@@ -8,7 +8,7 @@ use protobuf::Message as ProtoMessage;
 use secp256k1::{Error, RecoverableSignature, RecoveryId, Secp256k1};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct SignedTx<T>(T);
+pub struct SignedTx<T>(pub T);
 
 impl SignedTx<Tx> 
     where Tx: Quantifiable + Sendable + Countable + Signed + Valid {
