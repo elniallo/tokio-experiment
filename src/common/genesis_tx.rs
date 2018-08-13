@@ -1,9 +1,10 @@
-use common::Encode;
+use secp256k1::{RecoverableSignature, RecoveryId};
+use common::{Encode, Proto};
 use common::address::Address;
-use common::tx::{Tx, Quantifiable, Sendable};
+use common::tx::{Tx, ITx};
 use serialization::tx::GenesisTx as ProtoGenesisTx;
 
-use protobuf::Message;
+use protobuf::{Message, ProtobufError};
 
 pub struct GenesisTx<T>(pub T);
 
@@ -17,31 +18,39 @@ impl GenesisTx<Tx> {
     }
 }
 
-impl Encode for GenesisTx<Tx>
-    where Tx: Quantifiable + Sendable {
-    fn encode(&self) -> Result<Vec<u8>, String> {
-        let mut itx = ProtoGenesisTx::new();
-        itx.set_to(self.0.get_to().to_vec());
-        itx.set_amount(self.0.get_amount());
-        let encoding = itx.write_to_bytes();
-        match encoding {
-            Ok(data) => return Ok(data),
-            Err(e) => return Err(e.to_string())
+impl Proto<ProtoGenesisTx, ProtobufError> for GenesisTx<Tx> {
+    fn to_proto(&self) -> Result<ProtoGenesisTx, ProtobufError> {
+        let mut proto_genesis_tx = ProtoGenesisTx::new();
+        proto_genesis_tx.set_amount(self.get_amount());
+        match self.get_to() {
+            Some(addr) => proto_genesis_tx.set_to(addr.to_vec()),
+            None => {}
         }
+        Ok(proto_genesis_tx)
     }
 }
 
-impl Quantifiable for GenesisTx<Tx> 
-    where Tx: Quantifiable {
+impl ITx for GenesisTx<Tx> {
     fn get_amount(&self) -> u64 {
         self.0.get_amount()
     }
-}
-
-impl Sendable for GenesisTx<Tx> 
-    where Tx: Sendable {
-    fn get_to(&self) -> Address {
+    fn get_from(&self) -> Option<Address> {
+        self.0.get_from()
+    }
+    fn get_to(&self) -> Option<Address> {
         self.0.get_to()
+    }
+    fn get_fee(&self) -> Option<u64> {
+        self.0.get_fee()
+    }
+    fn get_nonce(&self) -> Option<u32> {
+        self.0.get_nonce()
+    }
+    fn get_signature(&self) -> Option<RecoverableSignature> {
+        self.0.get_signature()
+    }
+    fn get_recovery(&self) -> Option<RecoveryId> {
+        self.0.get_recovery()
     }
 }
 
@@ -57,7 +66,7 @@ mod tests {
         let amount = 123456789;
         let tx = Tx::new(None, Some(to), amount, None, None, None, None);
         let genesis_tx = GenesisTx(tx);
-        assert_eq!(genesis_tx.get_to(), to);
+        assert_eq!(genesis_tx.get_to().unwrap(), to);
         assert_eq!(genesis_tx.get_amount(), amount);
     }
 
@@ -73,7 +82,7 @@ mod tests {
         itx.set_amount(amount);
 
         let genesis_tx = GenesisTx::decode(itx);
-        assert_eq!(genesis_tx.get_to(), to);
+        assert_eq!(genesis_tx.get_to().unwrap(), to);
         assert_eq!(genesis_tx.get_amount(), amount);
     }
 

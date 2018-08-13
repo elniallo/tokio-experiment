@@ -1,19 +1,19 @@
+use common::signed_tx::VerifyError;
 use common::address::Address;
-use common::tx::{Tx, Quantifiable, Sendable, Signed, Valid};
+use common::tx::{Tx, ITx, Valid};
 use common::genesis_tx;
-use common::Encode;
-use serialization;
+use common::{Encode, Proto};
+use serialization::tx::GenesisSignedTx as ProtoGenesisSignedTx;
 
 
-use protobuf::Message as ProtoMessage;
+use protobuf::{Message as ProtoMessage, ProtobufError};
 use secp256k1::{Error, RecoverableSignature, RecoveryId, Secp256k1};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct GenesisSignedTx<T>(pub T);
 
-impl GenesisSignedTx<Tx> 
-    where Tx: Quantifiable + Sendable + Signed {
-    pub fn decode(proto_tx: serialization::tx::GenesisSignedTx) -> Result<GenesisSignedTx<Tx>, Error> {
+impl GenesisSignedTx<Tx> {
+    pub fn decode(proto_tx: ProtoGenesisSignedTx) -> Result<GenesisSignedTx<Tx>, Error> {
         let mut to: Address = [0; 20];
         to.clone_from_slice(&proto_tx.to[..]);
         let amount = proto_tx.amount;
@@ -26,71 +26,75 @@ impl GenesisSignedTx<Tx>
     }
 }
 
-impl Clone for GenesisSignedTx<Tx>
-    where Tx: Quantifiable + Sendable + Signed {
-        fn clone(&self) -> GenesisSignedTx<Tx> {
-            let to = self.get_to();
-            let amount = self.get_amount();
-            let signature = self.get_signature();
-            let recovery = self.get_recovery();
-            let tx = Tx::new(None, Some(to), amount, None, None, Some(signature), Some(recovery));
-            GenesisSignedTx(tx)
-        }
-    }
-
-impl Encode for GenesisSignedTx<Tx> 
-    where Tx: Quantifiable + Sendable + Signed {
-    fn encode(&self) -> Result<Vec<u8>, String> {
-        let mut itx = serialization::tx::GenesisSignedTx::new();
+impl Proto<ProtoGenesisSignedTx, VerifyError> for GenesisSignedTx<Tx> {
+    fn to_proto(&self) -> Result<ProtoGenesisSignedTx, VerifyError> {
+        let mut proto_genesis_signed_tx = ProtoGenesisSignedTx::new();
         let secp = Secp256k1::without_caps();
-        itx.set_to(self.0.get_to().to_vec());
-        itx.set_amount(self.0.get_amount());
-        itx.set_signature(self.0.get_signature().serialize_compact(&secp).1.to_vec());
-        itx.set_recovery(self.0.get_recovery().to_i32() as u32);
-        let encoding = itx.write_to_bytes(); {
-            match encoding {
-                Ok(data) => return Ok(data),
-                Err(e) => return Err(e.to_string())
-            }
+        match self.get_to() {
+            Some(addr) => proto_genesis_signed_tx.set_to(addr.to_vec()),
+            None => {}
+        }
+        proto_genesis_signed_tx.set_amount(self.get_amount());
+        match self.get_signature() {
+            Some(sig) => proto_genesis_signed_tx.set_signature(sig.serialize_compact(&secp).1.to_vec()),
+            None => {}
+        }
+        match self.get_recovery() {
+            Some(recovery) => proto_genesis_signed_tx.set_recovery(recovery.to_i32() as u32),
+            None => {}
+        }
+        Ok(proto_genesis_signed_tx)
+    }
+}
+
+impl Valid<VerifyError> for GenesisSignedTx<Tx> {
+    fn verify(&self) -> Result<bool, VerifyError> {
+        let to: Address;
+        match self.get_to() {
+            Some(addr) => to = addr,
+            None => return Err(VerifyError::Integrity("Genesis tx has no recipient".to_string()))
+        }
+        let tx = Tx::new(None, Some(to), self.get_amount(), None, None, None, None);
+        let genesis_tx = genesis_tx::GenesisTx(tx);
+        let encoding: Vec<u8>;
+        match genesis_tx.encode() {
+            Ok(data) => encoding = data,
+            Err(e) => return Err(VerifyError::Proto(e))
+        }
+        let signature: RecoverableSignature;
+        match self.get_signature() {
+            Some(sig) => signature = sig,
+            None => return Err(VerifyError::Integrity("Genesis tx has no signature".to_string()))
+        }
+        match Tx::verify(encoding, to, signature) {
+            Ok(result) => return Ok(result),
+            Err(e) => return Err(VerifyError::Secp(e))
         }
     }
 }
 
-impl Quantifiable for GenesisSignedTx<Tx> 
-    where Tx: Quantifiable {
+impl ITx for GenesisSignedTx<Tx> {
     fn get_amount(&self) -> u64 {
         self.0.get_amount()
     }
-}
-
-impl Sendable for GenesisSignedTx<Tx> 
-    where Tx: Sendable {
-    fn get_to(&self) -> Address {
+    fn get_from(&self) -> Option<Address> {
+        self.0.get_from()
+    }
+    fn get_to(&self) -> Option<Address> {
         self.0.get_to()
     }
-}
-
-impl Signed for GenesisSignedTx<Tx> 
-    where Tx: Signed {
-    fn get_signature(&self) -> RecoverableSignature {
+    fn get_fee(&self) -> Option<u64> {
+        self.0.get_fee()
+    }
+    fn get_nonce(&self) -> Option<u32> {
+        self.0.get_nonce()
+    }
+    fn get_signature(&self) -> Option<RecoverableSignature> {
         self.0.get_signature()
     }
-    fn get_recovery(&self) -> RecoveryId {
+    fn get_recovery(&self) -> Option<RecoveryId> {
         self.0.get_recovery()
     }
-}
-
-impl Valid for GenesisSignedTx<Tx> 
-    where Tx: Sendable + Signed {
-        fn verify(&self) -> Result<bool, Error> {
-            let sender = self.get_to();
-            let tx = Tx::new(None, Some(sender), self.get_amount(), None, None, None, None);
-            let genesis_tx = genesis_tx::GenesisTx(tx);
-            let encoding = genesis_tx.encode().unwrap();
-            let signature = self.get_signature();
-
-            Tx::verify(encoding, sender, signature)
-        }
 }
 
 #[cfg(test)]
@@ -111,10 +115,10 @@ mod tests {
             RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
         let tx = Tx::new(None, Some(to), amount, None, None, Some(signature), Some(recovery));
         let gen_sign_tx = GenesisSignedTx(tx);
-        assert_eq!(to, gen_sign_tx.get_to());
+        assert_eq!(to, gen_sign_tx.get_to().unwrap());
         assert_eq!(amount, gen_sign_tx.get_amount());
-        assert_eq!(signature, gen_sign_tx.get_signature());
-        assert_eq!(recovery, gen_sign_tx.get_recovery());
+        assert_eq!(signature, gen_sign_tx.get_signature().unwrap());
+        assert_eq!(recovery, gen_sign_tx.get_recovery().unwrap());
     }
 
     #[test]

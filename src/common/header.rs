@@ -78,8 +78,8 @@ impl Header {
     }
 }
 
-impl<T> Encode for Header 
-    where Header: Rooted + Raw + Mined + Proto<T>,
+impl<T, U> Encode for U 
+    where U: Rooted + Proto<T>,
           T: ProtoMessage {
     fn encode(&self) -> Result<Vec<u8>, String> {
         let proto_block_header: T = self.to_proto();
@@ -90,7 +90,7 @@ impl<T> Encode for Header
     }
 }
 
-impl<T> Proto<T> for Header
+impl<T, U> Proto<T> for Header
     where Header: Rooted,
         T: ProtoMessage + SetProtoHeader {
         fn to_proto(&self) -> T  {

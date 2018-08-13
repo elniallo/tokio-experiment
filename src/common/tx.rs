@@ -1,9 +1,10 @@
+use common::Proto;
 use common::Encode;
 use common::address::{Address, ValidAddress};
 use util::hash::hash;
 use serialization::tx::Tx as ProtoTx;
 
-use protobuf::{Message as ProtoMessage};
+use protobuf::{Message as ProtoMessage, ProtobufError};
 use secp256k1::{Message, RecoverableSignature, RecoveryId, Secp256k1, Error};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -17,26 +18,26 @@ pub struct Tx {
     recovery: Option<RecoveryId>,
 }
 
-pub trait Quantifiable {
+pub trait SetProtoTx {
+    fn set_from(&self, from: Vec<u8>);
+    fn set_to(&self, to: Vec<u8>);
+    fn set_amount(&self, amount: u64);
+    fn set_fee(&self, fee: u64);
+    fn set_nonce(&self, nonce: u32);
+}
+
+pub trait ITx {
     fn get_amount(&self) -> u64;
+    fn get_from(&self) -> Option<Address>;
+    fn get_to(&self) -> Option<Address>;
+    fn get_fee(&self) -> Option<u64>;
+    fn get_nonce(&self) -> Option<u32>;
+    fn get_signature(&self) -> Option<RecoverableSignature>;
+    fn get_recovery(&self) -> Option<RecoveryId>;
 }
 
-pub trait Countable {
-    fn get_from(&self) -> Address;
-    fn get_fee(&self) -> u64;
-    fn get_nonce(&self) -> u32;
-}
-
-pub trait Sendable {
-    fn get_to(&self) -> Address;
-}
-
-pub trait Signed {
-    fn get_signature(&self) -> RecoverableSignature;
-    fn get_recovery(&self) -> RecoveryId;
-}
-pub trait Valid {
-    fn verify(&self) -> Result<bool, Error>;
+pub trait Valid<ErrorType> {
+    fn verify(&self) -> Result<bool, ErrorType>;
 }
 
 impl Tx {
@@ -84,28 +85,6 @@ impl Tx {
         }
     }
 
-    pub fn to_proto_tx(&self) -> ProtoTx {
-        let mut proto_tx = ProtoTx::new();
-        match self.from {
-            Some(from) => proto_tx.set_from(from.to_vec()),
-            None => proto_tx.set_from(vec![])
-        }
-        match self.to {
-            Some(to) => proto_tx.set_to(to.to_vec()),
-            None => proto_tx.set_to(vec![])
-        }
-        proto_tx.set_amount(self.amount);
-        match self.fee {
-            Some(fee) => proto_tx.set_fee(fee),
-            None => proto_tx.set_fee(0)
-        }
-        match self.nonce {
-            Some(nonce) => proto_tx.set_nonce(nonce),
-            None => proto_tx.set_nonce(0)
-        }
-        proto_tx
-    }
-
     pub fn equals(&self, other_tx: Tx) -> bool {
         if self.from != other_tx.from {
             false
@@ -123,59 +102,63 @@ impl Tx {
     }
 }
 
-impl Encode for Tx {
-    fn encode(&self) -> Result<Vec<u8>, String> {
-        let proto_tx = self.to_proto_tx();
-        let encoding = proto_tx.write_to_bytes();
-        match encoding {
-            Ok(data) => return Ok(data),
-            Err(e) => return Err(e.to_string())
+impl<ProtoTxType, ErrorType, TxType> Proto<ProtoTxType, ErrorType> for TxType 
+    where TxType: ITx,  
+          ProtoTxType: ProtoMessage + SetProtoTx {
+    fn to_proto(&self) -> Result<ProtoTxType, ErrorType> {
+        let mut proto_tx = ProtoTxType::new();
+        match self.get_from() {
+            Some(addr) => proto_tx.set_from(addr.to_vec()),
+            None => {}
         }
+        match self.get_to() {
+            Some(to) => proto_tx.set_to(to.to_vec()),
+            None => {}
+        }
+        proto_tx.set_amount(self.get_amount());
+        match self.get_fee() {
+            Some(fee) => proto_tx.set_fee(fee),
+            None => {}
+        }
+        match self.get_nonce() {
+            Some(nonce) => proto_tx.set_nonce(nonce),
+            None => {}
+        }
+        Ok(proto_tx)
     }
 }
 
-impl Quantifiable for Tx {
+impl ITx for Tx {
     fn get_amount(&self) -> u64 {
         self.amount
     }
-}
-
-impl Sendable for Tx {
-    fn get_to(&self) -> Address {
-        self.to.unwrap()
+    fn get_from(&self) -> Option<Address> {
+        self.from
+    }
+    fn get_to(&self) -> Option<Address> {
+        self.to
+    }
+    fn get_nonce(&self) -> Option<u32> {
+        self.nonce
+    }
+    fn get_fee(&self) -> Option<u64> {
+        self.fee
+    }
+    fn get_signature(&self) -> Option<RecoverableSignature> {
+        self.signature
+    }
+    fn get_recovery(&self) -> Option<RecoveryId> {
+        self.recovery
     }
 }
 
-impl Countable for Tx {
-    fn get_from(&self) -> Address {
-        self.from.unwrap()
-    }
-
-    fn get_fee(&self) -> u64 {
-        self.fee.unwrap()
-    }
-
-    fn get_nonce(&self) -> u32 {
-        self.nonce.unwrap()
-    }
-}
-
-impl Signed for Tx {
-    fn get_signature(&self) -> RecoverableSignature {
-        self.signature.unwrap()
-    }
-    fn get_recovery(&self) -> RecoveryId {
-        self.recovery.unwrap()
-    }
-}
-
-impl Valid for Tx 
-    where Tx: Encode + Countable {
-    fn verify(&self) -> Result<bool, Error> {
-        let encoding = self.encode().unwrap();
-        let sender = self.get_from();
-        let signature = self.get_signature();
-        Tx::verify(encoding, sender, signature)
+impl<TxType, ProtoTxType> Encode<ProtobufError> for TxType 
+    where ProtoTxType: ProtoMessage,
+          TxType: Proto<ProtoTxType, ProtobufError> {
+    fn encode<ProtoTxType>(&self) -> Result<Vec<u8>, ProtobufError> 
+        where ProtoTxType: ProtoMessage {
+        let proto_tx: ProtoTxType = self.to_proto()?;
+        Ok(proto_tx.write_to_bytes()?)
     }
 }
 

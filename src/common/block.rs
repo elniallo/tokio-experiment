@@ -1,3 +1,5 @@
+use common::tx::SetProtoTx;
+use common::header::SetProtoHeader;
 use common::meta_info::MetaInfo;
 use common::signed_tx::SignedTx;
 use common::tx::{Quantifiable, Countable, Signed, Tx};
@@ -8,7 +10,7 @@ use serialization::block::Block as ProtoBlock;
 use serialization::tx::SignedTx as ProtoTx;
 use serialization::blockHeader::BlockHeader as ProtoHeader;
 
-use protobuf::{Message, RepeatedField};
+use protobuf::{Message as ProtoMessage, RepeatedField};
 
 pub struct Block<T, U>
     where T: Rooted,
@@ -16,6 +18,11 @@ pub struct Block<T, U>
     pub header: T,
     pub txs: Option<Vec<U>>,
     pub meta: Option<MetaInfo>,
+}
+
+pub trait SetProtoBlock<T, U> {
+    fn set_header(&self, header: T);
+    fn set_txs(&self, txs: RepeatedField<U>);
 }
 
 pub trait Headed<T> {
@@ -50,17 +57,20 @@ impl<T, U> Block<T, U>
     }
 }
 
-impl<T, U> Encode for Block<T, U> 
-    where Block<T, U>: Headed<T> + Embodied<U> + Meta,
-          T: Rooted,
-          U: Quantifiable + Signed {
+impl<HeaderType, TxType, ProtoHeaderType, ProtoTxType, ProtoBlockType> Encode for Block<HeaderType, TxType> 
+    where Block<HeaderType, TxType>: Headed<HeaderType> + Embodied<TxType> + Meta,
+          HeaderType: Rooted + Proto<ProtoHeaderType>,
+          TxType: Quantifiable + Signed + Proto<ProtoTxType>,
+          ProtoBlockType: ProtoMessage + SetProtoBlock<ProtoHeaderType, ProtoTxType>,
+          ProtoHeaderType: SetProtoHeader,
+          ProtoTxType: SetProtoTx {
     fn encode(&self) -> Result<Vec<u8>, String> {
-        let mut proto_block = ProtoBlock::new();
+        let mut proto_block = ProtoBlockType::new();
         proto_block.set_header(self.get_header().to_proto());
         let txs = self.get_txs();
         match txs {
             Ok(tx_vec) => {
-                let proto_txs: Vec<ProtoTx> = tx_vec.into_iter().map(|x| -> ProtoTx {x.to_proto()}).collect();
+                let proto_txs: Vec<ProtoTxType> = tx_vec.into_iter().map(|x| -> ProtoTxType {x.to_proto()}).collect();
                 proto_block.set_txs(RepeatedField::from(proto_txs));
             },
             _ => {}
@@ -74,12 +84,13 @@ impl<T, U> Encode for Block<T, U>
     }
 }
 
-impl<HeaderType, TxType> Proto for Block<HeaderType, TxType> 
-    where HeaderType: Rooted + Proto,
-          TxType: Quantifiable + Signed + Proto,
-          Block<HeaderType, TxType>: Headed<HeaderType> + Embodied<TxType> {
+impl<HeaderType, TxType, ProtoHeaderType, ProtoTxType, ProtoBlockType> Proto<ProtoBlockType> for Block<HeaderType, TxType> 
+    where HeaderType: Rooted + Proto<ProtoHeaderType>,
+          TxType: Quantifiable + Signed + Proto<ProtoTxType>,
+          Block<HeaderType, TxType>: Headed<HeaderType> + Embodied<TxType>,
+          ProtoBlockType: ProtoMessage + SetProtoBlock<ProtoHeaderType, ProtoTxType> {
 
-    fn to_proto<ProtoHeaderType, ProtoTxType>(&self) -> ProtoBlock {
+    fn to_proto<ProtoHeaderType, ProtoTxType>(&self) -> ProtoBlockType {
         let mut proto_block = ProtoBlock::new();
         let proto_header = self.get_header().to_proto();
         proto_block.set_header(proto_header);
