@@ -1,17 +1,10 @@
-use common::{Encode, Proto};
+use common::{Encode, EncodingError, Proto};
 use common::address::{Address, ValidAddress};
 use util::hash::hash;
 use serialization::tx::Tx as ProtoTx;
 
-use protobuf::{Message as ProtoMessage, ProtobufError};
+use protobuf::{Message as ProtoMessage};
 use secp256k1::{Message, RecoverableSignature, RecoveryId, Secp256k1, Error as SecpError};
-
-#[derive(Debug)]
-pub enum EncodingError {
-    Proto(ProtobufError),
-    Secp(SecpError),
-    Integrity(String)
-}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tx {

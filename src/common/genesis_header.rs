@@ -1,47 +1,41 @@
-use common::header::{Rooted, Header};
-use common::{Encode, Proto};
-use serialization::blockHeader::BlockHeader as ProtoHeader;
+use std::ops::Deref;
+use common::header::Header;
+use common::{Encode, EncodingError, Proto};
+use serialization::blockHeader::GenesisHeader as ProtoGenesisHeader;
 use protobuf::Message;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GenesisHeader<T>(pub T);
+pub struct GenesisHeader(pub Header);
 
-impl Encode for GenesisHeader<Header> 
-    where Header: Rooted + Proto<ProtoHeader> {
-    fn encode(&self) -> Result<Vec<u8>, String> {
-        let proto_genesis_block_header: ProtoHeader = self.to_proto();
+impl Deref for GenesisHeader {
+    type Target = Header;
+
+    fn deref(&self) -> &Header {
+        &self.0
+    }
+}
+
+impl Proto<EncodingError> for GenesisHeader {
+    type ProtoType = ProtoGenesisHeader;
+    fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
+        let mut proto_genesis_block_header = Self::ProtoType::new();
+        proto_genesis_block_header.set_merkleRoot(self.get_merkle_root());
+        proto_genesis_block_header.set_timeStamp(self.get_time_stamp());
+        proto_genesis_block_header.set_difficulty(self.get_difficulty());
+        proto_genesis_block_header.set_stateRoot(self.get_state_root());
+        Ok(proto_genesis_block_header)
+    }
+}
+
+impl Encode<EncodingError> for GenesisHeader {
+    fn encode(&self) -> Result<Vec<u8>, EncodingError> {
+        let proto_genesis_block_header: ProtoGenesisHeader = self.to_proto()?;
         match proto_genesis_block_header.write_to_bytes() {
-            Ok(data) => {
-                // The typescript protobufs for some reason elides the nonce on the encoding of the genesis block header
-                // The following deletes the nonce after it has been written to maintain compatibility with typescript
-                let mut elided_nonce = vec![0; data.len() - 2];
-                elided_nonce.clone_from_slice(&data[0..data.len() - 2]);
-                return Ok(elided_nonce);
-            },
-            Err(e) => return Err(e.to_string())
+            Ok(data) => return Ok(data),
+            Err(e) => return Err(EncodingError::Proto(e))
         }
     }
 }
-
-impl Proto<ProtoHeader> for GenesisHeader<Header> {
-
-}
-
-impl Rooted for GenesisHeader<Header> 
-    where Header: Rooted {
-        fn get_merkle_root(&self) -> Vec<u8> {
-            self.0.get_merkle_root()
-        }
-        fn get_state_root(&self) -> Vec<u8> {
-            self.0.get_state_root()
-        }
-        fn get_difficulty(&self) -> f64 {
-            self.0.get_difficulty()
-        }
-        fn get_time_stamp(&self) -> u64 {
-            self.0.get_time_stamp()
-        }
-    }
 
 #[cfg(test)]
 mod tests {

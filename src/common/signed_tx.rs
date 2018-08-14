@@ -1,8 +1,7 @@
-use common::tx::EncodingError;
 use std::ops::Deref;
 use common::address::Address;
 use common::tx::{Tx, Valid};
-use common::{Encode, Proto};
+use common::{Encode, EncodingError, Proto};
 
 use serialization::tx::SignedTx as ProtoSignedTx;
 
@@ -47,7 +46,10 @@ impl Proto<EncodingError> for SignedTx {
             Ok(data) => encoding = data,
             Err(e) => return Err(e)
         }
-        proto_signed_tx.merge_from_bytes(&encoding[..]);
+        match proto_signed_tx.merge_from_bytes(&encoding[..]) {
+            Ok(_) => {},
+            Err(e) => return Err(EncodingError::Proto(e))
+        }
         match self.get_recovery() {
             Some(recovery) => proto_signed_tx.set_recovery(recovery.to_i32() as u32),
             None => return Err(EncodingError::Integrity("Signed tx is missing a recovery id".to_string()))

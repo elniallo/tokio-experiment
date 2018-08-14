@@ -1,11 +1,10 @@
 use std::ops::Deref;
-use secp256k1::{RecoverableSignature, RecoveryId};
-use common::{Encode, Proto};
+use common::{Encode, EncodingError, Proto};
 use common::address::Address;
-use common::tx::{EncodingError, Tx};
+use common::tx::Tx;
 use serialization::tx::GenesisTx as ProtoGenesisTx;
 
-use protobuf::{Message as ProtoMessage, ProtobufError};
+use protobuf::Message as ProtoMessage;
 
 pub struct GenesisTx(pub Tx);
 

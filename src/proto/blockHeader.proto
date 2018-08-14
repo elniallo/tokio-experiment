@@ -11,6 +11,15 @@ message BlockHeader {
     bytes miner = 7;
 }
 
+message GenesisHeader {
+    repeated bytes previousHash = 1;
+    bytes merkleRoot = 2;
+    bytes stateRoot = 3; 
+    double difficulty = 4;
+    uint64 timeStamp = 5; 
+    bytes miner = 7;
+}
+
 message HeaderPrehash {
     repeated bytes previousHash = 1;
     bytes merkleRoot = 2;

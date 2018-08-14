@@ -1,11 +1,10 @@
 use std::ops::Deref;
 use common::address::Address;
-use common::tx::{EncodingError, Tx, Valid};
+use common::tx::{Tx, Valid};
 use common::genesis_tx;
-use common::{Encode, Proto};
+use common::{Encode, EncodingError};
 use serialization::tx::GenesisSignedTx as ProtoGenesisSignedTx;
 
-use protobuf::{Message as ProtoMessage};
 use secp256k1::{Error, RecoverableSignature, RecoveryId, Secp256k1};
 
 #[derive(Clone, Debug, PartialEq)]
