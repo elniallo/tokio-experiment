@@ -1,19 +1,18 @@
-use common::signed_tx::VerifyError;
+use std::ops::Deref;
 use common::address::Address;
-use common::tx::{Tx, ITx, Valid};
+use common::tx::{EncodingError, Tx, Valid};
 use common::genesis_tx;
 use common::{Encode, Proto};
 use serialization::tx::GenesisSignedTx as ProtoGenesisSignedTx;
 
-
-use protobuf::{Message as ProtoMessage, ProtobufError};
+use protobuf::{Message as ProtoMessage};
 use secp256k1::{Error, RecoverableSignature, RecoveryId, Secp256k1};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GenesisSignedTx<T>(pub T);
+pub struct GenesisSignedTx(pub Tx);
 
-impl GenesisSignedTx<Tx> {
-    pub fn decode(proto_tx: ProtoGenesisSignedTx) -> Result<GenesisSignedTx<Tx>, Error> {
+impl GenesisSignedTx {
+    pub fn decode(proto_tx: ProtoGenesisSignedTx) -> Result<GenesisSignedTx, Error> {
         let mut to: Address = [0; 20];
         to.clone_from_slice(&proto_tx.to[..]);
         let amount = proto_tx.amount;
@@ -26,74 +25,37 @@ impl GenesisSignedTx<Tx> {
     }
 }
 
-impl Proto<ProtoGenesisSignedTx, VerifyError> for GenesisSignedTx<Tx> {
-    fn to_proto(&self) -> Result<ProtoGenesisSignedTx, VerifyError> {
-        let mut proto_genesis_signed_tx = ProtoGenesisSignedTx::new();
-        let secp = Secp256k1::without_caps();
-        match self.get_to() {
-            Some(addr) => proto_genesis_signed_tx.set_to(addr.to_vec()),
-            None => {}
-        }
-        proto_genesis_signed_tx.set_amount(self.get_amount());
-        match self.get_signature() {
-            Some(sig) => proto_genesis_signed_tx.set_signature(sig.serialize_compact(&secp).1.to_vec()),
-            None => {}
-        }
-        match self.get_recovery() {
-            Some(recovery) => proto_genesis_signed_tx.set_recovery(recovery.to_i32() as u32),
-            None => {}
-        }
-        Ok(proto_genesis_signed_tx)
+impl Deref for GenesisSignedTx {
+    type Target = Tx;
+
+    fn deref(&self) -> &Tx {
+        &self.0
     }
 }
 
-impl Valid<VerifyError> for GenesisSignedTx<Tx> {
-    fn verify(&self) -> Result<bool, VerifyError> {
+impl Valid<EncodingError> for GenesisSignedTx {
+    fn verify(&self) -> Result<bool, EncodingError> {
         let to: Address;
         match self.get_to() {
             Some(addr) => to = addr,
-            None => return Err(VerifyError::Integrity("Genesis tx has no recipient".to_string()))
+            None => return Err(EncodingError::Integrity("Genesis tx has no recipient".to_string()))
         }
         let tx = Tx::new(None, Some(to), self.get_amount(), None, None, None, None);
         let genesis_tx = genesis_tx::GenesisTx(tx);
         let encoding: Vec<u8>;
         match genesis_tx.encode() {
             Ok(data) => encoding = data,
-            Err(e) => return Err(VerifyError::Proto(e))
+            Err(e) => return Err(e)
         }
         let signature: RecoverableSignature;
         match self.get_signature() {
             Some(sig) => signature = sig,
-            None => return Err(VerifyError::Integrity("Genesis tx has no signature".to_string()))
+            None => return Err(EncodingError::Integrity("Genesis tx has no signature".to_string()))
         }
         match Tx::verify(encoding, to, signature) {
             Ok(result) => return Ok(result),
-            Err(e) => return Err(VerifyError::Secp(e))
+            Err(e) => return Err(EncodingError::Secp(e))
         }
-    }
-}
-
-impl ITx for GenesisSignedTx<Tx> {
-    fn get_amount(&self) -> u64 {
-        self.0.get_amount()
-    }
-    fn get_from(&self) -> Option<Address> {
-        self.0.get_from()
-    }
-    fn get_to(&self) -> Option<Address> {
-        self.0.get_to()
-    }
-    fn get_fee(&self) -> Option<u64> {
-        self.0.get_fee()
-    }
-    fn get_nonce(&self) -> Option<u32> {
-        self.0.get_nonce()
-    }
-    fn get_signature(&self) -> Option<RecoverableSignature> {
-        self.0.get_signature()
-    }
-    fn get_recovery(&self) -> Option<RecoveryId> {
-        self.0.get_recovery()
     }
 }
 

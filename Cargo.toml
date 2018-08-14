@@ -12,8 +12,11 @@ crate-type = ["dylib"]
 [build-dependencies]
 neon-build = "0.2.0"
 protoc = "2.0.4"
-protoc-rust = "2.0.4"
 
+
+[build-dependencies.protoc-rust]
+git = "https://github.com/ChosunOne/rust-protobuf"
+branch = "v2.0"
 
 [build-dependencies.protobuf-codegen]
 git = "https://github.com/ChosunOne/rust-protobuf"

@@ -1,15 +1,16 @@
+use std::ops::Deref;
 use secp256k1::{RecoverableSignature, RecoveryId};
 use common::{Encode, Proto};
 use common::address::Address;
-use common::tx::{Tx, ITx};
+use common::tx::{EncodingError, Tx};
 use serialization::tx::GenesisTx as ProtoGenesisTx;
 
-use protobuf::{Message, ProtobufError};
+use protobuf::{Message as ProtoMessage, ProtobufError};
 
-pub struct GenesisTx<T>(pub T);
+pub struct GenesisTx(pub Tx);
 
-impl GenesisTx<Tx> {
-    pub fn decode(itx: ProtoGenesisTx) -> GenesisTx<Tx> {
+impl GenesisTx {
+    pub fn decode(itx: ProtoGenesisTx) -> GenesisTx {
         let mut to: Address = [0; 20];
         to.clone_from_slice(&itx.to[..]);
         let amount = itx.amount;
@@ -18,39 +19,34 @@ impl GenesisTx<Tx> {
     }
 }
 
-impl Proto<ProtoGenesisTx, ProtobufError> for GenesisTx<Tx> {
-    fn to_proto(&self) -> Result<ProtoGenesisTx, ProtobufError> {
-        let mut proto_genesis_tx = ProtoGenesisTx::new();
-        proto_genesis_tx.set_amount(self.get_amount());
+impl Deref for GenesisTx {
+    type Target = Tx;
+
+    fn deref(&self) -> &Tx {
+        &self.0
+    }
+}
+
+impl Proto<EncodingError> for GenesisTx {
+    type ProtoType = ProtoGenesisTx;
+    fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
+        let mut proto_genesis_tx = Self::ProtoType::new();
         match self.get_to() {
-            Some(addr) => proto_genesis_tx.set_to(addr.to_vec()),
-            None => {}
+            Some(to) => proto_genesis_tx.set_to(to.to_vec()),
+            None => return Err(EncodingError::Integrity("Genesis tx has to recipient".to_string()))
         }
+        proto_genesis_tx.set_amount(self.get_amount());
         Ok(proto_genesis_tx)
     }
 }
 
-impl ITx for GenesisTx<Tx> {
-    fn get_amount(&self) -> u64 {
-        self.0.get_amount()
-    }
-    fn get_from(&self) -> Option<Address> {
-        self.0.get_from()
-    }
-    fn get_to(&self) -> Option<Address> {
-        self.0.get_to()
-    }
-    fn get_fee(&self) -> Option<u64> {
-        self.0.get_fee()
-    }
-    fn get_nonce(&self) -> Option<u32> {
-        self.0.get_nonce()
-    }
-    fn get_signature(&self) -> Option<RecoverableSignature> {
-        self.0.get_signature()
-    }
-    fn get_recovery(&self) -> Option<RecoveryId> {
-        self.0.get_recovery()
+impl Encode<EncodingError> for GenesisTx {
+    fn encode(&self) -> Result<Vec<u8>, EncodingError> {
+        let proto_tx = self.to_proto()?;
+        match proto_tx.write_to_bytes() {
+            Ok(data) => Ok(data),
+            Err(e) => Err(EncodingError::Proto(e))
+        }
     }
 }
 

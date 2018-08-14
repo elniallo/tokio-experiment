@@ -1,5 +1,3 @@
-#![feature(trivial_bounds)]
-
 extern crate blake2_rfc;
 extern crate protobuf;
 extern crate rust_base58;

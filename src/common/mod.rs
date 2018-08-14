@@ -12,9 +12,11 @@ pub mod tx;
 // pub mod meta_info;
 
 pub trait Encode<ErrorType> {
-    fn encode<ProtoTxType>(&self) -> Result<Vec<u8>, ErrorType>;
+    fn encode(&self) -> Result<Vec<u8>, ErrorType>;
 }
 
-pub trait Proto<T, E> {
-    fn to_proto(&self) -> Result<T, E>;
+pub trait Proto<ErrorType> {
+    type ProtoType;
+    fn to_proto(&self) -> Result<Self::ProtoType, ErrorType>;
 }
+
