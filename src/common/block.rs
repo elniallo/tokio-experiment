@@ -1,139 +1,81 @@
-use common::tx::SetProtoTx;
-use common::header::SetProtoHeader;
-use common::meta_info::MetaInfo;
+use common::meta::Meta;
 use common::signed_tx::SignedTx;
-use common::tx::{Quantifiable, Countable, Signed, Tx};
-use common::header::{Rooted, Header, Mined, Raw};
-use common::{Encode, Proto};
+use common::header::Header;
+use common::{Encode, EncodingError, Proto};
 
 use serialization::block::Block as ProtoBlock;
 use serialization::tx::SignedTx as ProtoTx;
-use serialization::blockHeader::BlockHeader as ProtoHeader;
 
 use protobuf::{Message as ProtoMessage, RepeatedField};
 
-pub struct Block<T, U>
-    where T: Rooted,
-          U: Quantifiable + Signed {
-    pub header: T,
-    pub txs: Option<Vec<U>>,
-    pub meta: Option<MetaInfo>,
+pub struct Block<HeaderType, TxType> {
+    pub header: HeaderType,
+    pub txs: Option<Vec<TxType>>,
+    pub meta: Option<Meta>,
 }
 
-pub trait SetProtoBlock<T, U> {
-    fn set_header(&self, header: T);
-    fn set_txs(&self, txs: RepeatedField<U>);
-}
-
-pub trait Headed<T> {
-    fn get_header(&self) -> &T;
-}
-
-pub trait Embodied<T> {
-    fn get_txs(&self) -> Result<Vec<T>, String>;
-}
-
-pub trait Meta {
-    fn get_meta(&self) -> Result<MetaInfo, String>;
-}
-
-impl<T, U> Block<T, U>
-    where T: Rooted,
-          U: Quantifiable + Signed {
-
-    pub fn new(header: T, txs: Option<Vec<U>>, meta: Option<MetaInfo>) -> Block<T, U> {
+impl<HeaderType, TxType> Block<HeaderType, TxType> {
+    pub fn new(header: HeaderType, txs: Option<Vec<TxType>>, meta: Option<Meta>) -> Block<HeaderType, TxType> {
         Block {
             header,
             txs,
             meta
         }
     }
-    pub fn from_header(header: T)-> Block<T, U> {
+    pub fn from_header(header: HeaderType)-> Block<HeaderType, TxType> {
         Block {
             header,
             txs: None,
             meta: None
         }
     }
+    pub fn get_header(&self) -> HeaderType 
+        where HeaderType: Clone {
+        self.header.clone()
+    }
+    pub fn get_txs(&self) -> Option<Vec<TxType>> 
+        where TxType: Clone {
+        self.txs.clone()
+    }
+    pub fn get_meta(&self) -> Option<Meta> {
+        self.meta.clone()
+    }
 }
 
-impl<HeaderType, TxType, ProtoHeaderType, ProtoTxType, ProtoBlockType> Encode for Block<HeaderType, TxType> 
-    where Block<HeaderType, TxType>: Headed<HeaderType> + Embodied<TxType> + Meta,
-          HeaderType: Rooted + Proto<ProtoHeaderType>,
-          TxType: Quantifiable + Signed + Proto<ProtoTxType>,
-          ProtoBlockType: ProtoMessage + SetProtoBlock<ProtoHeaderType, ProtoTxType>,
-          ProtoHeaderType: SetProtoHeader,
-          ProtoTxType: SetProtoTx {
-    fn encode(&self) -> Result<Vec<u8>, String> {
-        let mut proto_block = ProtoBlockType::new();
-        proto_block.set_header(self.get_header().to_proto());
-        let txs = self.get_txs();
-        match txs {
-            Ok(tx_vec) => {
-                let proto_txs: Vec<ProtoTxType> = tx_vec.into_iter().map(|x| -> ProtoTxType {x.to_proto()}).collect();
-                proto_block.set_txs(RepeatedField::from(proto_txs));
-            },
-            _ => {}
-        }
+impl Encode<EncodingError> for Block<Header, SignedTx> {
+    fn encode(&self) -> Result<Vec<u8>, EncodingError> {
+        let proto_block = self.to_proto()?;
         let block_bytes = proto_block.write_to_bytes();
         match block_bytes {
             Ok(data) => Ok(data),
-            Err(e) => Err(e.to_string())
+            Err(e) => Err(EncodingError::Proto(e))
         }
-
     }
 }
 
-impl<HeaderType, TxType, ProtoHeaderType, ProtoTxType, ProtoBlockType> Proto<ProtoBlockType> for Block<HeaderType, TxType> 
-    where HeaderType: Rooted + Proto<ProtoHeaderType>,
-          TxType: Quantifiable + Signed + Proto<ProtoTxType>,
-          Block<HeaderType, TxType>: Headed<HeaderType> + Embodied<TxType>,
-          ProtoBlockType: ProtoMessage + SetProtoBlock<ProtoHeaderType, ProtoTxType> {
-
-    fn to_proto<ProtoHeaderType, ProtoTxType>(&self) -> ProtoBlockType {
-        let mut proto_block = ProtoBlock::new();
-        let proto_header = self.get_header().to_proto();
-        proto_block.set_header(proto_header);
+impl Proto<EncodingError> for Block<Header, SignedTx> {
+    type ProtoType = ProtoBlock;
+    fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
+        let mut proto_block = Self::ProtoType::new();
+        match self.get_header().to_proto() {
+            Ok(proto_header) => proto_block.set_header(proto_header),
+            Err(e) => return Err(e)
+        }
         let txs = self.get_txs();
         match txs {
-            Ok(tx_vec) => {
-                let proto_txs: Vec<ProtoTx> = tx_vec.into_iter().map(|x| -> ProtoTx {x.to_proto()}).collect();
+            Some(tx_vec) => {
+                let mut proto_txs: Vec<ProtoTx> = vec![];
+                for tx in tx_vec.into_iter() {
+                    match tx.to_proto() {
+                        Ok(proto_tx) => proto_txs.push(proto_tx),
+                        Err(_) => {} 
+                    }
+                }
                 proto_block.set_txs(RepeatedField::from(proto_txs));
             },
             _ => {}
         }
-        proto_block
-    }
-}
-
-impl Headed<Header> for Block<Header, SignedTx<Tx>>
-    where Header: Rooted + Raw + Mined,
-          SignedTx<Tx>: Quantifiable + Countable + Signed {
-    fn get_header(&self) -> &Header {
-        &self.header
-    }
-}
-
-impl Embodied<SignedTx<Tx>> for Block<Header, SignedTx<Tx>>
-    where Header: Rooted + Raw + Mined,
-          SignedTx<Tx>: Quantifiable + Countable + Signed {
-    
-    fn get_txs(&self) -> Result<Vec<SignedTx<Tx>>, String> {
-        match self.txs.clone() {
-            Some(data) => Ok(data),
-            None => Err("Block has no record of transactions".to_string())
-        }
-    }
-}
-
-impl Meta for Block<Header, SignedTx<Tx>>
-    where Header: Rooted + Raw + Mined,
-          SignedTx<Tx>: Quantifiable + Countable + Signed {
-    fn get_meta(&self) -> Result<MetaInfo, String> {
-        match self.meta.clone() {
-            Some(data) => Ok(data),
-            None => Err("Block has no meta info".to_string())
-        }
+        Ok(proto_block)
     }
 }
 
@@ -141,6 +83,7 @@ impl Meta for Block<Header, SignedTx<Tx>>
 mod tests {
     use super::*;
     use common::address::{Address, ValidAddress};
+    use common::tx::Tx;
     use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
     use rust_base58::FromBase58;
 
@@ -157,18 +100,18 @@ mod tests {
         let miner = Address::from_string(&"H3yGUaF38TxQxoFrqCqPdB2pN9jyBHnaj".to_string()).unwrap();
         let previous_hash = vec!["G4qXusbRyXmf62c8Tsha7iZoyLsVGfka7ynkvb3Esd1d".from_base58().unwrap()];
         let header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), Some(previous_hash.clone()), Some(nonce), Some(miner));
-        let block = Block::from_header(header.clone());
+        let block: Block<Header, SignedTx> = Block::from_header(header.clone());
         let txs = block.get_txs();
         match txs {
-            Ok(_) => panic!("Only a header was provided, but the block has transactions!"),
-            Err(_) => {}
+            Some(_) => panic!("Only a header was provided, but the block has transactions!"),
+            None => {}
         }
         let meta = block.get_meta();
         match meta {
-            Ok(_) => panic!("Only a header was provided, but the block has meta data!"),
-            Err(_) => {}
+            Some(_) => panic!("Only a header was provided, but the block has meta data!"),
+            None => {}
         }
-        assert_eq!(block.get_header(), &header);
+        assert_eq!(&block.get_header(), &header);
     }
 
     #[test]
@@ -207,11 +150,11 @@ mod tests {
         let block = Block::new(header.clone(), Some(txs.clone()), None);
 
         match block.get_meta() {
-            Ok(_) => panic!("Only a header and txs were provided, but block has meta info!"),
-            Err(_) => {}
+            Some(_) => panic!("Only a header and txs were provided, but block has meta info!"),
+            None => {}
         }
 
-        assert_eq!(block.get_header(), &header);
+        assert_eq!(&block.get_header(), &header);
         assert_eq!(&block.get_txs().unwrap(), &txs);
     }
 
@@ -231,13 +174,13 @@ mod tests {
         let block = Block::from_header(header.clone());
         let txs = block.get_txs();
         match txs {
-            Ok(_) => panic!("Only a header was provided, but the block has transactions!"),
-            Err(_) => {}
+            Some(_) => panic!("Only a header was provided, but the block has transactions!"),
+            None => {}
         }
         let meta = block.get_meta();
         match meta {
-            Ok(_) => panic!("Only a header was provided, but the block has meta data!"),
-            Err(_) => {}
+            Some(_) => panic!("Only a header was provided, but the block has meta data!"),
+            None => {}
         }
         let encoding = block.encode().unwrap();
         let expected_encoding = vec![10,143,1,10,32,167,196,139,41,65,52,154,132,218,
@@ -248,7 +191,7 @@ mod tests {
             165,147,9,247,207,204,221,146,61,33,175,189,89,172,241,108,181,62,40,252,
             176,141,155,210,44,48,143,5,58,20,213,49,13,190,194,137,35,119,16,249,57,
             125,207,78,117,246,36,136,151,210];
-        assert_eq!(block.get_header(), &header);
+        assert_eq!(&block.get_header(), &header);
         assert_eq!(encoding, expected_encoding);
     }
 
@@ -336,7 +279,7 @@ mod tests {
         let txs = vec![signed_tx];
 
         // Set up Meta
-        let meta = MetaInfo::new(1, 2 as f64, 3 as f64, 4 as f64, 5 as f64, Some(6), Some(7), Some(8));
+        let meta = Meta::new(1, 2 as f64, 3 as f64, 4 as f64, 5 as f64, Some(6), Some(7), Some(8));
 
         // Set up block
         let block = Block::new(header.clone(), Some(txs.clone()), Some(meta.clone()));

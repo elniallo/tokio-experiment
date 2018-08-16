@@ -6,6 +6,7 @@ use serialization::tx::GenesisTx as ProtoGenesisTx;
 
 use protobuf::Message as ProtoMessage;
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct GenesisTx(pub Tx);
 
 impl GenesisTx {

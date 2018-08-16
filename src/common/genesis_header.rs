@@ -55,11 +55,12 @@ mod tests {
         let header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), None, None, None);
         let genesis_header = GenesisHeader(header);
         let encoding = genesis_header.encode().unwrap();
-        let expected_encoding = vec![18,32,218,175,98,56,136,59,157,
-            43,178,250,66,194,50,129,87,37,147,54,157,79,238,83,118,
-            209,92,202,25,32,246,230,153,39,26,32,121,132,139,154,165,
-            229,182,152,126,204,58,142,150,220,236,119,144,1,181,107,19,
-            130,67,220,241,192,46,94,69,215,134,11,33,0,0,0,0,0,0,0,0,40,168,184,239,233,139,44];
+        let expected_encoding = vec![18,32,218,175,98,56,136,59,157,43,
+            178,250,66,194,50,129,87,37,147,54,157,79,238,83,118,209,
+            92,202,25,32,246,230,153,39,26,32,121,132,139,154,165,229,
+            182,152,126,204,58,142,150,220,236,119,144,1,181,107,19,130,
+            67,220,241,192,46,94,69,215,134,11,33,0,0,0,0,0,0,0,0,40,
+            168,184,239,233,139,44];
         let genesis_header_hash = hash(&encoding, 32).to_base58();
         assert_eq!(genesis_header.0.get_merkle_root(), merkle_root);
         assert_eq!(genesis_header.0.get_state_root(), state_root);

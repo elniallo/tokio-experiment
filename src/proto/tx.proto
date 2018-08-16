@@ -1,6 +1,6 @@
 syntax = "proto3";
 message Txs {
-  repeated Tx txs =1;
+  repeated SignedTx txs = 1;
 }
 
 message GenesisTx {

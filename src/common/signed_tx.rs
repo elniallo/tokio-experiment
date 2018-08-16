@@ -31,7 +31,6 @@ impl SignedTx {
 
 impl Deref for SignedTx {
     type Target = Tx;
-
     fn deref(&self) -> &Tx {
         &self.0
     }

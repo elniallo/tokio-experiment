@@ -24,7 +24,7 @@ use protobuf::ProtobufEnum as ProtobufEnum_imported_for_functions;
 #[derive(PartialEq,Clone,Default)]
 pub struct Txs {
     // message fields
-    pub txs: ::protobuf::RepeatedField<Tx>,
+    pub txs: ::protobuf::RepeatedField<SignedTx>,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
     cached_size: ::protobuf::CachedSize,
@@ -35,28 +35,28 @@ impl Txs {
         ::std::default::Default::default()
     }
 
-    // repeated .Tx txs = 1;
+    // repeated .SignedTx txs = 1;
 
     pub fn clear_txs(&mut self) {
         self.txs.clear();
     }
 
     // Param is passed by value, moved
-    pub fn set_txs(&mut self, v: ::protobuf::RepeatedField<Tx>) {
+    pub fn set_txs(&mut self, v: ::protobuf::RepeatedField<SignedTx>) {
         self.txs = v;
     }
 
     // Mutable pointer to the field.
-    pub fn mut_txs(&mut self) -> &mut ::protobuf::RepeatedField<Tx> {
+    pub fn mut_txs(&mut self) -> &mut ::protobuf::RepeatedField<SignedTx> {
         &mut self.txs
     }
 
     // Take field
-    pub fn take_txs(&mut self) -> ::protobuf::RepeatedField<Tx> {
+    pub fn take_txs(&mut self) -> ::protobuf::RepeatedField<SignedTx> {
         ::std::mem::replace(&mut self.txs, ::protobuf::RepeatedField::new())
     }
 
-    pub fn get_txs(&self) -> &[Tx] {
+    pub fn get_txs(&self) -> &[SignedTx] {
         &self.txs
     }
 }
@@ -147,7 +147,7 @@ impl ::protobuf::Message for Txs {
         unsafe {
             descriptor.get(|| {
                 let mut fields = ::std::vec::Vec::new();
-                fields.push(::protobuf::reflect::accessor::make_repeated_field_accessor::<_, ::protobuf::types::ProtobufTypeMessage<Tx>>(
+                fields.push(::protobuf::reflect::accessor::make_repeated_field_accessor::<_, ::protobuf::types::ProtobufTypeMessage<SignedTx>>(
                     "txs",
                     |m: &Txs| { &m.txs },
                     |m: &mut Txs| { &mut m.txs },
@@ -1637,14 +1637,14 @@ impl ::protobuf::reflect::ProtobufValue for TxDB {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x08tx.proto\"\x1c\n\x03Txs\x12\x15\n\x03txs\x18\x01\x20\x03(\x0b2\x03\
-    .TxR\x03txs\"3\n\tGenesisTx\x12\x0e\n\x02to\x18\x02\x20\x01(\x0cR\x02to\
-    \x12\x16\n\x06amount\x18\x03\x20\x01(\x04R\x06amount\"s\n\x0fGenesisSign\
-    edTx\x12\x0e\n\x02to\x18\x02\x20\x01(\x0cR\x02to\x12\x16\n\x06amount\x18\
-    \x03\x20\x01(\x04R\x06amount\x12\x1c\n\tsignature\x18\x06\x20\x01(\x0cR\
-    \tsignature\x12\x1a\n\x08recovery\x18\x07\x20\x01(\rR\x08recovery\"h\n\
-    \x02Tx\x12\x12\n\x04from\x18\x01\x20\x01(\x0cR\x04from\x12\x0e\n\x02to\
-    \x18\x02\x20\x01(\x0cR\x02to\x12\x16\n\x06amount\x18\x03\x20\x01(\x04R\
+    \n\x08tx.proto\"\"\n\x03Txs\x12\x1b\n\x03txs\x18\x01\x20\x03(\x0b2\t.Sig\
+    nedTxR\x03txs\"3\n\tGenesisTx\x12\x0e\n\x02to\x18\x02\x20\x01(\x0cR\x02t\
+    o\x12\x16\n\x06amount\x18\x03\x20\x01(\x04R\x06amount\"s\n\x0fGenesisSig\
+    nedTx\x12\x0e\n\x02to\x18\x02\x20\x01(\x0cR\x02to\x12\x16\n\x06amount\
+    \x18\x03\x20\x01(\x04R\x06amount\x12\x1c\n\tsignature\x18\x06\x20\x01(\
+    \x0cR\tsignature\x12\x1a\n\x08recovery\x18\x07\x20\x01(\rR\x08recovery\"\
+    h\n\x02Tx\x12\x12\n\x04from\x18\x01\x20\x01(\x0cR\x04from\x12\x0e\n\x02t\
+    o\x18\x02\x20\x01(\x0cR\x02to\x12\x16\n\x06amount\x18\x03\x20\x01(\x04R\
     \x06amount\x12\x10\n\x03fee\x18\x04\x20\x01(\x04R\x03fee\x12\x14\n\x05no\
     nce\x18\x05\x20\x01(\rR\x05nonce\"\xa8\x01\n\x08SignedTx\x12\x12\n\x04fr\
     om\x18\x01\x20\x01(\x0cR\x04from\x12\x0e\n\x02to\x18\x02\x20\x01(\x0cR\

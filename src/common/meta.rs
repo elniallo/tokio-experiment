@@ -1,4 +1,4 @@
-pub struct MetaInfo {
+pub struct Meta {
     pub height: u32,
     pub t_ema: f64,
     pub p_ema: f64,
@@ -15,9 +15,9 @@ pub trait Saved {
     fn get_length(&self) -> u32;
 }
 
-impl MetaInfo {
-    pub fn new(height: u32, t_ema: f64, p_ema: f64, next_difficulty: f64, total_work: f64, file_number: Option<u32>, offset: Option<u32>, length: Option<u32>) -> MetaInfo {
-        MetaInfo {
+impl Meta {
+    pub fn new(height: u32, t_ema: f64, p_ema: f64, next_difficulty: f64, total_work: f64, file_number: Option<u32>, offset: Option<u32>, length: Option<u32>) -> Meta {
+        Meta {
             height,
             t_ema,
             p_ema,
@@ -30,8 +30,8 @@ impl MetaInfo {
     }
 }
 
-impl Clone for MetaInfo {
-    fn clone(&self) -> MetaInfo {
+impl Clone for Meta {
+    fn clone(&self) -> Meta {
         let height = self.height;
         let t_ema = self.t_ema;
         let p_ema = self.p_ema;
@@ -40,7 +40,7 @@ impl Clone for MetaInfo {
         let file_number = self.file_number;
         let offset = self.offset;
         let length = self.length;
-        MetaInfo {
+        Meta {
             height,
             t_ema,
             p_ema,

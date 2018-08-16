@@ -8,9 +8,9 @@ pub mod signed_tx;
 pub mod tx;
 pub mod header;
 pub mod genesis_header;
-// pub mod block;
-// pub mod genesis_block;
-// pub mod meta_info;
+pub mod block;
+pub mod genesis_block;
+pub mod meta;
 
 pub trait Encode<ErrorType> {
     fn encode(&self) -> Result<Vec<u8>, ErrorType>;
