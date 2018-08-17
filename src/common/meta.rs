@@ -68,6 +68,7 @@ impl Encode<EncodingError> for Meta {
 
 mod tests {
     use super::*;
+
     #[test]
     fn it_makes_meta_without_file_info() {
         let height = 150000;
@@ -84,5 +85,27 @@ mod tests {
         assert_eq!(meta.file_number, None);
         assert_eq!(meta.offset, None);
         assert_eq!(meta.length, None);
+    }
+
+    #[test]
+    fn it_makes_meta_with_file_info() {
+        let height = 123456789;
+        let t_ema = 1234.0;
+        let p_ema = 0.1234;
+        let next_difficulty = 0.012345;
+        let total_work = 1e23;
+        let offset = 123;
+        let file_number = 234;
+        let length = 345;
+        let meta = Meta::new(height, t_ema, p_ema, next_difficulty, total_work, Some(file_number), Some(offset), Some(length));
+
+        assert_eq!(meta.height, height);
+        assert_eq!(meta.t_ema, t_ema);
+        assert_eq!(meta.p_ema, p_ema);
+        assert_eq!(meta.next_difficulty, next_difficulty);
+        assert_eq!(meta.total_work, total_work);
+        assert_eq!(meta.offset.unwrap(), offset);
+        assert_eq!(meta.file_number.unwrap(), file_number);
+        assert_eq!(meta.length.unwrap(), length);
     }
 }
