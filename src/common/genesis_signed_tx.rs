@@ -46,12 +46,12 @@ impl Proto<EncodingError> for GenesisSignedTx {
             Ok(_) => {},
             Err(e) => return Err(EncodingError::Proto(e))
         }
-        match self.get_recovery() {
+        match self.recovery {
             Some(recovery) => proto_genesis_signed_tx.set_recovery(recovery.to_i32() as u32),
             None => return Err(EncodingError::Integrity("Signed tx is missing a recovery id".to_string()))
         }
         let secp = Secp256k1::without_caps();
-        match self.get_signature() {
+        match self.signature {
             Some(signature) => proto_genesis_signed_tx.set_signature(signature.serialize_compact(&secp).1.to_vec()),
             None => return Err(EncodingError::Integrity("Signed tx is missing a signature".to_string()))
         }
@@ -72,11 +72,11 @@ impl Encode<EncodingError> for GenesisSignedTx {
 impl Valid<EncodingError> for GenesisSignedTx {
     fn verify(&self) -> Result<bool, EncodingError> {
         let to: Address;
-        match self.get_to() {
+        match self.to {
             Some(addr) => to = addr,
             None => return Err(EncodingError::Integrity("Genesis tx has no recipient".to_string()))
         }
-        let tx = Tx::new(None, Some(to), self.get_amount(), None, None, None, None);
+        let tx = Tx::new(None, Some(to), self.amount, None, None, None, None);
         let genesis_tx = GenesisTx(tx);
         let encoding: Vec<u8>;
         match genesis_tx.encode() {
@@ -84,7 +84,7 @@ impl Valid<EncodingError> for GenesisSignedTx {
             Err(e) => return Err(e)
         }
         let signature: RecoverableSignature;
-        match self.get_signature() {
+        match self.signature {
             Some(sig) => signature = sig,
             None => return Err(EncodingError::Integrity("Genesis tx has no signature".to_string()))
         }
@@ -114,10 +114,10 @@ mod tests {
         let tx = Tx::new(None, Some(to), amount, None, None, Some(signature), Some(recovery));
         let genesis_tx = GenesisTx(tx);
         let gen_sign_tx = GenesisSignedTx(genesis_tx);
-        assert_eq!(to, gen_sign_tx.get_to().unwrap());
-        assert_eq!(amount, gen_sign_tx.get_amount());
-        assert_eq!(signature, gen_sign_tx.get_signature().unwrap());
-        assert_eq!(recovery, gen_sign_tx.get_recovery().unwrap());
+        assert_eq!(to, gen_sign_tx.to.unwrap());
+        assert_eq!(amount, gen_sign_tx.amount);
+        assert_eq!(signature, gen_sign_tx.signature.unwrap());
+        assert_eq!(recovery, gen_sign_tx.recovery.unwrap());
     }
 
     #[test]

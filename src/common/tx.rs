@@ -8,13 +8,13 @@ use secp256k1::{Message, RecoverableSignature, RecoveryId, Secp256k1, Error as S
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tx {
-    from: Option<Address>,
-    to: Option<Address>,
-    amount: u64,
-    fee: Option<u64>,
-    nonce: Option<u32>,
-    signature: Option<RecoverableSignature>,
-    recovery: Option<RecoveryId>,
+    pub from: Option<Address>,
+    pub to: Option<Address>,
+    pub amount: u64,
+    pub fee: Option<u64>,
+    pub nonce: Option<u32>,
+    pub signature: Option<RecoverableSignature>,
+    pub recovery: Option<RecoveryId>,
 }
 
 pub trait Valid<ErrorType> {
@@ -38,27 +38,6 @@ impl Tx {
             signature,
             recovery
         }
-    }
-    pub fn get_amount(&self) -> u64 {
-        self.amount
-    }
-    pub fn get_from(&self) -> Option<Address> {
-        self.from
-    }
-    pub fn get_to(&self) -> Option<Address> {
-        self.to
-    }
-    pub fn get_nonce(&self) -> Option<u32> {
-        self.nonce
-    }
-    pub fn get_fee(&self) -> Option<u64> {
-        self.fee
-    }
-    pub fn get_signature(&self) -> Option<RecoverableSignature> {
-        self.signature
-    }
-    pub fn get_recovery(&self) -> Option<RecoveryId> {
-        self.recovery
     }
 
     pub fn decode(proto_tx: ProtoTx) -> Tx {
@@ -109,20 +88,20 @@ impl Proto<EncodingError> for Tx {
     fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> 
         where Self::ProtoType: ProtoMessage {
         let mut proto_tx = ProtoTx::new();
-        match self.get_from() {
+        match self.from {
             Some(addr) => proto_tx.set_from(addr.to_vec()),
             None => {}
         }
-        match self.get_to() {
+        match self.to {
             Some(addr) => proto_tx.set_to(addr.to_vec()),
             None => {}
         }
-        proto_tx.set_amount(self.get_amount());
-        match self.get_fee() {
+        proto_tx.set_amount(self.amount);
+        match self.fee {
             Some(fee) => proto_tx.set_fee(fee),
             None => {}
         }
-        match self.get_nonce() {
+        match self.nonce {
             Some(nonce) => proto_tx.set_nonce(nonce),
             None => {}
         }
@@ -214,6 +193,22 @@ mod tests {
             229, 233, 114, 18, 20, 87, 217, 90, 40, 10, 141, 125, 74, 177, 128, 155, 18, 148, 149,
             135, 84, 9, 224, 232, 102, 24, 149, 154, 239, 58, 32, 1, 40, 3,
         ];
+        assert_eq!(encoding, expected_encoding);
+    }
+
+    #[test]
+    fn it_encodes_like_javascript_for_large_amounts() {
+        let from = [41,251,67,236,239,131,69,76,102,112,26,52,242,162,24,220,242,33,163,105];
+        let to = [231,178,9,132,67,165,167,239,54,145,232,222,104,147,104,123,252,196,68,82];
+        let amount = 23892147312890090;
+        let fee = 7787639375790336;
+        let nonce = 364750872;
+        let tx = Tx::new(Some(from), Some(to), amount, Some(fee), Some(nonce), None, None);
+        let encoding = tx.encode().unwrap();
+        let expected_encoding = vec![10,20,41,251,67,236,239,131,69,76,102,112,26,52,242,162,
+            24,220,242,33,163,105,18,20,231,178,9,132,67,165,167,239,54,145,232,222,104,147,
+            104,123,252,196,68,82,24,234,161,134,204,128,185,184,42,32,128,130,136,181,145,
+            218,234,13,40,152,208,246,173,1];
         assert_eq!(encoding, expected_encoding);
     }
 

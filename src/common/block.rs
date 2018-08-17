@@ -3,7 +3,7 @@ use common::signed_tx::SignedTx;
 use common::header::Header;
 use common::{Encode, EncodingError, Proto};
 
-use serialization::block::Block as ProtoBlock;
+use serialization::block::{Block as ProtoBlock, BlockDB as ProtoBlockDB};
 use serialization::tx::SignedTx as ProtoTx;
 
 use protobuf::{Message as ProtoMessage, RepeatedField};
@@ -14,7 +14,8 @@ pub struct Block<HeaderType, TxType> {
     pub meta: Option<Meta>,
 }
 
-impl<HeaderType, TxType> Block<HeaderType, TxType> {
+impl<HeaderType, TxType> Block<HeaderType, TxType> 
+    where HeaderType: Clone + Encode<EncodingError> {
     pub fn new(header: HeaderType, txs: Option<Vec<TxType>>, meta: Option<Meta>) -> Block<HeaderType, TxType> {
         Block {
             header,
@@ -29,16 +30,17 @@ impl<HeaderType, TxType> Block<HeaderType, TxType> {
             meta: None
         }
     }
-    pub fn get_header(&self) -> HeaderType 
-        where HeaderType: Clone {
-        self.header.clone()
-    }
-    pub fn get_txs(&self) -> Option<Vec<TxType>> 
-        where TxType: Clone {
-        self.txs.clone()
-    }
-    pub fn get_meta(&self) -> Option<Meta> {
-        self.meta.clone()
+    pub fn save(&self) -> Result<ProtoBlockDB, EncodingError> {
+        let mut proto_meta: ProtoBlockDB;
+        match self.meta.clone() {
+            Some(meta) => proto_meta = meta.to_proto()?,
+            None => return Err(EncodingError::Integrity("Block is missing meta data to save".to_string()))
+        }
+        let header_bytes = self.header.encode()?;
+        match proto_meta.merge_from_bytes(&header_bytes) {
+            Ok(_) => Ok(proto_meta),
+            Err(e) => Err(EncodingError::Proto(e))
+        }
     }
 }
 
@@ -57,12 +59,11 @@ impl Proto<EncodingError> for Block<Header, SignedTx> {
     type ProtoType = ProtoBlock;
     fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
         let mut proto_block = Self::ProtoType::new();
-        match self.get_header().to_proto() {
+        match self.header.to_proto() {
             Ok(proto_header) => proto_block.set_header(proto_header),
             Err(e) => return Err(e)
         }
-        let txs = self.get_txs();
-        match txs {
+        match self.txs.clone() {
             Some(tx_vec) => {
                 let mut proto_txs: Vec<ProtoTx> = vec![];
                 for tx in tx_vec.into_iter() {
@@ -101,17 +102,15 @@ mod tests {
         let previous_hash = vec!["G4qXusbRyXmf62c8Tsha7iZoyLsVGfka7ynkvb3Esd1d".from_base58().unwrap()];
         let header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), Some(previous_hash.clone()), Some(nonce), Some(miner));
         let block: Block<Header, SignedTx> = Block::from_header(header.clone());
-        let txs = block.get_txs();
-        match txs {
+        match block.txs {
             Some(_) => panic!("Only a header was provided, but the block has transactions!"),
             None => {}
         }
-        let meta = block.get_meta();
-        match meta {
+        match block.meta {
             Some(_) => panic!("Only a header was provided, but the block has meta data!"),
             None => {}
         }
-        assert_eq!(&block.get_header(), &header);
+        assert_eq!(&block.header, &header);
     }
 
     #[test]
@@ -149,13 +148,13 @@ mod tests {
         // Set up block
         let block = Block::new(header.clone(), Some(txs.clone()), None);
 
-        match block.get_meta() {
+        match block.meta {
             Some(_) => panic!("Only a header and txs were provided, but block has meta info!"),
             None => {}
         }
 
-        assert_eq!(&block.get_header(), &header);
-        assert_eq!(&block.get_txs().unwrap(), &txs);
+        assert_eq!(&block.header, &header);
+        assert_eq!(&block.txs.unwrap(), &txs);
     }
 
     #[test]
@@ -172,13 +171,11 @@ mod tests {
         let miner = Address::from_string(&"H3yGUaF38TxQxoFrqCqPdB2pN9jyBHnaj".to_string()).unwrap();
         let header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), Some(previous_hash.clone()), Some(nonce), Some(miner));
         let block = Block::from_header(header.clone());
-        let txs = block.get_txs();
-        match txs {
+        match block.txs {
             Some(_) => panic!("Only a header was provided, but the block has transactions!"),
             None => {}
         }
-        let meta = block.get_meta();
-        match meta {
+        match block.meta {
             Some(_) => panic!("Only a header was provided, but the block has meta data!"),
             None => {}
         }
@@ -191,7 +188,7 @@ mod tests {
             165,147,9,247,207,204,221,146,61,33,175,189,89,172,241,108,181,62,40,252,
             176,141,155,210,44,48,143,5,58,20,213,49,13,190,194,137,35,119,16,249,57,
             125,207,78,117,246,36,136,151,210];
-        assert_eq!(&block.get_header(), &header);
+        assert_eq!(&block.header, &header);
         assert_eq!(encoding, expected_encoding);
     }
 

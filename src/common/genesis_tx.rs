@@ -21,7 +21,6 @@ impl GenesisTx {
 
 impl Deref for GenesisTx {
     type Target = Tx;
-
     fn deref(&self) -> &Tx {
         &self.0
     }
@@ -31,11 +30,11 @@ impl Proto<EncodingError> for GenesisTx {
     type ProtoType = ProtoGenesisTx;
     fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
         let mut proto_genesis_tx = Self::ProtoType::new();
-        match self.get_to() {
+        match self.to {
             Some(to) => proto_genesis_tx.set_to(to.to_vec()),
             None => return Err(EncodingError::Integrity("Genesis tx has to recipient".to_string()))
         }
-        proto_genesis_tx.set_amount(self.get_amount());
+        proto_genesis_tx.set_amount(self.amount);
         Ok(proto_genesis_tx)
     }
 }
@@ -62,8 +61,8 @@ mod tests {
         let amount = 123456789;
         let tx = Tx::new(None, Some(to), amount, None, None, None, None);
         let genesis_tx = GenesisTx(tx);
-        assert_eq!(genesis_tx.get_to().unwrap(), to);
-        assert_eq!(genesis_tx.get_amount(), amount);
+        assert_eq!(genesis_tx.to.unwrap(), to);
+        assert_eq!(genesis_tx.amount, amount);
     }
 
     #[test]
@@ -78,8 +77,8 @@ mod tests {
         itx.set_amount(amount);
 
         let genesis_tx = GenesisTx::decode(itx);
-        assert_eq!(genesis_tx.get_to().unwrap(), to);
-        assert_eq!(genesis_tx.get_amount(), amount);
+        assert_eq!(genesis_tx.to.unwrap(), to);
+        assert_eq!(genesis_tx.amount, amount);
     }
 
     #[test]

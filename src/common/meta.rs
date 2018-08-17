@@ -1,18 +1,19 @@
+use common::{Encode, EncodingError, Proto};
+
+use serialization::block::BlockDB as ProtoBlockDB;
+
+use protobuf::Message as ProtoMessage;
+
+#[derive(Clone)]
 pub struct Meta {
     pub height: u32,
     pub t_ema: f64,
     pub p_ema: f64,
     pub next_difficulty: f64,
     pub total_work: f64,
-    file_number: Option<u32>,
-    offset: Option<u32>,
-    length: Option<u32>,
-}
-
-pub trait Saved {
-    fn get_file_number(&self) -> u32;
-    fn get_offset(&self) -> u32;
-    fn get_length(&self) -> u32;
+    pub file_number: Option<u32>,
+    pub offset: Option<u32>,
+    pub length: Option<u32>,
 }
 
 impl Meta {
@@ -30,25 +31,58 @@ impl Meta {
     }
 }
 
-impl Clone for Meta {
-    fn clone(&self) -> Meta {
-        let height = self.height;
-        let t_ema = self.t_ema;
-        let p_ema = self.p_ema;
-        let next_difficulty = self.next_difficulty;
-        let total_work = self.total_work;
-        let file_number = self.file_number;
-        let offset = self.offset;
-        let length = self.length;
-        Meta {
-            height,
-            t_ema,
-            p_ema,
-            next_difficulty,
-            total_work,
-            file_number,
-            offset,
-            length
+impl Proto<EncodingError> for Meta {
+    type ProtoType = ProtoBlockDB;
+    fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
+        let mut proto_meta = Self::ProtoType::new();
+        proto_meta.set_height(self.height);
+        proto_meta.set_tEMA(self.t_ema);
+        proto_meta.set_pEMA(self.p_ema);
+        proto_meta.set_nextDifficulty(self.next_difficulty);
+        proto_meta.set_totalWork(self.total_work);
+        match self.file_number {
+            Some(fd) => proto_meta.set_fileNumber(fd),
+            None => {}
         }
+        match self.offset {
+            Some(offset) => proto_meta.set_offset(offset),
+            None => {}
+        }
+        match self.length {
+            Some(length) => proto_meta.set_length(length),
+            None => {}
+        }
+        Ok(proto_meta)
+    }
+}
+
+impl Encode<EncodingError> for Meta {
+    fn encode(&self) -> Result<Vec<u8>, EncodingError> {
+        let proto_meta = self.to_proto()?;
+        match proto_meta.write_to_bytes() {
+            Ok(data) => Ok(data),
+            Err(e) => Err(EncodingError::Proto(e))
+        }
+    }
+}
+
+mod tests {
+    use super::*;
+    #[test]
+    fn it_makes_meta_without_file_info() {
+        let height = 150000;
+        let t_ema = 30.00;
+        let p_ema = 0.000001;
+        let next_difficulty = 0.0001;
+        let total_work = 1e15;
+        let meta = Meta::new(height, t_ema, p_ema, next_difficulty, total_work, None, None, None);
+
+        assert_eq!(meta.height, height);
+        assert_eq!(meta.t_ema, t_ema);
+        assert_eq!(meta.p_ema, p_ema);
+        assert_eq!(meta.total_work, total_work);
+        assert_eq!(meta.file_number, None);
+        assert_eq!(meta.offset, None);
+        assert_eq!(meta.length, None);
     }
 }

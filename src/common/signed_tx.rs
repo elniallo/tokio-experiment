@@ -49,12 +49,12 @@ impl Proto<EncodingError> for SignedTx {
             Ok(_) => {},
             Err(e) => return Err(EncodingError::Proto(e))
         }
-        match self.get_recovery() {
+        match self.recovery {
             Some(recovery) => proto_signed_tx.set_recovery(recovery.to_i32() as u32),
             None => return Err(EncodingError::Integrity("Signed tx is missing a recovery id".to_string()))
         }
         let secp = Secp256k1::without_caps();
-        match self.get_signature() {
+        match self.signature {
             Some(signature) => proto_signed_tx.set_signature(signature.serialize_compact(&secp).1.to_vec()),
             None => return Err(EncodingError::Integrity("Signed tx is missing a signature".to_string()))
         }
@@ -80,12 +80,12 @@ impl Valid<EncodingError> for SignedTx {
             Err(e) => return Err(e)
         }
         let sender: Address;
-        match self.get_from() {
+        match self.from {
             Some(addr) => sender = addr,
             None => return Err(EncodingError::Integrity("Tx has no sender".to_string()))
         }
         let signature: RecoverableSignature;
-        match self.get_signature() {
+        match self.signature {
             Some(sig) => signature = sig,
             None => return Err(EncodingError::Integrity("Tx has no signature".to_string()))
         }

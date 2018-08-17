@@ -22,10 +22,9 @@ impl Proto<EncodingError> for GenesisBlock {
     type ProtoType = ProtoBlock;
     fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
         let mut proto_block = Self::ProtoType::new();
-        let proto_header = self.get_header().to_proto()?;
+        let proto_header = self.header.to_proto()?;
         proto_block.set_header(proto_header);
-        let txs = self.get_txs();
-        match txs {
+        match self.txs.clone() {
             Some(tx_vec) => {
                 let mut proto_txs: Vec<ProtoTx> = vec![];
                 for tx in tx_vec.into_iter() {
@@ -69,17 +68,17 @@ mod tests {
         let block = Block::new(genesis_header.clone(), None, None);
         let genesis_block = GenesisBlock(block);
 
-        match genesis_block.get_txs() {
+        match genesis_block.txs {
             Some(_) => panic!("No transactions were given, but the genesis block has transactions!"),
             None => {}
         }
 
-        match genesis_block.get_meta() {
+        match genesis_block.meta {
             Some(_) => panic!("No meta information was given, but the genesis block has meta information!"),
             None => {}
         }
 
-        assert_eq!(&genesis_block.get_header(), &genesis_header);
+        assert_eq!(&genesis_block.header, &genesis_header);
     }
 
     #[test]
@@ -89,13 +88,13 @@ mod tests {
         let block = Block::new(genesis_header.clone(), Some(genesis_txs.clone()), None);
         let genesis_block = GenesisBlock(block);
 
-        match genesis_block.get_meta() {
+        match genesis_block.meta {
             Some(_) => panic!("No meta information was supplied, but genesis block has meta information!"),
             None => {}
         }
 
-        assert_eq!(&genesis_block.get_header(), &genesis_header);
-        assert_eq!(genesis_block.get_txs().unwrap(), genesis_txs);
+        assert_eq!(&genesis_block.header, &genesis_header);
+        assert_eq!(genesis_block.txs.clone().unwrap(), genesis_txs);
     }
 
     #[test]
