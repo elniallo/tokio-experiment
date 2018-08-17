@@ -8,13 +8,13 @@ use protobuf::{Message as ProtoMessage, RepeatedField};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Header {
-    merkle_root: Vec<u8>,
-    time_stamp: u64,
-    difficulty: f64,
-    state_root: Vec<u8>,
-    previous_hash: Option<Vec<Vec<u8>>>,
-    nonce: Option<u64>,
-    miner: Option<Address>,
+    pub merkle_root: Vec<u8>,
+    pub time_stamp: u64,
+    pub difficulty: f64,
+    pub state_root: Vec<u8>,
+    pub previous_hash: Option<Vec<Vec<u8>>>,
+    pub nonce: Option<u64>,
+    pub miner: Option<Address>,
 }
 
 impl Header {
@@ -36,39 +36,17 @@ impl Header {
                    }
     }
 
-    pub fn get_merkle_root(&self) -> Vec<u8> {
-        self.merkle_root.clone()
-    }
-    pub fn get_time_stamp(&self) -> u64 {
-        self.time_stamp
-    }
-    pub fn get_difficulty(&self) -> f64 {
-        self.difficulty
-    }
-    pub fn get_state_root(&self) -> Vec<u8> {
-        self.state_root.clone()
-    }
-    pub fn get_previous_hash(&self) -> Option<Vec<Vec<u8>>> {
-        self.previous_hash.clone()
-    }
-    pub fn get_nonce(&self) -> Option<u64> {
-        self.nonce
-    }
-    pub fn get_miner(&self) -> Option<Address> {
-        self.miner
-    }
-
     pub fn prehash(&self) -> Result<Vec<u8>, EncodingError> {
         let mut proto_header = HeaderPrehash::new();
-        proto_header.set_merkleRoot(self.get_merkle_root());
-        proto_header.set_timeStamp(self.get_time_stamp());
-        proto_header.set_difficulty(self.get_difficulty());
-        proto_header.set_stateRoot(self.get_state_root());
-        match self.get_previous_hash() {
+        proto_header.set_merkleRoot(self.merkle_root.clone());
+        proto_header.set_timeStamp(self.time_stamp);
+        proto_header.set_difficulty(self.difficulty);
+        proto_header.set_stateRoot(self.state_root.clone());
+        match self.previous_hash.clone() {
             Some(previous_hash) => proto_header.set_previousHash(RepeatedField::from(previous_hash)),
             None => return Err(EncodingError::Integrity("Header is missing a previous hash".to_string()))
         }
-        match self.get_miner() {
+        match self.miner {
             Some(miner) => proto_header.set_miner(miner.to_vec()),
             None => return Err(EncodingError::Integrity("Header is missing a miner".to_string()))
         }
@@ -95,19 +73,19 @@ impl Proto<EncodingError> for Header {
     type ProtoType = BlockHeader;
     fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
         let mut proto_header = Self::ProtoType::new();
-        proto_header.set_merkleRoot(self.get_merkle_root());
-        proto_header.set_timeStamp(self.get_time_stamp());
+        proto_header.set_merkleRoot(self.merkle_root.clone());
+        proto_header.set_timeStamp(self.time_stamp);
         proto_header.set_difficulty(self.difficulty);
-        proto_header.set_stateRoot(self.get_state_root());
-        match self.get_previous_hash() {
+        proto_header.set_stateRoot(self.state_root.clone());
+        match self.previous_hash.clone() {
             Some(previous_hash) => proto_header.set_previousHash(RepeatedField::from(previous_hash)),
             None => {}
         }
-        match self.get_nonce() {
+        match self.nonce {
             Some(nonce) => proto_header.set_nonce(nonce),
             None => {}
         }
-        match self.get_miner() {
+        match self.miner {
             Some(miner) => proto_header.set_miner(miner.to_vec()),
             None => {}
         }        
@@ -134,13 +112,13 @@ mod tests {
         let previous_hash = vec!["G4qXusbRyXmf62c8Tsha7iZoyLsVGfka7ynkvb3Esd1d".from_base58().unwrap()];
 
         let header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), Some(previous_hash.clone()), Some(nonce), Some(miner));
-        assert_eq!(header.get_merkle_root(), merkle_root);
-        assert_eq!(header.get_state_root(), state_root);
-        assert_eq!(header.get_time_stamp(), time_stamp);
-        assert_eq!(header.get_difficulty(), difficulty);
-        assert_eq!(header.get_nonce().unwrap(), nonce);
-        assert_eq!(header.get_miner().unwrap(), miner);
-        assert_eq!(header.get_previous_hash().unwrap(), previous_hash);
+        assert_eq!(header.merkle_root, merkle_root);
+        assert_eq!(header.state_root, state_root);
+        assert_eq!(header.time_stamp, time_stamp);
+        assert_eq!(header.difficulty, difficulty);
+        assert_eq!(header.nonce.unwrap(), nonce);
+        assert_eq!(header.miner.unwrap(), miner);
+        assert_eq!(header.previous_hash.unwrap(), previous_hash);
     }
 
     #[test]

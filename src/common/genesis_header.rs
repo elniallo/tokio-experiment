@@ -19,10 +19,10 @@ impl Proto<EncodingError> for GenesisHeader {
     type ProtoType = ProtoGenesisHeader;
     fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
         let mut proto_genesis_block_header = Self::ProtoType::new();
-        proto_genesis_block_header.set_merkleRoot(self.get_merkle_root());
-        proto_genesis_block_header.set_timeStamp(self.get_time_stamp());
-        proto_genesis_block_header.set_difficulty(self.get_difficulty());
-        proto_genesis_block_header.set_stateRoot(self.get_state_root());
+        proto_genesis_block_header.set_merkleRoot(self.merkle_root.clone());
+        proto_genesis_block_header.set_timeStamp(self.time_stamp);
+        proto_genesis_block_header.set_difficulty(self.difficulty);
+        proto_genesis_block_header.set_stateRoot(self.state_root.clone());
         Ok(proto_genesis_block_header)
     }
 }
@@ -62,10 +62,10 @@ mod tests {
             67,220,241,192,46,94,69,215,134,11,33,0,0,0,0,0,0,0,0,40,
             168,184,239,233,139,44];
         let genesis_header_hash = hash(&encoding, 32).to_base58();
-        assert_eq!(genesis_header.0.get_merkle_root(), merkle_root);
-        assert_eq!(genesis_header.0.get_state_root(), state_root);
-        assert_eq!(genesis_header.0.get_time_stamp(), time_stamp);
-        assert_eq!(genesis_header.0.get_difficulty(), difficulty);
+        assert_eq!(genesis_header.merkle_root, merkle_root);
+        assert_eq!(genesis_header.state_root, state_root);
+        assert_eq!(genesis_header.time_stamp, time_stamp);
+        assert_eq!(genesis_header.difficulty, difficulty);
         assert_eq!(encoding, expected_encoding);
         assert_eq!(genesis_header_hash, "G4qXusbRyXmf62c8Tsha7iZoyLsVGfka7ynkvb3Esd1d".to_string())
     }
