@@ -64,22 +64,6 @@ impl Tx {
         let standard_signature = signature.to_standard(&secp);
         Ok(secp.verify(&message, &standard_signature, &pubkey)?)
     }
-
-    pub fn equals(&self, other_tx: Tx) -> bool {
-        if self.from != other_tx.from {
-            false
-        } else if self.to != other_tx.to {
-            false
-        } else if self.amount != other_tx.amount {
-            false
-        } else if self.fee != other_tx.fee {
-            false
-        } else if self.nonce != other_tx.nonce {
-            false
-        } else {
-            true
-        }
-    }
 }
 
 impl Proto for Tx {
