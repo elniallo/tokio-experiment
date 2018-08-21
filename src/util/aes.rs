@@ -87,12 +87,15 @@ mod tests {
 
     #[test]
     fn it_decrypts_encrypted_data() {
-        let key = hash("password".as_bytes(), 32);
+        let mut password = [0u8; 32];
+        thread_rng().fill(&mut password);
+        let key = hash(&password, 32);
         let mut iv = [0u8; 16];
         thread_rng().fill(&mut iv);
-        let data = "data to be encrypted, then decrypted".as_bytes();
-        let encryption = encrypt_aes(data, &key[..], &iv).unwrap();
+        let mut data = [0u8; 256];
+        thread_rng().fill(&mut data);
+        let encryption = encrypt_aes(&data, &key[..], &iv).unwrap();
         let decryption = decrypt_aes(&encryption, &key[..], &iv, data.len()).unwrap();
-        assert_eq!(data, &decryption[..]);
+        assert_eq!(data.to_vec(), &decryption[..]);
     }
 }

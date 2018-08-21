@@ -1,5 +1,7 @@
-use std::fs::File;
+use std::env;
+use std::fs::{create_dir_all, File};
 use std::io::{Error as FSError, Read, Write};
+use std::path::PathBuf;
 use std::string::FromUtf8Error;
 use rustc_serialize::hex::{ToHex, FromHex, FromHexError};
 
@@ -14,8 +16,7 @@ use secp256k1::{Error, Message, RecoverableSignature, Secp256k1};
 use rand::{thread_rng, Rng};
 use crypto::symmetriccipher::SymmetricCipherError;
 
-static WALLET_PATH: &str = "./wallet/";
-
+#[derive(Debug)]
 pub enum WalletError {
     Fs(FSError),
     Encrypt(SymmetricCipherError),
@@ -55,31 +56,49 @@ impl Wallet {
         }
     }
 
-    pub fn load(name: String, password: String) -> Result<Wallet, WalletError> {
+    pub fn load(name: String, password: String, path: Option<PathBuf>) -> Result<Wallet, WalletError> {
+        let mut file_path: PathBuf;
+        match path {
+            Some(p) => file_path = p,
+            None => {
+                file_path = PathBuf::new();
+                match env::current_dir() {
+                    Ok(dir) => file_path.push(dir),
+                    Err(e) => return Err(WalletError::Fs(e))
+                }
+                file_path.push("wallet");
+                file_path.push("rootKey");
+                file_path.push(name);
+            }
+        }
         let mut file: File;
-        match File::open(WALLET_PATH.to_owned() + &"/rootkey/".to_owned() + &name) {
+        match File::open(file_path) {
             Ok(f) => file = f,
             Err(e) => return Err(WalletError::Fs(e))
         }
-        let mut buffer: Vec<u8> = vec![];
+        let mut buffer: Vec<u8> = vec![0; 256];
         match file.read(&mut buffer) {
             Ok(_) => {},
             Err(e) => return Err(WalletError::Fs(e)),
         }
+
         let loaded_data: String;
         match String::from_utf8(buffer) {
             Ok(data) => loaded_data = data,
             Err(e) => return Err(WalletError::Load(e))
         }
         let string_data: Vec<&str> = loaded_data.split(":").collect();
+
         let key = hash(password.as_bytes(), 32);
         let iv: Vec<u8>;
         match string_data[1].to_owned().from_hex() {
             Ok(data) => iv = data,
             Err(e) => return Err(WalletError::Hex(e))
         }
+        let encrypted_hex_data = &string_data[2][0..48];
+        println!("{:?}", encrypted_hex_data);
         let encrypted_data: Vec<u8>;
-        match string_data[2].from_hex() {
+        match encrypted_hex_data.from_hex() {
             Ok(data) => encrypted_data = data,
             Err(e) => return Err(WalletError::Hex(e)),
         }
@@ -120,16 +139,39 @@ impl Wallet {
         Ok(SignedTx(new_tx))
     }
 
-    pub fn save(&self, name: String, password: String, hint: Option<String>) -> Result <(), WalletError> {
-        match File::open(WALLET_PATH.to_owned()  + &"/rootkey/".to_owned() + &name) {
+    pub fn save(&self, name: String, password: String, hint: Option<String>, path: Option<PathBuf>) -> Result <(), WalletError> {
+        let mut file_path: PathBuf;
+        match path {
+            Some(p) => file_path = p,
+            None => {
+                file_path = PathBuf::new();
+                match env::current_dir() {
+                    Ok(dir) => file_path.push(dir),
+                    Err(e) => return Err(WalletError::Fs(e))
+                }
+                file_path.push("wallet");
+                file_path.push("rootKey");
+                file_path.push(&name);
+            }
+        }
+        match File::open(&file_path) {
             Ok(_) => return Ok(()),
             Err(_) => {}
         }
 
-        let mut file: File;
-        match File::create(WALLET_PATH.to_owned() + &name) {
-            Ok(f) => file = f,
+        file_path.pop();
+        match create_dir_all(&file_path) {
+            Ok(_) => {},
             Err(e) => return Err(WalletError::Fs(e))
+        }
+        file_path.push(&name);
+
+        let mut file: File;
+        match File::create(&file_path) {
+            Ok(f) => file = f,
+            Err(e) => {
+                return Err(WalletError::Fs(e))
+            }
         }
         let key = hash(password.as_bytes(), 32);
         let mut iv = [0u8; 16];
@@ -147,15 +189,23 @@ impl Wallet {
         }
         match file.write(encrypted_data.as_bytes()) {
             Ok(_) => return Ok(()),
-            Err(e) => return Err(WalletError::Fs(e))
+            Err(e) => {
+                return Err(WalletError::Fs(e))
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{Wallet, WalletError};
     use common::address::{Address, ValidAddress};
+    use common::tx::Tx;
+    use common::{Encode, EncodingError};
+    use util::hash::hash;
+
+    use secp256k1::{Message, Secp256k1};
+    use rand::{thread_rng, Rng};
 
     #[test]
     fn it_makes_a_wallet() {
@@ -201,5 +251,19 @@ mod tests {
         let pubkey = secp.recover(&secp_message, &recoverable_signature).unwrap();
         assert_eq!(pubkey, wallet.public_key);
         secp.verify(&secp_message, &signature, &wallet.public_key).unwrap();
+    }
+
+    #[test]
+    fn it_saves_a_wallet() {
+        let wallet = Wallet::new();
+        wallet.save("test_save_wallet".to_string(), "password".to_string(), None, None).unwrap();
+    }
+
+    #[test]
+    fn it_loads_a_wallet() {
+        let wallet = Wallet::new();
+        wallet.save("test_load_wallet".to_string(), "password".to_string(), None, None).unwrap();
+        let loaded_wallet = Wallet::load("test_load_wallet".to_string(), "password".to_string(), None).unwrap();
+        assert_eq!(wallet.public_key, loaded_wallet.public_key);
     }
 }
