@@ -1,22 +1,17 @@
 use std::fs::File;
-use std::io::Error as FSError;
-use std::io::{Read, Write};
+use std::io::{Error as FSError, Read, Write};
 use std::string::FromUtf8Error;
-use rustc_serialize::hex::ToHex;
-use rustc_serialize::hex::FromHexError;
+use rustc_serialize::hex::{ToHex, FromHex, FromHexError};
 
 use common::tx::Tx;
 use common::signed_tx::SignedTx;
 use common::{Encode, EncodingError};
 use util::hash::hash;
+use util::aes::{decrypt_aes, encrypt_aes};
 
 use secp256k1::key::{PublicKey, SecretKey};
 use secp256k1::{Error, Message, RecoverableSignature, Secp256k1};
 use rand::{thread_rng, Rng};
-use crypto::aes::{cbc_encryptor};
-use crypto::aes::KeySize::KeySize256;
-use crypto::blockmodes::NoPadding;
-use crypto::buffer::{RefReadBuffer, RefWriteBuffer};
 use crypto::symmetriccipher::SymmetricCipherError;
 
 static WALLET_PATH: &str = "./wallet/";
@@ -25,7 +20,8 @@ pub enum WalletError {
     Fs(FSError),
     Encrypt(SymmetricCipherError),
     Load(FromUtf8Error),
-    Hex(FromHexError)
+    Hex(FromHexError),
+    Key(Error)
 }
 
 pub struct Wallet {
@@ -76,9 +72,9 @@ impl Wallet {
             Err(e) => return Err(WalletError::Load(e))
         }
         let string_data: Vec<&str> = loaded_data.split(":").collect();
-        let hint = string_data[0];
-        let iv: Vec<u8>
-        match string_data[1].from_hex() {
+        let key = hash(password.as_bytes(), 32);
+        let iv: Vec<u8>;
+        match string_data[1].to_owned().from_hex() {
             Ok(data) => iv = data,
             Err(e) => return Err(WalletError::Hex(e))
         }
@@ -88,17 +84,29 @@ impl Wallet {
             Err(e) => return Err(WalletError::Hex(e)),
         }
 
+        let decrypted_data: Vec<u8>;
+        match decrypt_aes(&encrypted_data, &key, &iv, 32) {
+            Ok(data) => decrypted_data = data,
+            Err(e) => return Err(WalletError::Encrypt(e))
+        }
 
+        let secp = Secp256k1::without_caps();
+        let private_key: SecretKey;
+        match SecretKey::from_slice(&secp, &decrypted_data) {
+            Ok(s_key) => private_key = s_key,
+            Err(e) => return Err(WalletError::Key(e))
+        }
+        Ok(Wallet::from_private_key(private_key))
     }
 
     pub fn sign(&self, message: &Vec<u8>) -> Result<RecoverableSignature, Error> {
-        let msg = Message::from_slice(&message[..])?;
+        let msg = Message::from_slice(&message)?;
         let secp = Secp256k1::signing_only();
         Ok(secp.sign_recoverable(&msg, &self.private_key))
     }
 
     pub fn sign_tx(&self, tx: &Tx) -> Result<SignedTx, EncodingError> {
-        let encoded_tx = hash(&tx.encode()?[..], 32);
+        let encoded_tx = hash(&tx.encode()?, 32);
         let signature: RecoverableSignature;
         match self.sign(&encoded_tx) {
             Ok(sig) => signature = sig,
@@ -126,15 +134,13 @@ impl Wallet {
         let key = hash(password.as_bytes(), 32);
         let mut iv = [0u8; 16];
         thread_rng().fill(&mut iv);
-        let mut cipher = cbc_encryptor(KeySize256, &key[..], &iv, NoPadding);
-        let mut ref_input = RefReadBuffer::new(&self.private_key[..]);
-        let mut out = [0u8; 32];
-        match cipher.encrypt(&mut ref_input, &mut RefWriteBuffer::new(&mut out), false) {
-            Ok(_) => {},
+        let encrypted_key: Vec<u8>;
+        match encrypt_aes(&self.private_key[..], &key, &iv) {
+            Ok(data) => encrypted_key = data,
             Err(e) => return Err(WalletError::Encrypt(e))
         }
 
-        let mut encrypted_data = &":".to_owned() + iv.to_hex() + &":".to_owned() + &out.to_hex();
+        let mut encrypted_data = ":".to_owned() + &iv.to_hex().to_owned() + &":".to_owned() + &encrypted_key.to_hex();
         match hint {
             Some(h) => encrypted_data = h + &encrypted_data,
             None => {}
