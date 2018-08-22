@@ -12,6 +12,7 @@ pub mod block;
 pub mod genesis_block;
 pub mod meta;
 pub mod wallet;
+pub mod key_store;
 
 pub trait Encode {
     fn encode(&self) -> Result<Vec<u8>, Box<Error>>;

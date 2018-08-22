@@ -56,7 +56,7 @@ impl Wallet {
         }
     }
 
-    pub fn load(name: String, password: String, path: Option<PathBuf>) -> Result<Wallet, WalletError> {
+    pub fn import(name: String, password: String, path: Option<PathBuf>) -> Result<Wallet, WalletError> {
         let mut file_path: PathBuf;
         match path {
             Some(p) => file_path = p,
@@ -95,7 +95,7 @@ impl Wallet {
             Ok(data) => iv = data,
             Err(e) => return Err(WalletError::Hex(e))
         }
-        let encrypted_hex_data = &string_data[2][0..48];
+        let encrypted_hex_data = &string_data[2][0..96];
         println!("{:?}", encrypted_hex_data);
         let encrypted_data: Vec<u8>;
         match encrypted_hex_data.from_hex() {
@@ -104,7 +104,7 @@ impl Wallet {
         }
 
         let decrypted_data: Vec<u8>;
-        match decrypt_aes(&encrypted_data, &key, &iv, 32) {
+        match decrypt_aes(&encrypted_data, &key, &iv, 32, true) {
             Ok(data) => decrypted_data = data,
             Err(e) => return Err(WalletError::Encrypt(e))
         }
@@ -177,7 +177,7 @@ impl Wallet {
         let mut iv = [0u8; 16];
         thread_rng().fill(&mut iv);
         let encrypted_key: Vec<u8>;
-        match encrypt_aes(&self.private_key[..], &key, &iv) {
+        match encrypt_aes(&self.private_key[..], &key, &iv, true) {
             Ok(data) => encrypted_key = data,
             Err(e) => return Err(WalletError::Encrypt(e))
         }
@@ -260,10 +260,10 @@ mod tests {
     }
 
     #[test]
-    fn it_loads_a_wallet() {
+    fn it_imports_a_wallet() {
         let wallet = Wallet::new();
         wallet.save("test_load_wallet".to_string(), "password".to_string(), None, None).unwrap();
-        let loaded_wallet = Wallet::load("test_load_wallet".to_string(), "password".to_string(), None).unwrap();
-        assert_eq!(wallet.public_key, loaded_wallet.public_key);
+        let imported_wallet = Wallet::import("test_load_wallet".to_string(), "password".to_string(), None).unwrap();
+        assert_eq!(wallet.public_key, imported_wallet.public_key);
     }
 }
