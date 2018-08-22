@@ -65,7 +65,9 @@ mod tests {
         let nonce: u32 = 20;
         let account = Account::new(balance, nonce);
         let encoded = account.encode().unwrap();
+        let javascriptEncoded = vec![8, 232, 7, 16, 20];
         let decoded = account.decode(&encoded).unwrap();
+        assert_eq!(encoded, javascriptEncoded);
         assert_eq!(decoded.balance, account.balance);
         assert_eq!(decoded.nonce, account.nonce);
     }
