@@ -40,6 +40,7 @@ tiny-keccak = "1.4.2"
 lazy_static = "1.1.0"
 double = "0.2.2"
 byteorder = "1.2.6"
+rocksdb= "0.10.1"
 
 [dependencies.uuid]
 version = "0.6.5"

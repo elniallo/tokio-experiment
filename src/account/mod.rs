@@ -1,6 +1,10 @@
-pub mod DBState;
-pub mod account;
-pub mod node_ref;
+use rocksdb::Error as RocksdbError;
 
-pub use self::account::Account;
+pub mod account;
+pub mod db_state;
+pub mod node_ref;
+pub mod state_node;
+
+pub use account::account::Account;
+pub use account::state_node::StateNode;
 pub use common::address::ValidAddress;

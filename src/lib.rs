@@ -5,6 +5,7 @@ extern crate double;
 extern crate hex;
 extern crate openssl;
 extern crate protobuf;
+extern crate rocksdb;
 extern crate rust_base58;
 extern crate secp256k1;
 extern crate rand;
@@ -14,6 +15,7 @@ extern crate tiny_keccak;
 extern crate serde_json;
 extern crate serde;
 
+pub mod account;
 pub mod common;
 pub mod consensus;
 pub mod serialization;
