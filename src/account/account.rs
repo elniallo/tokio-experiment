@@ -58,4 +58,15 @@ mod tests {
         assert_eq!(account.balance, balance);
         assert_eq!(account.nonce, nonce);
     }
+
+    #[test]
+    fn it_makes_a_rew_account() {
+        let balance: u64 = 1000;
+        let nonce: u32 = 20;
+        let account = Account::new(balance, nonce);
+        let encoded = account.encode().unwrap();
+        let decoded = account.decode(&encoded).unwrap();
+        assert_eq!(decoded.balance, account.balance);
+        assert_eq!(decoded.nonce, account.nonce);
+    }
 }
