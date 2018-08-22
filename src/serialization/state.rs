@@ -23,6 +23,8 @@ use protobuf::ProtobufEnum as ProtobufEnum_imported_for_functions;
 
 #[derive(PartialEq,Clone,Default)]
 pub struct DBState {
+    // message fields
+    pub refCount: u32,
     // message oneof groups
     pub state: ::std::option::Option<DBState_oneof_state>,
     // special fields
@@ -34,7 +36,6 @@ pub struct DBState {
 pub enum DBState_oneof_state {
     account(Account),
     node(StateNode),
-    refCount(u32),
 }
 
 impl DBState {
@@ -143,26 +144,16 @@ impl DBState {
     // uint32 refCount = 3;
 
     pub fn clear_refCount(&mut self) {
-        self.state = ::std::option::Option::None;
-    }
-
-    pub fn has_refCount(&self) -> bool {
-        match self.state {
-            ::std::option::Option::Some(DBState_oneof_state::refCount(..)) => true,
-            _ => false,
-        }
+        self.refCount = 0;
     }
 
     // Param is passed by value, moved
     pub fn set_refCount(&mut self, v: u32) {
-        self.state = ::std::option::Option::Some(DBState_oneof_state::refCount(v))
+        self.refCount = v;
     }
 
     pub fn get_refCount(&self) -> u32 {
-        match self.state {
-            ::std::option::Option::Some(DBState_oneof_state::refCount(v)) => v,
-            _ => 0,
-        }
+        self.refCount
     }
 }
 
@@ -201,7 +192,8 @@ impl ::protobuf::Message for DBState {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     }
-                    self.state = ::std::option::Option::Some(DBState_oneof_state::refCount(is.read_uint32()?));
+                    let tmp = is.read_uint32()?;
+                    self.refCount = tmp;
                 },
                 _ => {
                     ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
@@ -215,6 +207,9 @@ impl ::protobuf::Message for DBState {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
+        if true {
+            my_size += ::protobuf::rt::value_size(3, self.refCount, ::protobuf::wire_format::WireTypeVarint);
+        }
         if let ::std::option::Option::Some(ref v) = self.state {
             match v {
                 &DBState_oneof_state::account(ref v) => {
@@ -225,9 +220,6 @@ impl ::protobuf::Message for DBState {
                     let len = v.compute_size();
                     my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
                 },
-                &DBState_oneof_state::refCount(v) => {
-                    my_size += ::protobuf::rt::value_size(3, v, ::protobuf::wire_format::WireTypeVarint);
-                },
             };
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -236,6 +228,9 @@ impl ::protobuf::Message for DBState {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
+        if true {
+            os.write_uint32(3, self.refCount)?;
+        }
         if let ::std::option::Option::Some(ref v) = self.state {
             match v {
                 &DBState_oneof_state::account(ref v) => {
@@ -247,9 +242,6 @@ impl ::protobuf::Message for DBState {
                     os.write_tag(2, ::protobuf::wire_format::WireTypeLengthDelimited)?;
                     os.write_raw_varint32(v.get_cached_size())?;
                     v.write_to_with_cached_sizes(os)?;
-                },
-                &DBState_oneof_state::refCount(v) => {
-                    os.write_uint32(3, v)?;
                 },
             };
         }
@@ -305,10 +297,10 @@ impl ::protobuf::Message for DBState {
                     DBState::has_node,
                     DBState::get_node,
                 ));
-                fields.push(::protobuf::reflect::accessor::make_singular_u32_accessor::<_>(
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeUint32>(
                     "refCount",
-                    DBState::has_refCount,
-                    DBState::get_refCount,
+                    |m: &DBState| { &m.refCount },
+                    |m: &mut DBState| { &mut m.refCount },
                 ));
                 ::protobuf::reflect::MessageDescriptor::new::<DBState>(
                     "DBState",
@@ -918,14 +910,14 @@ impl ::protobuf::reflect::ProtobufValue for NodeRef {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x0bstate.proto\"x\n\x07DBState\x12$\n\x07account\x18\x01\x20\x01(\x0b\
+    \n\x0bstate.proto\"v\n\x07DBState\x12$\n\x07account\x18\x01\x20\x01(\x0b\
     2\x08.AccountH\0R\x07account\x12\x20\n\x04node\x18\x02\x20\x01(\x0b2\n.S\
-    tateNodeH\0R\x04node\x12\x1c\n\x08refCount\x18\x03\x20\x01(\rH\0R\x08ref\
-    CountB\x07\n\x05state\"9\n\x07Account\x12\x18\n\x07balance\x18\x01\x20\
-    \x01(\x04R\x07balance\x12\x14\n\x05nonce\x18\x02\x20\x01(\rR\x05nonce\"1\
-    \n\tStateNode\x12$\n\x08nodeRefs\x18\x01\x20\x03(\x0b2\x08.NodeRefR\x08n\
-    odeRefs\"9\n\x07NodeRef\x12\x18\n\x07address\x18\x01\x20\x01(\x0cR\x07ad\
-    dress\x12\x14\n\x05child\x18\x02\x20\x01(\x0cR\x05childb\x06proto3\
+    tateNodeH\0R\x04node\x12\x1a\n\x08refCount\x18\x03\x20\x01(\rR\x08refCou\
+    ntB\x07\n\x05state\"9\n\x07Account\x12\x18\n\x07balance\x18\x01\x20\x01(\
+    \x04R\x07balance\x12\x14\n\x05nonce\x18\x02\x20\x01(\rR\x05nonce\"1\n\tS\
+    tateNode\x12$\n\x08nodeRefs\x18\x01\x20\x03(\x0b2\x08.NodeRefR\x08nodeRe\
+    fs\"9\n\x07NodeRef\x12\x18\n\x07address\x18\x01\x20\x01(\x0cR\x07address\
+    \x12\x14\n\x05child\x18\x02\x20\x01(\x0cR\x05childb\x06proto3\
 ";
 
 static mut file_descriptor_proto_lazy: ::protobuf::lazy::Lazy<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::lazy::Lazy {

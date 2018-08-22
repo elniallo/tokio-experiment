@@ -3,9 +3,9 @@ syntax = "proto3";
 message DBState {
     oneof state {
         Account account = 1;
-        StateNode node = 2;
-        uint32 refCount = 3;
+        StateNode node = 2;       
     }
+     uint32 refCount = 3;
 }
 
 message Account {
