@@ -8,6 +8,12 @@ pub struct Account {
     pub nonce: u32,
 }
 
+impl Account {
+    pub fn new(balance: u64, nonce: u32) -> Account {
+        return Account { balance, nonce };
+    }
+}
+
 impl Encode<EncodingError> for Account {
     fn encode(&self) -> Result<Vec<u8>, EncodingError> {
         let serialized = self.to_proto()?;
@@ -36,5 +42,20 @@ impl Proto<EncodingError> for Account {
         data.balance = self.balance;
         data.nonce = self.nonce;
         return Ok(data);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::address::ValidAddress;
+    use rust_base58::FromBase58;
+    #[test]
+    fn it_makes_a_account() {
+        let balance: u64 = 1000;
+        let nonce: u32 = 20;
+        let account = Account::new(balance, nonce);
+        assert_eq!(account.balance, balance);
+        assert_eq!(account.nonce, nonce);
     }
 }
