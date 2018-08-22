@@ -3,6 +3,8 @@ use common::{Decode, DecodingError, Encode, EncodingError, Proto};
 use protobuf::{Message as ProtoMessage, RepeatedField};
 use serialization::state::Account as ProtoAccount;
 use util::hash::hash;
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Account {
     pub balance: u64,
     pub nonce: u32,
@@ -65,9 +67,9 @@ mod tests {
         let nonce: u32 = 20;
         let account = Account::new(balance, nonce);
         let encoded = account.encode().unwrap();
-        let javascriptEncoded = vec![8, 232, 7, 16, 20];
+        let javascript_encoded = vec![8, 232, 7, 16, 20];
         let decoded = account.decode(&encoded).unwrap();
-        assert_eq!(encoded, javascriptEncoded);
+        assert_eq!(encoded, javascript_encoded);
         assert_eq!(decoded.balance, account.balance);
         assert_eq!(decoded.nonce, account.nonce);
     }
