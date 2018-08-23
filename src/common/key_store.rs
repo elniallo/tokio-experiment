@@ -14,7 +14,8 @@ use rustc_serialize::hex::ToHex;
 
 #[derive(Serialize, Deserialize)]
 pub struct CipherParams {
-    iv: String
+    iv: String,
+    keysize: usize
 }
 
 #[derive(Serialize, Deserialize)]
@@ -46,13 +47,13 @@ pub struct KeyStore {
 
 impl KeyStore {
     pub fn to_v4(password: String, private_key: SecretKey) -> Result<KeyStore, SymmetricCipherError> {
-        // TODO: Add keylength to determine the AES key size
         let network = "hycon".to_string();
         let version = 4;
         let id = Uuid::new_v4().to_string();
         let secp = Secp256k1::signing_only();
         let kdf = "scrypt".to_string();
-        let dklen = 64;
+        let dklen = 48;
+        let keysize = 32;
         let mut salt_bytes = [0u8; 32];
         thread_rng().fill(&mut salt_bytes);
         let salt = salt_bytes.to_vec();
@@ -61,14 +62,14 @@ impl KeyStore {
         let p = 1;
         let kdf_params = KdfParams::new(dklen, salt.to_hex(), n, r, p);
         // log2(8192) = 13
-        let scrypt_params = ScryptParams::new(13, r, p);
-        let mut decryption_key = [0u8; 48];
-        scrypt(password.as_bytes(), &salt_bytes, &scrypt_params, &mut decryption_key);
+        let scrypt_params = ScryptParams::new(18, r, p);
+        let mut derived_key = [0u8; 48];
+        scrypt(password.as_bytes(), &salt_bytes, &scrypt_params, &mut derived_key);
         let mut iv = [0u8; 16];
         thread_rng().fill(&mut iv);
-        let cipher_params = CipherParams::new(iv.to_hex());
+        let cipher_params = CipherParams::new(iv.to_hex(), keysize);
         let cipher = "aes-256-cbc".to_string();
-        let cipher_text = encrypt_aes_cbc(&private_key[..], &decryption_key[0..32], &iv, false)?;
+        let cipher_text = encrypt_aes_cbc(&private_key[..], &derived_key[0..32], &iv, false)?;
         let mut mac_input = vec![0u8; 16];
         mac_input.clone_from_slice(&derived_key[32..48]);
         mac_input.append(&mut cipher_text.clone());
@@ -92,6 +93,7 @@ impl KeyStore {
         let secp = Secp256k1::signing_only();
         let kdf = "scrypt".to_string();
         let dklen = 32;
+        let keysize = 16;
         let mut salt_bytes = [0u8; 32];
         thread_rng().fill(&mut salt_bytes);
         let salt = salt_bytes.to_vec();
@@ -104,7 +106,7 @@ impl KeyStore {
         scrypt(password.as_bytes(), &salt_bytes, &scrypt_params, &mut derived_key);
         let mut iv = [0u8; 16];
         thread_rng().fill(&mut iv);
-        let cipher_params = CipherParams::new(iv.to_hex());
+        let cipher_params = CipherParams::new(iv.to_hex(), keysize);
         let cipher = "aes-128-cbc".to_string();
         let cipher_text = encrypt_aes_cbc(&private_key[..], &derived_key[0..16], &iv, true)?;
         let mut mac_input = vec![0u8; 16];
@@ -168,9 +170,10 @@ impl KdfParams {
 }
 
 impl CipherParams {
-    pub fn new(iv: String) -> CipherParams {
+    pub fn new(iv: String, keysize: usize) -> CipherParams {
         CipherParams {
-            iv
+            iv,
+            keysize
         }
     }
 }
@@ -181,8 +184,7 @@ mod tests {
     use common::wallet::Wallet;
 
     #[test]
-    #[ignore]
-    fn it_makes_a_keystore() {
+    fn it_makes_a_v4_keystore() {
         let mut secret_key = [0u8; 32];
         let secp = Secp256k1::without_caps();
         let private_key: SecretKey;
@@ -199,11 +201,11 @@ mod tests {
         }
         let password = "password".to_string();
 
-        KeyStore::new(password, private_key).unwrap();
+        KeyStore::to_v4(password, private_key).unwrap();
     }
 
     #[test]
-    fn it_makes_an_ethereum_keystore() {
+    fn it_makes_a_v3_keystore() {
         let mut secret_key = [0u8; 32];
         let secp = Secp256k1::without_caps();
         let private_key: SecretKey;
@@ -218,12 +220,11 @@ mod tests {
                 Err(_) => {}
             }
         }
-        println!("{}", secret_key.to_hex());
-        panic!("{}", String::from_utf8(KeyStore::to_ethereum("password".to_string(), private_key).unwrap().encode().unwrap()).unwrap());
+        KeyStore::to_v3("password".to_string(), private_key).unwrap().encode().unwrap();
     }
 
     #[test]
-    fn it_encrypts_an_ethereum_keystore() {
+    fn it_encodes_a_v3_keystore() {
         let password = "testpassword".to_string();
         let secp = Secp256k1::without_caps();
         let mut secret_key = [
@@ -253,7 +254,7 @@ mod tests {
         let iv = [
             0x60, 0x87, 0xda, 0xb2, 0xf9, 0xfd, 0xbb, 0xfa,
             0xdd, 0xc3, 0x1a, 0x90, 0x97, 0x35, 0xc1, 0xe6];
-        let cipher_params = CipherParams::new(iv.to_hex());
+        let cipher_params = CipherParams::new(iv.to_hex(), 16);
         let cipher = "aes-128-cbc".to_string();
         let cipher_text = encrypt_aes_cbc(&private_key[..], &derived_key[0..16], &iv, true).unwrap();
         assert_eq!("052643cd39cd9e2e0f045ebcfec424d33a9fa6135f363d94a95cb09abc4d086a1c7eecc132c966e2a6691c6640605615".to_string(), cipher_text.to_hex());
@@ -268,6 +269,8 @@ mod tests {
         let crypto = Crypto::new(cipher_text.to_hex(), cipher_params, cipher, kdf, kdf_params, mac.to_hex());
         let key_store = KeyStore::from_params(network, version, id, crypto).unwrap();
         let encoding = key_store.encode().unwrap();
+        let encoding_string = String::from_utf8(encoding).unwrap();
+        assert_eq!(encoding_string, expected_v3_encoding());
     }
 
     #[test]
@@ -302,7 +305,7 @@ mod tests {
         mac.clone_from_slice(&decryption_key[0..16]);
         mac.append(&mut cipher_text.clone());
         mac = hash(&mac, 32);
-        let cipher_params = CipherParams::new(iv.to_hex());
+        let cipher_params = CipherParams::new(iv.to_hex(), 32);
         let cipher = "aes-256-cbc".to_string();
         let kdf = "scrypt".to_string();
         let crypto = Crypto::new(cipher_text.to_hex(), cipher_params, cipher, kdf, kdf_params, mac.to_hex());
@@ -321,5 +324,9 @@ mod tests {
         let expected_cipher_text = [
             0x7d, 0xed, 0x35, 0x5c, 0xc6, 0xc4, 0xda, 0x4c,
             0xc6, 0xa5, 0x6e, 0x49, 0x08, 0x87, 0x11, 0xe0];
+    }
+
+    fn expected_v3_encoding() -> String {
+        "{\"network\":\"ethereum\",\"version\":3,\"id\":\"3198bc9c-6672-5ab3-d995-4942343ae5b6\",\"crypto\":{\"ciphertext\":\"052643cd39cd9e2e0f045ebcfec424d33a9fa6135f363d94a95cb09abc4d086a1c7eecc132c966e2a6691c6640605615\",\"cipherparams\":{\"iv\":\"6087dab2f9fdbbfaddc31a909735c1e6\",\"keysize\":16},\"cipher\":\"aes-128-cbc\",\"kdf\":\"scrypt\",\"kdfparams\":{\"dklen\":32,\"salt\":\"ae3cd4e7013836a3df6bd7241b12db061dbe2c6785853cce422d148a624ce0bd\",\"n\":262144,\"r\":8,\"p\":1},\"mac\":\"44c8b015c8702b9a315644725ca2c780605d62f56583ec43c140c14860ef807a\"}}".to_string()
     }
 }
