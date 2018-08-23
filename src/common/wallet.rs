@@ -9,7 +9,7 @@ use common::tx::Tx;
 use common::signed_tx::SignedTx;
 use common::{Encode, EncodingError};
 use util::hash::hash;
-use util::aes::{decrypt_aes, encrypt_aes};
+use util::aes::{decrypt_aes_cbc, encrypt_aes_cbc};
 
 use secp256k1::key::{PublicKey, SecretKey};
 use secp256k1::{Error, Message, RecoverableSignature, Secp256k1};
@@ -104,7 +104,7 @@ impl Wallet {
         }
 
         let decrypted_data: Vec<u8>;
-        match decrypt_aes(&encrypted_data, &key, &iv, 32, true) {
+        match decrypt_aes_cbc(&encrypted_data, &key, &iv, 32, true) {
             Ok(data) => decrypted_data = data,
             Err(e) => return Err(WalletError::Encrypt(e))
         }
@@ -177,7 +177,7 @@ impl Wallet {
         let mut iv = [0u8; 16];
         thread_rng().fill(&mut iv);
         let encrypted_key: Vec<u8>;
-        match encrypt_aes(&self.private_key[..], &key, &iv, true) {
+        match encrypt_aes_cbc(&self.private_key[..], &key, &iv, true) {
             Ok(data) => encrypted_key = data,
             Err(e) => return Err(WalletError::Encrypt(e))
         }
