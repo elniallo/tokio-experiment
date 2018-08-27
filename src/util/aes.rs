@@ -1,21 +1,67 @@
-use crypto::aes::{cbc_decryptor, cbc_encryptor};
-use crypto::aes::KeySize::{KeySize256, KeySize128, KeySize192};
-use crypto::blockmodes::PkcsPadding;
-use crypto::buffer::{RefReadBuffer, RefWriteBuffer};
-use crypto::symmetriccipher::SymmetricCipherError;
+use std::ops::Deref;
 
-pub fn encrypt_aes_cbc(data: &[u8], key: &[u8], iv: &[u8], extra: bool) -> Result<Vec<u8>, SymmetricCipherError> {
+use crypto::aes::{cbc_decryptor, cbc_encryptor, ctr};
+use crypto::aes::KeySize::{KeySize128, KeySize192, KeySize256};
+use crypto::aes::KeySize;
+use crypto::blockmodes::PkcsPadding;
+use crypto::buffer::{BufferResult, RefReadBuffer, RefWriteBuffer};
+use crypto::symmetriccipher::{Decryptor, Encryptor, SymmetricCipherError, SynchronousStreamCipher};
+
+#[derive(Debug)]
+pub enum AESError {
+    Cipher(SymmetricCipherError),
+    Support(String)
+}
+
+struct AESCTR{
+    b: Box<SynchronousStreamCipher>
+}
+
+impl AESCTR {
+    pub fn new(b: Box<SynchronousStreamCipher>) -> AESCTR {
+        AESCTR {
+            b
+        }
+    }
+}
+
+impl Deref for AESCTR {
+    type Target = SynchronousStreamCipher;
+    fn deref(&self) -> &Self::Target {&self.b}
+}
+
+impl Encryptor for AESCTR {
+    fn encrypt(&mut self, input: &mut RefReadBuffer, output: &mut RefWriteBuffer, eof: bool) -> Result<BufferResult, SymmetricCipherError> {
+        self.b.encrypt(input, output, eof)
+    }
+}
+
+impl Decryptor for AESCTR {
+    fn decrypt(&mut self, input: &mut RefReadBuffer, output: &mut RefWriteBuffer, eof: bool) -> Result<BufferResult, SymmetricCipherError> {
+        self.b.decrypt(input, output, eof)
+    }
+}
+
+pub fn encrypt_aes(data: &[u8], key: &[u8], iv: &[u8], extra: bool, cipher: String) -> Result<Vec<u8>, AESError> {
     let key_size;
-    if key.len() == 32 {
-        key_size = KeySize256;
-    } else if key.len() == 16 {
+    if key.len() == 16 {
         key_size = KeySize128;
     } else if key.len() == 24 {
         key_size = KeySize192;
+    } else if key.len() == 32 {
+        key_size = KeySize256;
     } else {
-        return Err(SymmetricCipherError::InvalidLength)
+        return Err(AESError::Cipher(SymmetricCipherError::InvalidLength));
     }
-    let mut encryptor = cbc_encryptor(key_size, &key, &iv, PkcsPadding);
+    let mut encryptor;
+
+    if cipher.contains("cbc") {
+        encryptor = cbc_encryptor(key_size, &key, &iv, PkcsPadding);
+    } else if cipher.contains("ctr") {
+        encryptor = Box::new(AESCTR::new(ctr(key_size, &key, &iv)));
+    } else {
+        return Err(AESError::Support("Unsupported AES mode".to_string()));
+    }
     let mut ref_input = RefReadBuffer::new(&data);
     let mut length = data.len();
     if length % 16 == 0 && extra {
@@ -24,26 +70,39 @@ pub fn encrypt_aes_cbc(data: &[u8], key: &[u8], iv: &[u8], extra: bool) -> Resul
         length += 16 - length % 16;
     }
     let mut out = vec![0u8; length];
-    encryptor.encrypt(&mut ref_input, &mut RefWriteBuffer::new(&mut out), true)?;
+    match encryptor.encrypt(&mut ref_input, &mut RefWriteBuffer::new(&mut out), true) {
+        Ok(_) => {},
+        Err(e) => return Err(AESError::Cipher(e))
+    }
     Ok(out)
 }
 
-pub fn decrypt_aes_cbc(data: &[u8], key: &[u8], iv: &[u8], size: usize, extra: bool) -> Result<Vec<u8>, SymmetricCipherError> {
+pub fn decrypt_aes(data: &[u8], key: &[u8], iv: &[u8], extra: bool, cipher: String) -> Result<Vec<u8>, AESError> {
     let key_size;
-    if key.len() == 32 {
-        key_size = KeySize256;
-    } else if key.len() == 16 {
+    if key.len() == 16 {
         key_size = KeySize128;
     } else if key.len() == 24 {
         key_size = KeySize192;
+    } else if key.len() == 32 {
+        key_size = KeySize256;
     } else {
-        return Err(SymmetricCipherError::InvalidLength)
+        return Err(AESError::Cipher(SymmetricCipherError::InvalidLength));
     }
 
-    let mut decryptor = cbc_decryptor(key_size, &key, &iv, PkcsPadding);
-    let mut out = vec![0u8; size];
+    let mut decryptor;
+    if cipher.contains("cbc") {
+        decryptor = cbc_decryptor(key_size, &key, &iv, PkcsPadding);
+    } else if cipher.contains("ctr") {
+        decryptor = Box::new(AESCTR::new(ctr(key_size, &key, &iv)));
+    } else {
+        return Err(AESError::Support("Unsupported AES mode".to_string()));
+    }
+    let mut out = vec![0u8; data.len()];
     let mut ref_input = RefReadBuffer::new(&data);
-    decryptor.decrypt(&mut ref_input, &mut RefWriteBuffer::new(&mut out), true)?;
+    match decryptor.decrypt(&mut ref_input, &mut RefWriteBuffer::new(&mut out), true) {
+        Ok(_) => {},
+        Err(e) => return Err(AESError::Cipher(e))
+    }
     Ok(out)
 }
 
@@ -116,7 +175,7 @@ mod tests {
         let mut data = [0u8; 256];
         thread_rng().fill(&mut data);
         let encryption = encrypt_aes_cbc(&data, &key[..], &iv, true).unwrap();
-        let decryption = decrypt_aes_cbc(&encryption, &key[..], &iv, data.len(), true).unwrap();
+        let decryption = decrypt_aes_cbc(&encryption, &key[..], &iv,  true).unwrap();
         assert_eq!(data.to_vec(), &decryption[..]);
     }
 }
