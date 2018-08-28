@@ -57,68 +57,6 @@ impl Wallet {
         }
     }
 
-    pub fn import(name: String, password: String, path: Option<PathBuf>) -> Result<Wallet, WalletError> {
-        let mut file_path: PathBuf;
-        match path {
-            Some(p) => file_path = p,
-            None => {
-                file_path = PathBuf::new();
-                match env::current_dir() {
-                    Ok(dir) => file_path.push(dir),
-                    Err(e) => return Err(WalletError::Fs(e))
-                }
-                file_path.push("wallet");
-                file_path.push("rootKey");
-                file_path.push(name);
-            }
-        }
-        let mut file: File;
-        match File::open(file_path) {
-            Ok(f) => file = f,
-            Err(e) => return Err(WalletError::Fs(e))
-        }
-        let mut buffer: Vec<u8> = vec![0; 256];
-        match file.read(&mut buffer) {
-            Ok(_) => {},
-            Err(e) => return Err(WalletError::Fs(e)),
-        }
-
-        let loaded_data: String;
-        match String::from_utf8(buffer) {
-            Ok(data) => loaded_data = data,
-            Err(e) => return Err(WalletError::Load(e))
-        }
-        let string_data: Vec<&str> = loaded_data.split(":").collect();
-
-        let key = hash(password.as_bytes(), 32);
-        let iv: Vec<u8>;
-        match string_data[1].to_owned().from_hex() {
-            Ok(data) => iv = data,
-            Err(e) => return Err(WalletError::Hex(e))
-        }
-        let encrypted_hex_data = &string_data[2][0..96];
-        println!("{:?}", encrypted_hex_data);
-        let encrypted_data: Vec<u8>;
-        match encrypted_hex_data.from_hex() {
-            Ok(data) => encrypted_data = data,
-            Err(e) => return Err(WalletError::Hex(e)),
-        }
-
-        let decrypted_data: Vec<u8>;
-        match decrypt_aes(&encrypted_data, &key, &iv, true, "aes-256-cbc".to_string(), 32) {
-            Ok(data) => decrypted_data = data,
-            Err(e) => return Err(WalletError::Aes(e))
-        }
-
-        let secp = Secp256k1::without_caps();
-        let private_key: SecretKey;
-        match SecretKey::from_slice(&secp, &decrypted_data) {
-            Ok(s_key) => private_key = s_key,
-            Err(e) => return Err(WalletError::Key(e))
-        }
-        Ok(Wallet::from_private_key(private_key))
-    }
-
     pub fn sign(&self, message: &Vec<u8>) -> Result<RecoverableSignature, Error> {
         let msg = Message::from_slice(&message)?;
         let secp = Secp256k1::signing_only();
@@ -140,60 +78,20 @@ impl Wallet {
         Ok(SignedTx(new_tx))
     }
 
-    pub fn save(&self, name: String, password: String, hint: Option<String>, path: Option<PathBuf>) -> Result <(), WalletError> {
-        let mut file_path: PathBuf;
-        match path {
-            Some(p) => file_path = p,
-            None => {
-                file_path = PathBuf::new();
-                match env::current_dir() {
-                    Ok(dir) => file_path.push(dir),
-                    Err(e) => return Err(WalletError::Fs(e))
-                }
-                file_path.push("wallet");
-                file_path.push("rootKey");
-                file_path.push(&name);
-            }
-        }
-        match File::open(&file_path) {
-            Ok(_) => return Ok(()),
-            Err(_) => {}
+    pub fn load(path: PathBuf) -> Result<Wallet, WalletError> {
+        let mut file;
+        match File::open(path) {
+            Ok(f) => file = f,
+            Err(e) => return Err(WalletError::Fs(e))
         }
 
-        file_path.pop();
-        match create_dir_all(&file_path) {
+        let mut read_data = vec![0u8; 1024];
+        match file.read(&mut read_data) {
             Ok(_) => {},
             Err(e) => return Err(WalletError::Fs(e))
         }
-        file_path.push(&name);
 
-        let mut file: File;
-        match File::create(&file_path) {
-            Ok(f) => file = f,
-            Err(e) => {
-                return Err(WalletError::Fs(e))
-            }
-        }
-        let key = hash(password.as_bytes(), 32);
-        let mut iv = [0u8; 16];
-        thread_rng().fill(&mut iv);
-        let encrypted_key: Vec<u8>;
-        match encrypt_aes(&self.private_key[..], &key, &iv, true, "aes-256-cbc".to_string()) {
-            Ok(data) => encrypted_key = data,
-            Err(e) => return Err(WalletError::Aes(e))
-        }
 
-        let mut encrypted_data = ":".to_owned() + &iv.to_hex().to_owned() + &":".to_owned() + &encrypted_key.to_hex();
-        match hint {
-            Some(h) => encrypted_data = h + &encrypted_data,
-            None => {}
-        }
-        match file.write(encrypted_data.as_bytes()) {
-            Ok(_) => return Ok(()),
-            Err(e) => {
-                return Err(WalletError::Fs(e))
-            }
-        }
     }
 }
 
@@ -252,20 +150,5 @@ mod tests {
         let pubkey = secp.recover(&secp_message, &recoverable_signature).unwrap();
         assert_eq!(pubkey, wallet.public_key);
         secp.verify(&secp_message, &signature, &wallet.public_key).unwrap();
-    }
-
-    #[test]
-    fn it_saves_a_wallet() {
-        let wallet = Wallet::new();
-        wallet.save("test_save_wallet".to_string(), "password".to_string(), None, None).unwrap();
-    }
-
-    #[test]
-    #[ignore]
-    fn it_imports_a_wallet() {
-        let wallet = Wallet::new();
-        wallet.save("test_load_wallet".to_string(), "password".to_string(), None, None).unwrap();
-        let imported_wallet = Wallet::import("test_load_wallet".to_string(), "password".to_string(), None).unwrap();
-        assert_eq!(wallet.public_key, imported_wallet.public_key);
     }
 }

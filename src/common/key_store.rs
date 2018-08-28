@@ -75,7 +75,7 @@ impl KeyStore {
                        given_n: Option<u32>,
                        given_r: Option<u32>,
                        given_p: Option<u32>,
-                       given_keysize: Option<usize>) -> (ScryptParams, KdfParams, CipherParams, usize, Vec<u8>) {
+                       given_keysize: Option<usize>) -> (KdfParams, CipherParams, usize, Vec<u8>) {
         let n: u32;
         let r: u32;
         let p: u32;
@@ -104,7 +104,7 @@ impl KeyStore {
         let cipher_params = CipherParams::new(iv.to_hex(), Some(keysize));
         let mut derived_key = vec![0u8; dklen];
         scrypt(password.as_bytes(), &salt, &scrypt_params, &mut derived_key);
-        (scrypt_params, kdf_params, cipher_params, keysize, derived_key)
+        (kdf_params, cipher_params, keysize, derived_key)
     }
 
     fn gen_mac(keysize: usize, derived_key: &[u8], cipher_text: &Vec<u8>) -> Vec<u8>{
@@ -134,8 +134,7 @@ impl KeyStore {
         let mut iv = [0u8; 16];
         thread_rng().fill(&mut iv);
 
-        let (scrypt_params,
-             kdf_params,
+        let (kdf_params,
              cipher_params,
              keysize,
              derived_key) = KeyStore::gen_derived_key(password, &salt, &iv, given_n, given_r, given_p, given_keysize);
@@ -204,7 +203,7 @@ impl KeyStore {
         let p = keystore.crypto.kdfparams.p;
 
         let derived_key =
-            KeyStore::gen_derived_key(password, &salt, &iv, Some(n), Some(r), Some(p), Some(keysize)).4;
+            KeyStore::gen_derived_key(password, &salt, &iv, Some(n), Some(r), Some(p), Some(keysize)).3;
 
         let derived_mac = KeyStore::gen_mac(keysize, &derived_key, &cipher_text);
         if derived_mac != mac {
@@ -212,7 +211,7 @@ impl KeyStore {
         }
 
         let private_key: Vec<u8>;
-        match decrypt_aes(&cipher_text, &derived_key[0..keysize], &iv, true, cipher, PRIVATE_KEY_SIZE) {
+        match decrypt_aes(&cipher_text, &derived_key[0..keysize], &iv, cipher, PRIVATE_KEY_SIZE) {
             Ok(pk) => private_key = pk,
             Err(e) => return Err(KeyStoreError::Aes(e))
         }
@@ -252,7 +251,7 @@ impl KeyStore {
         }
 
         let decrypted_string_data_bytes;
-        match decrypt_aes(&encrypted_data, &key, &iv, true, "aes-256-cbc".to_string(), 64) {
+        match decrypt_aes(&encrypted_data, &key, &iv, "aes-256-cbc".to_string(), 64) {
             Ok(data) => decrypted_string_data_bytes = data,
             Err(e) => return Err(KeyStoreError::Aes(e))
         }
@@ -344,7 +343,7 @@ mod tests {
 
     #[test]
     fn it_makes_a_v4_keystore() {
-        let mut private_key = generate_private_key();
+        let private_key = generate_private_key();
         KeyStore::generate_keystore("password".to_string(), private_key, 4, None, None, None, Some(DEFAULT_V4_KEYSIZE)).unwrap().encode().unwrap();
     }
 
@@ -478,6 +477,12 @@ mod tests {
         assert_eq!(keystore.version, 4);
         assert_eq!(keystore.id, "3198bc9c-6672-5ab3-d995-4942343ae5b6".to_string());
         assert_eq!(keystore.crypto, expected_crypto);
+    }
+
+    #[test]
+    fn it_loads_a_v3_keystore_with_extra_zeros() {
+        let mut frame = [0u8; 1024];
+
     }
 
     #[test]

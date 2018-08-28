@@ -79,7 +79,7 @@ pub fn encrypt_aes(data: &[u8], key: &[u8], iv: &[u8], extra: bool, cipher: Stri
     Ok(out)
 }
 
-pub fn decrypt_aes(data: &[u8], key: &[u8], iv: &[u8], extra: bool, cipher: String, size: usize) -> Result<Vec<u8>, AESError> {
+pub fn decrypt_aes(data: &[u8], key: &[u8], iv: &[u8], cipher: String, size: usize) -> Result<Vec<u8>, AESError> {
     let key_size;
     if key.len() == 16 {
         key_size = KeySize128;
@@ -180,7 +180,7 @@ mod tests {
         let mut data = [0u8; 256];
         thread_rng().fill(&mut data);
         let encryption = encrypt_aes(&data, &key[..], &iv, true, "cbc".to_string()).unwrap();
-        let decryption = decrypt_aes(&encryption, &key, &iv,  true, "cbc".to_string(), data.len()).unwrap();
+        let decryption = decrypt_aes(&encryption, &key, &iv, "cbc".to_string(), data.len()).unwrap();
         assert_eq!(data.to_vec(), &decryption[..]);
     }
 
@@ -220,7 +220,7 @@ mod tests {
             0x78, 0x4b, 0xf5, 0x06, 0xfa, 0x95, 0xed, 0xc3,
             0x95, 0xf5, 0xcf, 0x6c, 0x75, 0x14, 0xfe, 0x9d];
         let encryption = encrypt_aes(&data, &key, &iv, true, "ctr".to_string()).unwrap();
-        let decryption = decrypt_aes(&encryption, &key, &iv, true, "ctr".to_string(), 32).unwrap();
+        let decryption = decrypt_aes(&encryption, &key, &iv, "ctr".to_string(), 32).unwrap();
         assert_eq!(data.to_vec(), decryption);
     }
 }
