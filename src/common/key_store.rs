@@ -1,3 +1,5 @@
+use std::string::FromUtf8Error;
+
 use common::address::{Address, ValidAddress};
 use common::{Encode, EncodingError};
 use util::aes::{AESError, encrypt_aes, decrypt_aes};
@@ -13,12 +15,14 @@ use serde_json::{to_vec, Error as JSONError};
 use serde_json::de;
 use rustc_serialize::hex::{ToHex, FromHex, FromHexError};
 
-static DEFAULT_N: u32 = 16384;
-static DEFAULT_R: u32 = 8;
-static DEFAULT_P: u32 = 1;
-static DEFAULT_KEYSIZE: usize = 16;
-static MAC_KEY_SIZE: usize = 16;
-static MAC_SIZE: usize = 32;
+const DEFAULT_N: u32 = 16384;
+const DEFAULT_R: u32 = 8;
+const DEFAULT_P: u32 = 1;
+const DEFAULT_V3_KEYSIZE: usize = 16;
+const DEFAULT_V4_KEYSIZE: usize = 32;
+const MAC_KEY_SIZE: usize = 16;
+const MAC_SIZE: usize = 32;
+const PRIVATE_KEY_SIZE: usize = 32;
 
 #[derive(Debug)]
 pub enum KeyStoreError {
@@ -27,7 +31,8 @@ pub enum KeyStoreError {
     Hex(FromHexError),
     Access(String),
     Key(SecpError),
-    Aes(AESError)
+    Aes(AESError),
+    String(FromUtf8Error)
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -90,7 +95,7 @@ impl KeyStore {
         }
         match given_keysize {
             Some(num) => keysize = num as usize,
-            None => keysize = DEFAULT_KEYSIZE
+            None => keysize = DEFAULT_V3_KEYSIZE
         }
         let dklen: usize = keysize + MAC_KEY_SIZE;
         let log_n = ((n as f64).log2()) as u8;
@@ -162,7 +167,7 @@ impl KeyStore {
         })
     }
 
-    fn unlock_keystore(keystore: KeyStore, password: String) -> Result<SecretKey, KeyStoreError> {
+    pub fn unlock_keystore(keystore: KeyStore, password: String) -> Result<SecretKey, KeyStoreError> {
         let version = keystore.version;
         if version < 3 || version > 4 {
             return Err(KeyStoreError::Access("Unsupported Version".to_string()))
@@ -187,7 +192,7 @@ impl KeyStore {
         let keysize: usize;
         match keystore.crypto.cipherparams.keysize {
             Some(k) => keysize = k,
-            None => keysize = 16
+            None => keysize = DEFAULT_V3_KEYSIZE
         }
         let cipher_text: Vec<u8>;
         match keystore.crypto.ciphertext.from_hex() {
@@ -207,7 +212,7 @@ impl KeyStore {
         }
 
         let private_key: Vec<u8>;
-        match decrypt_aes(&cipher_text, &derived_key[0..keysize], &iv, true, cipher, 32) {
+        match decrypt_aes(&cipher_text, &derived_key[0..keysize], &iv, true, cipher, PRIVATE_KEY_SIZE) {
             Ok(pk) => private_key = pk,
             Err(e) => return Err(KeyStoreError::Aes(e))
         }
@@ -223,12 +228,60 @@ impl KeyStore {
         de::from_slice(&encoded_keystore)
     }
 
+    pub fn load_legacy_keystore(encoded_keystore: Vec<u8>, password: String) -> Result<SecretKey, KeyStoreError> {
+        let loaded_data: String;
+        match String::from_utf8(encoded_keystore) {
+            Ok(data) => loaded_data = data,
+            Err(e) => return Err(KeyStoreError::String(e))
+        }
+        let string_data: Vec<&str> = loaded_data.split(":").collect();
+
+        let key = hash(password.as_bytes(), 32);
+        let iv: Vec<u8>;
+        match string_data[1].to_owned().from_hex() {
+            Ok(data) => iv = data,
+            Err(e) => return Err(KeyStoreError::Hex(e))
+        }
+        // The legacy versions encrypted the string representation of the private key.
+        // It must be converted from that to bytes which the string represents
+        let encrypted_hex_data = string_data[2].to_string();
+        let encrypted_data: Vec<u8>;
+        match encrypted_hex_data.from_hex() {
+            Ok(data) => encrypted_data = data.to_vec(),
+            Err(e) => return Err(KeyStoreError::Hex(e))
+        }
+
+        let decrypted_string_data_bytes;
+        match decrypt_aes(&encrypted_data, &key, &iv, true, "aes-256-cbc".to_string(), 64) {
+            Ok(data) => decrypted_string_data_bytes = data,
+            Err(e) => return Err(KeyStoreError::Aes(e))
+        }
+
+        let decrypted_string_data;
+        match String::from_utf8(decrypted_string_data_bytes) {
+            Ok(data) => decrypted_string_data = data,
+            Err(e) => return Err(KeyStoreError::String(e))
+        }
+
+        let decrypted_data;
+        match decrypted_string_data.from_hex() {
+            Ok(data) => decrypted_data = data,
+            Err(e) => return Err(KeyStoreError::Hex(e))
+        }
+
+        let secp = Secp256k1::without_caps();
+        match SecretKey::from_slice(&secp, &decrypted_data) {
+            Ok(s_key) => return Ok(s_key),
+            Err(e) => return Err(KeyStoreError::Key(e))
+        }
+    }
+
     pub fn to_v3(password: String, private_key: SecretKey) -> Result<KeyStore, AESError> {
-        KeyStore::generate_keystore(password, private_key, 3, None, None, None, Some(16))
+        KeyStore::generate_keystore(password, private_key, 3, None, None, None, Some(DEFAULT_V3_KEYSIZE))
     }
 
     pub fn to_v4(password: String, private_key: SecretKey) -> Result<KeyStore, AESError> {
-        KeyStore::generate_keystore(password, private_key, 4, None, None, None, None)
+        KeyStore::generate_keystore(password, private_key, 4, None, None, None, Some(DEFAULT_V4_KEYSIZE))
     }
 
     pub fn from_params(network: String, version: usize, id: String, crypto: Crypto) -> Result<KeyStore, SymmetricCipherError> {
@@ -292,12 +345,12 @@ mod tests {
     #[test]
     fn it_makes_a_v4_keystore() {
         let mut private_key = generate_private_key();
-        KeyStore::generate_keystore("password".to_string(), private_key, 4, None, None, None, Some(32)).unwrap().encode().unwrap();
+        KeyStore::generate_keystore("password".to_string(), private_key, 4, None, None, None, Some(DEFAULT_V4_KEYSIZE)).unwrap().encode().unwrap();
     }
 
     #[test]
     fn it_makes_a_v3_keystore() {
-        let mut private_key = generate_private_key();
+        let private_key = generate_private_key();
         KeyStore::generate_keystore("password".to_string(), private_key, 3, Some(8192), None, None, None).unwrap().encode().unwrap();
     }
 
@@ -326,21 +379,21 @@ mod tests {
         let p = 1;
         let kdf_params = KdfParams::new(dklen, salt.to_hex(), n, r, p);
         let scrypt_params = ScryptParams::new(13, r, p);
-        let mut derived_key = [0u8; 32];
+        let mut derived_key = vec![0u8; dklen];
         scrypt(password.as_bytes(), &salt, &scrypt_params, &mut derived_key);
         let iv = [
             0x60, 0x87, 0xda, 0xb2, 0xf9, 0xfd, 0xbb, 0xfa,
             0xdd, 0xc3, 0x1a, 0x90, 0x97, 0x35, 0xc1, 0xe6];
-        let cipher_params = CipherParams::new(iv.to_hex(), Some(16));
+        let cipher_params = CipherParams::new(iv.to_hex(), Some(DEFAULT_V3_KEYSIZE));
         let cipher = "aes-128-cbc".to_string();
-        let cipher_text = encrypt_aes(&private_key[..], &derived_key[0..16], &iv, true, cipher.clone()).unwrap();
+        let cipher_text = encrypt_aes(&private_key[..], &derived_key[0..DEFAULT_V3_KEYSIZE], &iv, true, cipher.clone()).unwrap();
         assert_eq!("e44f58dc0de4183814970d2cd0f72385de469285c07caaad4eda5ab0b579d911419f40fe4412b63b8a50a787cc9403e4".to_string(), cipher_text.to_hex());
-        let mut mac_input = vec![0u8; 16];
-        mac_input.clone_from_slice(&derived_key[16..32]);
+        let mut mac_input = vec![0u8; MAC_KEY_SIZE];
+        mac_input.clone_from_slice(&derived_key[DEFAULT_V3_KEYSIZE..DEFAULT_V3_KEYSIZE + MAC_KEY_SIZE]);
         mac_input.append(&mut cipher_text.clone());
         let mut mac_hash = Sha3::keccak256();
         mac_hash.input(&mac_input);
-        let mut mac = [0u8; 32];
+        let mut mac = [0u8; MAC_SIZE];
         mac_hash.result(&mut mac);
         assert_eq!("f9413c4b594522b2e73e3afb0f475c5013c9954de34bd6ca9ea39042e69f9e58".to_string(), mac.to_hex());
         let crypto = Crypto::new(cipher_text.to_hex(), cipher_params, cipher.clone(), kdf, kdf_params, mac.to_hex());
@@ -375,23 +428,23 @@ mod tests {
         let p = 1;
         let kdf_params = KdfParams::new(dklen, salt.to_hex(), n, r, p);
         let scrypt_params = ScryptParams::new(13, r, p);
-        let mut derived_key = [0u8; 32];
+        let mut derived_key = vec![0u8; dklen];
         scrypt(password.as_bytes(), &salt, &scrypt_params, &mut derived_key);
         let iv = [
             0x60, 0x87, 0xda, 0xb2, 0xf9, 0xfd, 0xbb, 0xfa,
             0xdd, 0xc3, 0x1a, 0x90, 0x97, 0x35, 0xc1, 0xe6];
-        let cipher_params = CipherParams::new(iv.to_hex(), Some(32));
+        let cipher_params = CipherParams::new(iv.to_hex(), Some(DEFAULT_V4_KEYSIZE));
         let cipher = "aes-256-cbc".to_string();
-        let cipher_text = encrypt_aes(&private_key[..], &derived_key[0..32], &iv, true, cipher.clone()).unwrap();
+        let cipher_text = encrypt_aes(&private_key[..], &derived_key[0..DEFAULT_V4_KEYSIZE], &iv, true, cipher.clone()).unwrap();
         assert_eq!("73bd75ef1556bfd51b647e3860db8109b6f850f8d7598671c54b9727403576d1e3207b6ee10c15f5a0e2d7fb530ec673".to_string(), cipher_text.to_hex());
-        let mut mac_input = vec![0u8; 16];
-        mac_input.clone_from_slice(&derived_key[16..32]);
+        let mut mac_input = vec![0u8; MAC_KEY_SIZE];
+        mac_input.clone_from_slice(&derived_key[DEFAULT_V4_KEYSIZE..DEFAULT_V4_KEYSIZE + MAC_KEY_SIZE]);
         mac_input.append(&mut cipher_text.clone());
         let mut mac_hash = Sha3::keccak256();
         mac_hash.input(&mac_input);
-        let mut mac = [0u8; 32];
+        let mut mac = [0u8; MAC_SIZE];
         mac_hash.result(&mut mac);
-        assert_eq!("5408b75829074955e0b3e0d189d20ce76302474661ca26e9673f161e33d4c6bf".to_string(), mac.to_hex());
+        assert_eq!("7e4de3e41191fde8156f5677de34a9330f775741145615d5e72ac8e6fb528506".to_string(), mac.to_hex());
         let crypto = Crypto::new(cipher_text.to_hex(), cipher_params, cipher.clone(), kdf, kdf_params, mac.to_hex());
         let key_store = KeyStore::from_params(network, version, id, crypto).unwrap();
         let encoding = key_store.encode().unwrap();
@@ -418,7 +471,7 @@ mod tests {
         let keystore = KeyStore::load_keystore(expected_v4_encoding().as_bytes().to_vec()).unwrap();
         let expected_cipher_params = CipherParams::new("6087dab2f9fdbbfaddc31a909735c1e6".to_string(), Some(32));
         let expected_kdf_params = KdfParams::new(48, "ae3cd4e7013836a3df6bd7241b12db061dbe2c6785853cce422d148a624ce0bd".to_string(), 8192, 8, 1);
-        let expected_mac = "5408b75829074955e0b3e0d189d20ce76302474661ca26e9673f161e33d4c6bf".to_string();
+        let expected_mac = "7e4de3e41191fde8156f5677de34a9330f775741145615d5e72ac8e6fb528506".to_string();
         let expected_crypto = Crypto::new("73bd75ef1556bfd51b647e3860db8109b6f850f8d7598671c54b9727403576d1e3207b6ee10c15f5a0e2d7fb530ec673".to_string(),
             expected_cipher_params, "aes-256-cbc".to_string(), "scrypt".to_string(), expected_kdf_params, expected_mac);
         assert_eq!(keystore.network, Some("hycon".to_string()));
@@ -460,8 +513,22 @@ mod tests {
         assert_eq!(secret_key, decrypted_key);
     }
 
+    #[test]
+    fn it_unlocks_a_legacy_keystore() {
+        let secp = Secp256k1::without_caps();
+        let expected_secret_key = [
+            124, 214, 250, 144, 150, 223, 109, 129,
+            174, 64,  89,  150, 99,  184, 82,  202,
+            35,  114, 240, 250, 76,  57,  129, 250,
+            43,  168, 112, 23,  225, 186, 120, 222];
+        let password = "password".to_string();
+        let expected_private_key = SecretKey::from_slice(&secp, &expected_secret_key).unwrap();
+        let private_key = KeyStore::load_legacy_keystore(legacy_keystore().as_bytes().to_vec(), password).unwrap();
+        assert_eq!(private_key, expected_private_key);
+    }
+
     fn generate_private_key() -> SecretKey {
-        let mut secret_key = [0u8; 32];
+        let mut secret_key = [0u8; PRIVATE_KEY_SIZE];
         let secp = Secp256k1::without_caps();
         let private_key: SecretKey;
         loop {
@@ -508,21 +575,21 @@ mod tests {
             \"version\":4,\
             \"id\":\"3198bc9c-6672-5ab3-d995-4942343ae5b6\",\
             \"crypto\":{\
-            \"ciphertext\":\"73bd75ef1556bfd51b647e3860db8109b6f850f8d7598671c54b9727403576d1e3207b6ee10c15f5a0e2d7fb530ec673\",\
-            \"cipherparams\":{\
-                \"iv\":\"6087dab2f9fdbbfaddc31a909735c1e6\",\
-                \"keysize\":32\
-            },\
-            \"cipher\":\"aes-256-cbc\",\
-            \"kdf\":\"scrypt\",\
-            \"kdfparams\":{\
-                \"dklen\":48,\
-                \"salt\":\"ae3cd4e7013836a3df6bd7241b12db061dbe2c6785853cce422d148a624ce0bd\",\
-                \"n\":8192,\
-                \"r\":8,\
-                \"p\":1\
-            },\
-            \"mac\":\"5408b75829074955e0b3e0d189d20ce76302474661ca26e9673f161e33d4c6bf\"}\
+                \"ciphertext\":\"73bd75ef1556bfd51b647e3860db8109b6f850f8d7598671c54b9727403576d1e3207b6ee10c15f5a0e2d7fb530ec673\",\
+                \"cipherparams\":{\
+                    \"iv\":\"6087dab2f9fdbbfaddc31a909735c1e6\",\
+                    \"keysize\":32\
+                },\
+                \"cipher\":\"aes-256-cbc\",\
+                \"kdf\":\"scrypt\",\
+                \"kdfparams\":{\
+                    \"dklen\":48,\
+                    \"salt\":\"ae3cd4e7013836a3df6bd7241b12db061dbe2c6785853cce422d148a624ce0bd\",\
+                    \"n\":8192,\
+                    \"r\":8,\
+                    \"p\":1\
+                },\
+            \"mac\":\"7e4de3e41191fde8156f5677de34a9330f775741145615d5e72ac8e6fb528506\"}\
         }".to_string()
     }
 
@@ -546,5 +613,14 @@ mod tests {
                 },\
                 \"mac\":\"b7e4a5938a298802e449db084b7f591b5a161a304ef9b0f234a229ce554f915d\"}\
         }".to_string()
+    }
+
+    fn legacy_keystore() -> String {
+        ":d5421c02ecbc77a07ce6e46e7c156a70\
+        :89644ab4749644de227f292f36208da9\
+        b0fb1a47a70b5bdec78097957616b128\
+        694cc3436e3cec6e63cbbdd501cf1cca\
+        a6adfa4277cfcce6656635a795abc2fc\
+        7e32e48342db345f0b928cdb7ecf463d".to_string()
     }
 }
