@@ -105,7 +105,7 @@ impl Wallet {
         }
 
         let decrypted_data: Vec<u8>;
-        match decrypt_aes(&encrypted_data, &key, &iv, true, "aes-256-cbc".to_string()) {
+        match decrypt_aes(&encrypted_data, &key, &iv, true, "aes-256-cbc".to_string(), 32) {
             Ok(data) => decrypted_data = data,
             Err(e) => return Err(WalletError::Aes(e))
         }

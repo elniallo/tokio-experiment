@@ -13,6 +13,13 @@ use serde_json::{to_vec, Error as JSONError};
 use serde_json::de;
 use rustc_serialize::hex::{ToHex, FromHex, FromHexError};
 
+static DEFAULT_N: u32 = 16384;
+static DEFAULT_R: u32 = 8;
+static DEFAULT_P: u32 = 1;
+static DEFAULT_KEYSIZE: usize = 16;
+static MAC_KEY_SIZE: usize = 16;
+static MAC_SIZE: usize = 32;
+
 #[derive(Debug)]
 pub enum KeyStoreError {
     Crypto(SymmetricCipherError),
@@ -50,7 +57,7 @@ pub struct Crypto {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct KeyStore {
-    pub network: String,
+    pub network: Option<String>,
     pub version: usize,
     pub id: String,
     pub crypto: Crypto
@@ -71,21 +78,21 @@ impl KeyStore {
 
         match given_n {
             Some(num) => n = num,
-            None => n = 262144
+            None => n = DEFAULT_N
         }
         match given_r {
             Some(num) => r = num,
-            None => r = 8
+            None => r = DEFAULT_R
         }
         match given_p {
             Some(num) => p = num,
-            None => p = 1
+            None => p = DEFAULT_P
         }
         match given_keysize {
             Some(num) => keysize = num as usize,
-            None => keysize = 32
+            None => keysize = DEFAULT_KEYSIZE
         }
-        let dklen: usize = keysize + 16;
+        let dklen: usize = keysize + MAC_KEY_SIZE;
         let log_n = ((n as f64).log2()) as u8;
         let scrypt_params = ScryptParams::new(log_n, r, p);
         let kdf_params = KdfParams::new(dklen, salt.to_hex(), n, r, p);
@@ -96,12 +103,12 @@ impl KeyStore {
     }
 
     fn gen_mac(keysize: usize, derived_key: &[u8], cipher_text: &Vec<u8>) -> Vec<u8>{
-        let mut mac_input = vec![0u8; 16];
-        mac_input.clone_from_slice(&derived_key[keysize..keysize + 16]);
+        let mut mac_input = vec![0u8; MAC_KEY_SIZE];
+        mac_input.clone_from_slice(&derived_key[keysize..keysize + MAC_KEY_SIZE]);
         mac_input.append(&mut cipher_text.clone());
         let mut mac_hash = Sha3::keccak256();
         mac_hash.input(&mac_input);
-        let mut mac = vec![0u8; 32];
+        let mut mac = vec![0u8; MAC_SIZE];
         mac_hash.result(&mut mac);
         mac
     }
@@ -148,7 +155,7 @@ impl KeyStore {
 
         let crypto = Crypto::new(cipher_text.to_hex(), cipher_params, cipher, kdf, kdf_params, mac.to_hex());
         Ok(KeyStore {
-            network,
+            network: Some(network),
             version,
             id,
             crypto
@@ -200,7 +207,7 @@ impl KeyStore {
         }
 
         let private_key: Vec<u8>;
-        match decrypt_aes(&cipher_text, &derived_key[0..keysize], &iv, true, cipher) {
+        match decrypt_aes(&cipher_text, &derived_key[0..keysize], &iv, true, cipher, 32) {
             Ok(pk) => private_key = pk,
             Err(e) => return Err(KeyStoreError::Aes(e))
         }
@@ -224,13 +231,9 @@ impl KeyStore {
         KeyStore::generate_keystore(password, private_key, 4, None, None, None, None)
     }
 
-//    pub fn from_v3(keystore: KeyStore, password: String) -> Result<SecretKey, KeyStoreError> {
-//
-//    }
-
     pub fn from_params(network: String, version: usize, id: String, crypto: Crypto) -> Result<KeyStore, SymmetricCipherError> {
         Ok(KeyStore {
-            network,
+            network: Some(network),
             version,
             id,
             crypto
@@ -288,42 +291,14 @@ mod tests {
 
     #[test]
     fn it_makes_a_v4_keystore() {
-        let mut secret_key = [0u8; 32];
-        let secp = Secp256k1::without_caps();
-        let private_key: SecretKey;
-        loop {
-            thread_rng().fill(&mut secret_key);
-            let priv_key = SecretKey::from_slice(&secp, &secret_key[..]);
-            match priv_key {
-                Ok(sk) => {
-                    private_key = sk;
-                    break;
-                }
-                Err(_) => {}
-            }
-        }
-        let password = "password".to_string();
-
-        KeyStore::generate_keystore(password, private_key, 4, Some(8192), None, None, None).unwrap().encode().unwrap();
+        let mut private_key = generate_private_key();
+        KeyStore::generate_keystore("password".to_string(), private_key, 4, None, None, None, Some(32)).unwrap().encode().unwrap();
     }
 
     #[test]
     fn it_makes_a_v3_keystore() {
-        let mut secret_key = [0u8; 32];
-        let secp = Secp256k1::without_caps();
-        let private_key: SecretKey;
-        loop {
-            thread_rng().fill(&mut secret_key);
-            let priv_key = SecretKey::from_slice(&secp, &secret_key[..]);
-            match priv_key {
-                Ok(sk) => {
-                    private_key = sk;
-                    break;
-                }
-                Err(_) => {}
-            }
-        }
-        KeyStore::generate_keystore("password".to_string(), private_key, 3, Some(8192), None, None, Some(16)).unwrap().encode().unwrap();
+        let mut private_key = generate_private_key();
+        KeyStore::generate_keystore("password".to_string(), private_key, 3, Some(8192), None, None, None).unwrap().encode().unwrap();
     }
 
     #[test]
@@ -358,7 +333,7 @@ mod tests {
             0xdd, 0xc3, 0x1a, 0x90, 0x97, 0x35, 0xc1, 0xe6];
         let cipher_params = CipherParams::new(iv.to_hex(), Some(16));
         let cipher = "aes-128-cbc".to_string();
-        let cipher_text = encrypt_aes(&private_key[..], &derived_key[0..16], &iv, true, cipher).unwrap();
+        let cipher_text = encrypt_aes(&private_key[..], &derived_key[0..16], &iv, true, cipher.clone()).unwrap();
         assert_eq!("e44f58dc0de4183814970d2cd0f72385de469285c07caaad4eda5ab0b579d911419f40fe4412b63b8a50a787cc9403e4".to_string(), cipher_text.to_hex());
         let mut mac_input = vec![0u8; 16];
         mac_input.clone_from_slice(&derived_key[16..32]);
@@ -368,7 +343,7 @@ mod tests {
         let mut mac = [0u8; 32];
         mac_hash.result(&mut mac);
         assert_eq!("f9413c4b594522b2e73e3afb0f475c5013c9954de34bd6ca9ea39042e69f9e58".to_string(), mac.to_hex());
-        let crypto = Crypto::new(cipher_text.to_hex(), cipher_params, cipher, kdf, kdf_params, mac.to_hex());
+        let crypto = Crypto::new(cipher_text.to_hex(), cipher_params, cipher.clone(), kdf, kdf_params, mac.to_hex());
         let key_store = KeyStore::from_params(network, version, id, crypto).unwrap();
         let encoding = key_store.encode().unwrap();
         let encoding_string = String::from_utf8(encoding).unwrap();
@@ -407,7 +382,7 @@ mod tests {
             0xdd, 0xc3, 0x1a, 0x90, 0x97, 0x35, 0xc1, 0xe6];
         let cipher_params = CipherParams::new(iv.to_hex(), Some(32));
         let cipher = "aes-256-cbc".to_string();
-        let cipher_text = encrypt_aes(&private_key[..], &derived_key[0..32], &iv, true, cipher).unwrap();
+        let cipher_text = encrypt_aes(&private_key[..], &derived_key[0..32], &iv, true, cipher.clone()).unwrap();
         assert_eq!("73bd75ef1556bfd51b647e3860db8109b6f850f8d7598671c54b9727403576d1e3207b6ee10c15f5a0e2d7fb530ec673".to_string(), cipher_text.to_hex());
         let mut mac_input = vec![0u8; 16];
         mac_input.clone_from_slice(&derived_key[16..32]);
@@ -417,7 +392,7 @@ mod tests {
         let mut mac = [0u8; 32];
         mac_hash.result(&mut mac);
         assert_eq!("5408b75829074955e0b3e0d189d20ce76302474661ca26e9673f161e33d4c6bf".to_string(), mac.to_hex());
-        let crypto = Crypto::new(cipher_text.to_hex(), cipher_params, cipher, kdf, kdf_params, mac.to_hex());
+        let crypto = Crypto::new(cipher_text.to_hex(), cipher_params, cipher.clone(), kdf, kdf_params, mac.to_hex());
         let key_store = KeyStore::from_params(network, version, id, crypto).unwrap();
         let encoding = key_store.encode().unwrap();
         let encoding_string = String::from_utf8(encoding).unwrap();
@@ -432,7 +407,7 @@ mod tests {
         let expected_mac = "f9413c4b594522b2e73e3afb0f475c5013c9954de34bd6ca9ea39042e69f9e58".to_string();
         let expected_crypto = Crypto::new("e44f58dc0de4183814970d2cd0f72385de469285c07caaad4eda5ab0b579d911419f40fe4412b63b8a50a787cc9403e4".to_string(),
             expected_cipher_params, "aes-128-cbc".to_string(), "scrypt".to_string(), expected_kdf_params, expected_mac);
-        assert_eq!(keystore.network, "hycon".to_string());
+        assert_eq!(keystore.network, Some("hycon".to_string()));
         assert_eq!(keystore.version, 3);
         assert_eq!(keystore.id, "3198bc9c-6672-5ab3-d995-4942343ae5b6".to_string());
         assert_eq!(keystore.crypto, expected_crypto);
@@ -446,10 +421,61 @@ mod tests {
         let expected_mac = "5408b75829074955e0b3e0d189d20ce76302474661ca26e9673f161e33d4c6bf".to_string();
         let expected_crypto = Crypto::new("73bd75ef1556bfd51b647e3860db8109b6f850f8d7598671c54b9727403576d1e3207b6ee10c15f5a0e2d7fb530ec673".to_string(),
             expected_cipher_params, "aes-256-cbc".to_string(), "scrypt".to_string(), expected_kdf_params, expected_mac);
-        assert_eq!(keystore.network, "hycon".to_string());
+        assert_eq!(keystore.network, Some("hycon".to_string()));
         assert_eq!(keystore.version, 4);
         assert_eq!(keystore.id, "3198bc9c-6672-5ab3-d995-4942343ae5b6".to_string());
         assert_eq!(keystore.crypto, expected_crypto);
+    }
+
+    #[test]
+    fn it_unlocks_a_v3_keystore() {
+        let private_key = generate_private_key();
+        let keystore = KeyStore::generate_keystore("password".to_string(), private_key, 3, Some(8192), None, None, None).unwrap();
+        let decrypted_key = KeyStore::unlock_keystore(keystore, "password".to_string()).unwrap();
+        assert_eq!(private_key, decrypted_key);
+    }
+
+    #[test]
+    fn it_unlocks_a_v4_keystore() {
+        let private_key = generate_private_key();
+        let keystore = KeyStore::generate_keystore("password".to_string(), private_key, 4, Some(8192), None, None, Some(32)).unwrap();
+        let decrypted_key = KeyStore::unlock_keystore(keystore, "password".to_string()).unwrap();
+        assert_eq!(private_key, decrypted_key);
+    }
+
+    // You can ignore this test for the most part since it takes a long time to complete.
+    // However, you should run this test if you are changing the wallet/keystore/crypto functions
+    #[test]
+    #[ignore]
+    fn it_unlocks_a_ctr_v3_keystore() {
+        let secp = Secp256k1::without_caps();
+        let private_key = [
+            0x7a, 0x28, 0xb5, 0xba, 0x57, 0xc5, 0x36, 0x03,
+            0xb0, 0xb0, 0x7b, 0x56, 0xbb, 0xa7, 0x52, 0xf7,
+            0x78, 0x4b, 0xf5, 0x06, 0xfa, 0x95, 0xed, 0xc3,
+            0x95, 0xf5, 0xcf, 0x6c, 0x75, 0x14, 0xfe, 0x9d];
+        let secret_key = SecretKey::from_slice(&secp, &private_key).unwrap();
+        let keystore = KeyStore::load_keystore(ctr_encrypted_keystore().as_bytes().to_vec()).unwrap();
+        let decrypted_key = KeyStore::unlock_keystore(keystore, "testpassword".to_string()).unwrap();
+        assert_eq!(secret_key, decrypted_key);
+    }
+
+    fn generate_private_key() -> SecretKey {
+        let mut secret_key = [0u8; 32];
+        let secp = Secp256k1::without_caps();
+        let private_key: SecretKey;
+        loop {
+            thread_rng().fill(&mut secret_key);
+            let priv_key = SecretKey::from_slice(&secp, &secret_key[..]);
+            match priv_key {
+                Ok(sk) => {
+                    private_key = sk;
+                    break;
+                }
+                Err(_) => {}
+            }
+        }
+        private_key
     }
 
     fn expected_v3_encoding() -> String {
@@ -497,6 +523,28 @@ mod tests {
                 \"p\":1\
             },\
             \"mac\":\"5408b75829074955e0b3e0d189d20ce76302474661ca26e9673f161e33d4c6bf\"}\
+        }".to_string()
+    }
+
+    fn ctr_encrypted_keystore() -> String {
+        "{\
+            \"version\": 3,\
+            \"id\":\"1bfe00fa-3a0f-4758-936b-c0816c84d57b\",\
+            \"address\":\"008aeeda4d805471df9b2a5b0f38a0c3bcba786b\",\
+            \"crypto\":{\
+                \"ciphertext\":\"0262b75a41568c31e3b248ae6051f3fc8037a50d99d043813c17df315e67c5f2\",\
+                \"cipherparams\":{\
+                    \"iv\":\"b043656cc25861128a501acbdce1e8af\"},\
+                \"cipher\":\"aes-128-ctr\",\
+                \"kdf\":\"scrypt\",\
+                \"kdfparams\":{\
+                    \"dklen\":32,\
+                    \"salt\":\"fb7b556a8150c2ec985cf572bc9ba5c31dc909d5cc1135f1d5e28a4eb9dc7055\",\
+                    \"n\":262144,\
+                    \"r\":8,\
+                    \"p\":1\
+                },\
+                \"mac\":\"b7e4a5938a298802e449db084b7f591b5a161a304ef9b0f234a229ce554f915d\"}\
         }".to_string()
     }
 }
