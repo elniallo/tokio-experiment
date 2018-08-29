@@ -4,14 +4,17 @@ extern crate protobuf;
 extern crate rust_base58;
 extern crate secp256k1;
 extern crate rand;
-extern crate crypto;
-extern crate rustc_serialize;
 extern crate uuid;
+extern crate openssl;
+extern crate hex;
+extern crate tiny_keccak;
 
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
 extern crate serde;
+#[macro_use]
+extern crate lazy_static;
 
 pub mod common;
 pub mod serialization;
