@@ -21,7 +21,7 @@ impl GenesisSignedTx {
 
         let secp = Secp256k1::without_caps();
         let recovery = RecoveryId::from_i32(proto_tx.recovery as i32)?;
-        let signature = RecoverableSignature::from_compact(&secp, &proto_tx.signature[..], recovery)?;
+        let signature = RecoverableSignature::from_compact(&secp, &proto_tx.signature, recovery)?;
         let tx = Tx::new(None, Some(to), amount, None, None, Some(signature), Some(recovery));
         let genesis_tx = GenesisTx(tx);
         Ok(GenesisSignedTx(genesis_tx))
@@ -40,7 +40,7 @@ impl Proto for GenesisSignedTx {
     fn to_proto(&self) -> Result<ProtoGenesisSignedTx, Box<Error>> {
         let mut proto_genesis_signed_tx = ProtoGenesisSignedTx::new();
         let encoding = self.0.encode()?;
-        proto_genesis_signed_tx.merge_from_bytes(&encoding[..])?;
+        proto_genesis_signed_tx.merge_from_bytes(&encoding)?;
         match self.recovery {
             Some(recovery) => proto_genesis_signed_tx.set_recovery(recovery.to_i32() as u32),
             None => return Err(Box::new(Exception::new("Signed tx is missing a recovery id")))
