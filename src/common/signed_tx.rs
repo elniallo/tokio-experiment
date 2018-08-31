@@ -4,7 +4,7 @@ use std::error::Error;
 use common::address::Address;
 use common::transaction::{Transaction, Valid, verify_tx};
 use common::tx::Tx;
-use common::{Encode, Exception, Proto};
+use common::{Decode, Encode, Exception, Proto};
 
 use serialization::tx::SignedTx as ProtoSignedTx;
 
@@ -56,22 +56,6 @@ impl SignedTx {
             recovery
         }
     }
-
-    pub fn decode(proto_tx: ProtoSignedTx) -> Result<SignedTx, SecpError> {
-        let mut from: Address = [0; 20];
-        from.clone_from_slice(&proto_tx.from[..]);
-        let mut to: Address = [0; 20];
-        to.clone_from_slice(&proto_tx.to[..]);
-        let amount = proto_tx.amount;
-        let fee = proto_tx.fee;
-        let nonce = proto_tx.nonce;
-
-        let secp = Secp256k1::without_caps();
-        let recovery = RecoveryId::from_i32(proto_tx.recovery as i32)?;
-        let signature = RecoverableSignature::from_compact(&secp, &proto_tx.signature, recovery)?;
-        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
-        Ok(signed_tx)
-    }
 }
 
 impl Proto for SignedTx {
@@ -97,6 +81,22 @@ impl Encode for SignedTx {
     }
 }
 
+impl Decode for SignedTx {
+    type ProtoType = ProtoSignedTx;
+    fn decode(buffer: &Vec<u8>) -> Result<SignedTx, Box<Error>> {
+        let secp = Secp256k1::without_caps();
+        let mut proto_signed_tx = ProtoSignedTx::new();
+        proto_signed_tx.merge_from_bytes(&buffer)?;
+        let mut from = [0u8; 20];
+        from.clone_from_slice(&proto_signed_tx.from);
+        let mut to = [0u8; 20];
+        to.clone_from_slice(&proto_signed_tx.to);
+        let recovery = RecoveryId::from_i32(proto_signed_tx.recovery as i32)?;
+        let signature = RecoverableSignature::from_compact(&secp, &proto_signed_tx.signature, recovery)?;
+        Ok(SignedTx::new(from, to, proto_signed_tx.amount, proto_signed_tx.fee, proto_signed_tx.nonce, signature, recovery))
+    }
+}
+
 impl Valid for SignedTx {
     fn verify(&self) -> Result<(), Box<Error>> {
         let tx = Tx::new(self.from, self.to, self.amount, self.fee, self.nonce);
@@ -109,6 +109,7 @@ impl Valid for SignedTx {
 mod tests {
     use super::*;
     use common::address::ValidAddress;
+    use rand::{thread_rng, Rng};
 
     #[test]
     fn it_verifies_a_signed_tx() {
@@ -136,6 +137,7 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn it_rejects_a_forged_tx() {
         let from_addr = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
         let from = Address::from_string(&from_addr).unwrap();
@@ -158,9 +160,42 @@ mod tests {
 
         let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
 
-        match signed_tx.verify() {
-            Ok(_) => panic!("Invalid signature was reported as verified"),
-            Err(_) => {}
-        }
+        signed_tx.verify().unwrap();
+    }
+
+    #[test]
+    fn it_decodes_a_signed_tx() {
+        let from_addr = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
+        let from = Address::from_string(&from_addr).unwrap();
+        let to_addr = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
+        let to = Address::from_string(&to_addr).unwrap();
+        let amount = 100;
+        let fee = 1;
+        let nonce = 1;
+        let recovery = RecoveryId::from_i32(0).unwrap();
+
+        let signature_bytes = [
+            208, 50, 197, 4, 84, 254, 196, 173, 123, 37, 234, 93, 48, 249, 247, 56, 156, 54, 7,
+            211, 17, 121, 174, 74, 111, 1, 7, 184, 82, 196, 94, 176, 73, 221, 78, 105, 137, 12,
+            165, 212, 15, 47, 134, 101, 221, 69, 158, 19, 237, 120, 63, 173, 92, 215, 144, 224,
+            100, 78, 84, 128, 237, 25, 234, 206,
+        ];
+        let secp = Secp256k1::without_caps();
+        let signature =
+            RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
+
+        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
+        let encoding = signed_tx.encode().unwrap();
+        let decoded_signed_tx = SignedTx::decode(&encoding).unwrap();
+
+        assert_eq!(signed_tx, decoded_signed_tx);
+    }
+
+    #[test]
+    #[should_panic]
+    fn it_fails_to_decode_random_bad_bytes() {
+        let mut random_bytes = [0u8; 256];
+        thread_rng().fill(&mut random_bytes);
+        SignedTx::decode(&random_bytes.to_vec()).unwrap();
     }
 }

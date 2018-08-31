@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 
 pub mod address;
 pub mod genesis_tx;
-pub mod genesis_signed_tx;
+pub mod signed_genesis_tx;
 pub mod signed_tx;
 pub mod transaction;
 pub mod header;
@@ -19,6 +19,12 @@ pub mod tx;
 
 pub trait Encode {
     fn encode(&self) -> Result<Vec<u8>, Box<Error>>;
+}
+
+pub trait Decode {
+    type ProtoType;
+    fn decode(buffer: &Vec<u8>) -> Result<Self, Box<Error>>
+        where Self: Sized;
 }
 
 pub trait Proto {

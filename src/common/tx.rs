@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use common::{Encode, Proto};
+use common::{Decode, Encode, Proto};
 use common::address::Address;
 use common::transaction::Transaction;
 use serialization::tx::Tx as ProtoTx;
@@ -8,6 +8,7 @@ use serialization::tx::Tx as ProtoTx;
 use secp256k1::{RecoverableSignature, RecoveryId};
 use protobuf::Message as ProtoMessage;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tx {
     pub from: Address,
     pub to: Address,
@@ -58,10 +59,25 @@ impl Encode for Tx {
     }
 }
 
+impl Decode for Tx {
+    type ProtoType = ProtoTx;
+    fn decode(buffer: &Vec<u8>) -> Result<Tx, Box<Error>> {
+        let mut proto_tx = ProtoTx::new();
+        proto_tx.merge_from_bytes(&buffer)?;
+        let mut from = [0u8; 20];
+        from.clone_from_slice(&proto_tx.from);
+        let mut to = [0u8; 20];
+        to.clone_from_slice(&proto_tx.to);
+
+        Ok(Tx::new(from, to, proto_tx.amount, proto_tx.fee, proto_tx.nonce))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use common::address::ValidAddress;
+    use rand::{thread_rng, Rng};
 
     #[test]
     fn it_makes_a_transaction() {
@@ -140,5 +156,35 @@ mod tests {
             46, 51, 111, 17, 216, 146, 24, 0, 32, 0, 40, 0,
         ];
         assert_eq!(encoding, expected_encoding);
+    }
+
+    #[test]
+    fn it_decodes_an_encoded_tx() {
+        let from = [
+            230, 104, 95, 253, 219, 134, 92, 215, 230, 126, 105, 213, 18, 95, 30, 166, 128, 229,
+            233, 114,
+        ];
+
+        let to = [
+            87, 217, 90, 40, 10, 141, 125, 74, 177, 128, 155, 18, 148, 149, 135, 84, 9, 224, 232,
+            102,
+        ];
+
+        let amount = 123456789;
+        let fee = 1;
+        let nonce = 3;
+        let tx = Tx::new(from, to, amount, fee, nonce);
+        let encoding = tx.encode().unwrap();
+        let decoded_tx = Tx::decode(&encoding).unwrap();
+
+        assert_eq!(tx, decoded_tx);
+    }
+
+    #[test]
+    #[should_panic]
+    fn it_fails_to_decode_random_bad_bytes() {
+        let mut random_bytes = [0u8; 256];
+        thread_rng().fill(&mut random_bytes);
+        Tx::decode(&random_bytes.to_vec()).unwrap();
     }
 }

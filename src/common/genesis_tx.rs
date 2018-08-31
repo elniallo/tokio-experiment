@@ -1,6 +1,6 @@
 use std::ops::Deref;
 use std::error::Error;
-use common::{Encode, Exception, Proto};
+use common::{Decode, Encode, Exception, Proto};
 use common::address::Address;
 use common::transaction::Transaction;
 use serialization::tx::GenesisTx as ProtoGenesisTx;
@@ -31,13 +31,6 @@ impl GenesisTx {
             amount
         }
     }
-
-    pub fn decode(itx: ProtoGenesisTx) -> GenesisTx {
-        let mut to: Address = [0; 20];
-        to.clone_from_slice(&itx.to);
-        let amount = itx.amount;
-        GenesisTx::new(to, amount)
-    }
 }
 
 impl Proto for GenesisTx {
@@ -57,9 +50,22 @@ impl Encode for GenesisTx {
     }
 }
 
+impl Decode for GenesisTx {
+    type ProtoType = ProtoGenesisTx;
+    fn decode(buffer: &Vec<u8>) -> Result<GenesisTx, Box<Error>> {
+        let mut proto_genesis_tx = ProtoGenesisTx::new();
+        proto_genesis_tx.merge_from_bytes(&buffer)?;
+        let mut to: Address = [0; 20];
+        to.clone_from_slice(&proto_genesis_tx.to);
+        Ok(GenesisTx::new(to, proto_genesis_tx.amount))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::{thread_rng, Rng};
+
     #[test]
     fn it_makes_a_genesis_transaction() {
         let to = [
@@ -68,22 +74,6 @@ mod tests {
         ];
         let amount = 123456789;
         let genesis_tx = GenesisTx::new(to, amount);
-        assert_eq!(genesis_tx.to, to);
-        assert_eq!(genesis_tx.amount, amount);
-    }
-
-    #[test]
-    fn it_makes_a_genesis_transaction_from_itx() {
-        let to = [
-            87, 217, 90, 40, 10, 141, 125, 74, 177, 128, 155, 18, 148, 149, 135, 84, 9, 224, 232,
-            102,
-        ];
-        let amount = 123456789;
-        let mut itx = ProtoGenesisTx::new();
-        itx.set_to(to.to_vec());
-        itx.set_amount(amount);
-
-        let genesis_tx = GenesisTx::decode(itx);
         assert_eq!(genesis_tx.to, to);
         assert_eq!(genesis_tx.amount, amount);
     }
@@ -118,5 +108,26 @@ mod tests {
             224, 232, 102, 24, 0,
         ];
         assert_eq!(encoding, expected_encoding);
+    }
+
+    #[test]
+    fn it_decodes_a_genesis_tx() {
+        let to = [
+            87, 217, 90, 40, 10, 141, 125, 74, 177, 128, 155, 18, 148, 149, 135, 84, 9, 224, 232,
+            102,
+        ];
+        let amount = 123456789;
+        let genesis_tx = GenesisTx::new(to, amount);
+        let encoding = genesis_tx.encode().unwrap();
+        let decoded_genesis_tx = GenesisTx::decode(&encoding).unwrap();
+        assert_eq!(genesis_tx, decoded_genesis_tx);
+    }
+
+    #[test]
+    #[should_panic]
+    fn it_fails_to_decode_random_bad_bytes() {
+        let mut random_bytes = [0u8; 256];
+        thread_rng().fill(&mut random_bytes);
+        GenesisTx::decode(&random_bytes.to_vec()).unwrap();
     }
 }
