@@ -58,7 +58,7 @@ impl Proto for Block<Header, SignedTx> {
     fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>> {
         let mut proto_block = Self::ProtoType::new();
         proto_block.set_header(self.header.to_proto()?);
-        match self.txs.clone() {
+        match &self.txs {
             Some(tx_vec) => {
                 let mut proto_txs: Vec<ProtoTx> = vec![];
                 for tx in tx_vec.into_iter() {
@@ -79,7 +79,7 @@ impl Proto for Block<Header, SignedTx> {
 mod tests {
     use super::*;
     use common::address::{Address, ValidAddress};
-    use common::tx::Tx;
+    use common::signed_tx::SignedTx;
     use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
     use rust_base58::FromBase58;
 
@@ -136,8 +136,7 @@ mod tests {
         let recovery = RecoveryId::from_i32(0 as i32).unwrap();
         let secp = Secp256k1::without_caps();
         let signature = RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
-        let tx = Tx::new(Some(from), Some(to), amount, Some(fee), Some(nonce), Some(signature), Some(recovery));
-        let signed_tx = SignedTx(tx);
+        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
         let txs = vec![signed_tx];
 
         // Set up block
@@ -215,8 +214,7 @@ mod tests {
         let recovery = RecoveryId::from_i32(0 as i32).unwrap();
         let secp = Secp256k1::without_caps();
         let signature = RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
-        let tx = Tx::new(Some(from), Some(to), amount, Some(fee), Some(nonce), Some(signature), Some(recovery));
-        let signed_tx = SignedTx(tx);
+        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
         let txs = vec![signed_tx];
 
         // Set up block
@@ -241,6 +239,7 @@ mod tests {
     #[test]
     fn it_encodes_a_block_with_txs_and_meta() {
         // Set up header
+
         let previous_hash = vec![vec![74,248,206,224,124,114,100,237,205,62,60,165,
             198,225,77,241,138,87,77,236,55,60,183,46,88,192,18,199,125,23,169,171]];
         let merkle_root = vec![213,169,1,8,101,229,19,22,130,84,151,145,203,
@@ -266,13 +265,11 @@ mod tests {
         let recovery = RecoveryId::from_i32(0 as i32).unwrap();
         let secp = Secp256k1::without_caps();
         let signature = RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
-        let tx = Tx::new(Some(from), Some(to), amount, Some(fee), Some(nonce), Some(signature), Some(recovery));
-        let signed_tx = SignedTx(tx);
+        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
         let txs = vec![signed_tx];
 
         // Set up Meta
         let meta = Meta::new(1, 2 as f64, 3 as f64, 4 as f64, 5 as f64, Some(6), Some(7), Some(8));
-
         // Set up block
         let block = Block::new(header.clone(), Some(txs.clone()), Some(meta.clone()));
         let encoding = block.encode().unwrap();

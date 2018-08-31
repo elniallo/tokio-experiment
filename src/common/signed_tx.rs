@@ -2,7 +2,8 @@ use std::ops::Deref;
 use std::error::Error;
 
 use common::address::Address;
-use common::tx::{Tx, Valid};
+use common::transaction::{Transaction, Valid, verify_tx};
+use common::tx::Tx;
 use common::{Encode, Exception, Proto};
 
 use serialization::tx::SignedTx as ProtoSignedTx;
@@ -10,10 +11,52 @@ use serialization::tx::SignedTx as ProtoSignedTx;
 use protobuf::Message as ProtoMessage;
 use secp256k1::{Error as SecpError, RecoverableSignature, RecoveryId, Secp256k1};
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct SignedTx(pub Tx);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SignedTx {
+    pub from: Address,
+    pub to: Address,
+    pub amount: u64,
+    pub fee: u64,
+    pub nonce: u32,
+    pub signature: RecoverableSignature,
+    pub recovery: RecoveryId,
+}
+
+impl Transaction for SignedTx {
+    fn get_from(&self) -> Option<Address> {Some(self.from)}
+    fn get_to(&self) -> Option<Address> {Some(self.to)}
+    fn get_amount(&self) -> u64 {self.amount}
+    fn get_fee(&self) -> Option<u64> {Some(self.fee)}
+    fn get_nonce(&self) -> Option<u32> {Some(self.nonce)}
+    fn get_signature(&self) -> Option<RecoverableSignature> {Some(self.signature)}
+    fn get_recovery(&self) -> Option<RecoveryId> {Some(self.recovery)}
+}
 
 impl SignedTx {
+    pub fn new(from: Address, to: Address, amount: u64, fee: u64, nonce: u32, signature: RecoverableSignature, recovery: RecoveryId) -> SignedTx {
+        SignedTx {
+            from,
+            to,
+            amount,
+            fee,
+            nonce,
+            signature,
+            recovery,
+        }
+    }
+
+    pub fn from_tx(tx: &Tx, signature: RecoverableSignature, recovery: RecoveryId) -> SignedTx {
+        SignedTx {
+            from: tx.from,
+            to: tx.to,
+            amount: tx.amount,
+            fee: tx.fee,
+            nonce: tx.nonce,
+            signature,
+            recovery
+        }
+    }
+
     pub fn decode(proto_tx: ProtoSignedTx) -> Result<SignedTx, SecpError> {
         let mut from: Address = [0; 20];
         from.clone_from_slice(&proto_tx.from[..]);
@@ -25,16 +68,9 @@ impl SignedTx {
 
         let secp = Secp256k1::without_caps();
         let recovery = RecoveryId::from_i32(proto_tx.recovery as i32)?;
-        let signature = RecoverableSignature::from_compact(&secp, &proto_tx.signature[..], recovery)?;
-        let tx = Tx::new(Some(from), Some(to), amount, Some(fee), Some(nonce), Some(signature), Some(recovery));
-        Ok(SignedTx(tx))
-    }
-}
-
-impl Deref for SignedTx {
-    type Target = Tx;
-    fn deref(&self) -> &Tx {
-        &self.0
+        let signature = RecoverableSignature::from_compact(&secp, &proto_tx.signature, recovery)?;
+        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
+        Ok(signed_tx)
     }
 }
 
@@ -42,17 +78,14 @@ impl Proto for SignedTx {
     type ProtoType = ProtoSignedTx;
     fn to_proto(&self) -> Result<ProtoSignedTx, Box<Error>> {
         let mut proto_signed_tx = ProtoSignedTx::new();
-        let encoding = self.0.encode()?;
-        proto_signed_tx.merge_from_bytes(&encoding[..])?;
-        match self.recovery {
-            Some(recovery) => proto_signed_tx.set_recovery(recovery.to_i32() as u32),
-            None => return Err(Box::new(Exception::new("Signed tx is missing a recovery id")))
-        }
+        proto_signed_tx.set_from(self.from.to_vec());
+        proto_signed_tx.set_to(self.to.to_vec());
+        proto_signed_tx.set_amount(self.amount);
+        proto_signed_tx.set_fee(self.fee);
+        proto_signed_tx.set_nonce(self.nonce);
+        proto_signed_tx.set_recovery(self.recovery.to_i32() as u32);
         let secp = Secp256k1::without_caps();
-        match self.signature {
-            Some(signature) => proto_signed_tx.set_signature(signature.serialize_compact(&secp).1.to_vec()),
-            None => return Err(Box::new(Exception::new("Signed tx is missing a signature")))
-        }
+        proto_signed_tx.set_signature(self.signature.serialize_compact(&secp).1.to_vec());
         Ok(proto_signed_tx)
     }
 }
@@ -66,18 +99,9 @@ impl Encode for SignedTx {
 
 impl Valid for SignedTx {
     fn verify(&self) -> Result<(), Box<Error>> {
-        let encoding = self.0.encode()?;
-        let sender: Address;
-        match self.from {
-            Some(addr) => sender = addr,
-            None => return Err(Box::new(Exception::new("Tx has no sender")))
-        }
-        let signature: RecoverableSignature;
-        match self.signature {
-            Some(sig) => signature = sig,
-            None => return Err(Box::new(Exception::new("Tx has no signature")))
-        }
-        Tx::verify(encoding, sender, signature)
+        let tx = Tx::new(self.from, self.to, self.amount, self.fee, self.nonce);
+        let encoding = tx.encode()?;
+        verify_tx(encoding, self.from, self.signature)
     }
 }
 
@@ -88,10 +112,10 @@ mod tests {
 
     #[test]
     fn it_verifies_a_signed_tx() {
-        let from_addr_string = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
-        let from_addr = Address::from_string(&from_addr_string).unwrap();
-        let to_addr_str = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
-        let to_addr = Address::from_string(&to_addr_str).unwrap();
+        let from_addr = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
+        let from = Address::from_string(&from_addr).unwrap();
+        let to_addr = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
+        let to = Address::from_string(&to_addr).unwrap();
         let amount = 100;
         let fee = 1;
         let nonce = 1;
@@ -107,17 +131,16 @@ mod tests {
         let signature =
             RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
 
-        let tx = Tx::new(Some(from_addr), Some(to_addr), amount, Some(fee), Some(nonce), Some(signature), Some(recovery));
-        let signed_tx = SignedTx(tx);
+        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
         signed_tx.verify().unwrap();
     }
 
     #[test]
     fn it_rejects_a_forged_tx() {
-        let from_addr_string = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
-        let from_addr = Address::from_string(&from_addr_string).unwrap();
-        let to_addr_str = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
-        let to_addr = Address::from_string(&to_addr_str).unwrap();
+        let from_addr = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
+        let from = Address::from_string(&from_addr).unwrap();
+        let to_addr = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
+        let to = Address::from_string(&to_addr).unwrap();
         let amount = 200;
         let fee = 1;
         let nonce = 1;
@@ -133,8 +156,7 @@ mod tests {
         let signature =
             RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
 
-        let tx = Tx::new(Some(from_addr), Some(to_addr), amount, Some(fee), Some(nonce), Some(signature), Some(recovery));
-        let signed_tx = SignedTx(tx);
+        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
 
         match signed_tx.verify() {
             Ok(_) => panic!("Invalid signature was reported as verified"),

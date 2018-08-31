@@ -55,7 +55,6 @@ mod tests {
     use super::*;
     use common::address::{Address, ValidAddress};
     use common::header::Header;
-    use common::tx::Tx;
     use common::genesis_tx::GenesisTx;
 
     use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
@@ -144,9 +143,7 @@ mod tests {
             104,199,229,7,191,94,31,116,224,83,41,58,104,35,204,189,96,77,86,99,69,243,237,
             35,106,215,176,110,113,85,133,62,69,176,245,74,80,40,164,234,107,132,100,135,195,32,76,158];
         let signature_1 = RecoverableSignature::from_compact(&secp, &signature_1_bytes[..], recovery_1).unwrap();
-        let tx_1 = Tx::new(None, Some(address_1), amount_1, None, None, Some(signature_1), Some(recovery_1));
-        let genesis_tx_1 = GenesisTx(tx_1);
-        let genesis_signed_tx_1 = GenesisSignedTx(genesis_tx_1);
+        let genesis_signed_tx_1 = GenesisSignedTx::new(address_1, amount_1, signature_1, recovery_1);
 
         let address_2 = Address::from_string(&"HHhrFzwkhbZHm49WJS7Aqfy4SSnj35DH".to_string()).unwrap();
         let amount_2 = 100000000000000000;
@@ -156,9 +153,7 @@ mod tests {
             105,128,115,242,243,71,57,227,161,132,226,223,6,219,4,24,167,103,233,89,0,178,
             229,199,229,237,214,232];
         let signature_2 = RecoverableSignature::from_compact(&secp, &signature_2_bytes[..], recovery_2).unwrap();
-        let tx_2 = Tx::new(None, Some(address_2), amount_2, None, None, Some(signature_2), Some(recovery_2));
-        let genesis_tx_2 = GenesisTx(tx_2);
-        let genesis_signed_tx_2 = GenesisSignedTx(genesis_tx_2);
+        let genesis_signed_tx_2 = GenesisSignedTx::new(address_2, amount_2, signature_2, recovery_2);
 
         let address_3 = Address::from_string(&"H235yexRUBEWiSC9xG4a7A5b6vjUaBsr7".to_string()).unwrap();
         let amount_3 = 500000000000000000;
@@ -167,9 +162,7 @@ mod tests {
             22,152,116,80,142,140,194,87,181,89,105,7,178,116,88,132,64,93,221,2,101,38,212,
             119,41,233,180,120,15,141,3,22,76,121,31,156,41,67,220,0,255,255,129,128,130,38,111,188,190];
         let signature_3 = RecoverableSignature::from_compact(&secp, &signature_3_bytes[..], recovery_3).unwrap();
-        let tx_3 = Tx::new(None, Some(address_3), amount_3, None, None, Some(signature_3), Some(recovery_3));
-        let genesis_tx_3 = GenesisTx(tx_3);
-        let genesis_signed_tx_3 = GenesisSignedTx(genesis_tx_3);
+        let genesis_signed_tx_3 = GenesisSignedTx::new(address_3, amount_3, signature_3, recovery_3);
 
         let address_4 = Address::from_string(&"H27MU6pdoAmNfsrjd1QRwmaYMtTrT988U".to_string()).unwrap();
         let amount_4 = 500000000000000000;
@@ -178,9 +171,7 @@ mod tests {
             39,224,75,99,37,58,63,236,142,1,194,33,186,55,3,134,255,249,88,117,48,29,208,
             169,54,108,80,250,110,196,252,98,38,130,202,47,68,195,150,254,230,226,96,76,222,104,235,63,140,160];
         let signature_4 = RecoverableSignature::from_compact(&secp, &signature_4_bytes[..], recovery_4).unwrap();
-        let tx_4 = Tx::new(None, Some(address_4), amount_4, None, None, Some(signature_4), Some(recovery_4));
-        let genesis_tx_4 = GenesisTx(tx_4);
-        let genesis_signed_tx_4 = GenesisSignedTx(genesis_tx_4);
+        let genesis_signed_tx_4 = GenesisSignedTx::new(address_4, amount_4, signature_4, recovery_4);
 
         let address_5 = Address::from_string(&"H2QC1ebYRgvSV4xQyZGC5DbWWGZST6M3W".to_string()).unwrap();
         let amount_5 = 400000000000000000;
@@ -189,9 +180,7 @@ mod tests {
             9,23,186,93,187,13,243,54,51,49,144,127,148,41,36,138,174,60,114,62,139,193,
             225,72,241,31,26,186,189,155,145,185,217,135,255,158,227,168,225,62,17,34,246,227,47,80,90,195,93];
         let signature_5 = RecoverableSignature::from_compact(&secp, &signature_5_bytes[..], recovery_5).unwrap();
-        let tx_5 = Tx::new(None, Some(address_5), amount_5, None, None, Some(signature_5), Some(recovery_5));
-        let genesis_tx_5 = GenesisTx(tx_5);
-        let genesis_signed_tx_5 = GenesisSignedTx(genesis_tx_5);
+        let genesis_signed_tx_5 = GenesisSignedTx::new(address_5, amount_5, signature_5, recovery_5);
 
         let address_6 = Address::from_string(&"H3gxigHtbRWi3nqVA6FHHfmtkyu7d9suC".to_string()).unwrap();
         let amount_6 = 500000000000000000;
@@ -200,9 +189,7 @@ mod tests {
             109,100,133,252,204,84,3,236,158,38,195,33,100,12,112,129,205,104,206,252,101,
             101,196,190,231,190,129,57,29,166,137,35,236,58,27,190,228,14,123,55,148,247,92,199,22,238,89,6,152];
         let signature_6 = RecoverableSignature::from_compact(&secp, &signature_6_bytes[..], recovery_6).unwrap();
-        let tx_6 = Tx::new(None, Some(address_6), amount_6, None, None, Some(signature_6), Some(recovery_6));
-        let genesis_tx_6 = GenesisTx(tx_6);
-        let genesis_signed_tx_6 = GenesisSignedTx(genesis_tx_6);
+        let genesis_signed_tx_6 = GenesisSignedTx::new(address_6, amount_6, signature_6, recovery_6);
 
         vec![genesis_signed_tx_1, genesis_signed_tx_2, genesis_signed_tx_3, genesis_signed_tx_4, genesis_signed_tx_5, genesis_signed_tx_6]
     }

@@ -2,7 +2,7 @@ use std::error::Error;
 
 use common::tx::Tx;
 use common::signed_tx::SignedTx;
-use common::Encode;
+use common::{Encode, Exception};
 use util::hash::hash;
 
 use secp256k1::key::{PublicKey, SecretKey};
@@ -51,19 +51,15 @@ impl Wallet {
         let signature = self.sign(&encoded_tx)?;
         let secp = Secp256k1::without_caps();
         let recovery = signature.serialize_compact(&secp).0;
-        let mut new_tx = tx.clone();
-        new_tx.signature = Some(signature);
-        new_tx.recovery = Some(recovery);
-        Ok(SignedTx(new_tx))
+
+        Ok(SignedTx::from_tx(tx, signature, recovery))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Wallet;
+    use super::*;
     use common::address::{Address, ValidAddress};
-    use common::tx::Tx;
-    use common::Encode;
     use util::hash::hash;
 
     use secp256k1::{Message, Secp256k1};
@@ -97,18 +93,18 @@ mod tests {
         let amount = thread_rng().gen_range(123456, 12345566789);
         let fee = thread_rng().gen_range(1, 12345293847);
         let nonce = thread_rng().gen_range(0, 123456789);
-        let tx = Tx::new(Some(from), Some(to), amount, Some(fee), Some(nonce), None, None);
+        let tx = Tx::new(from, to, amount, fee, nonce);
         let encoding = tx.encode().unwrap();
         let secp_message = Message::from_slice(&hash(&encoding[..], 32)[..]).unwrap();
         let signed_tx = wallet.sign_tx(&tx).unwrap();
 
-        assert_eq!(signed_tx.from.unwrap(), from);
-        assert_eq!(signed_tx.to.unwrap(), to);
+        assert_eq!(signed_tx.from, from);
+        assert_eq!(signed_tx.to, to);
         assert_eq!(signed_tx.amount, amount);
-        assert_eq!(signed_tx.fee.unwrap(), fee);
-        assert_eq!(signed_tx.nonce.unwrap(), nonce);
+        assert_eq!(signed_tx.fee, fee);
+        assert_eq!(signed_tx.nonce, nonce);
 
-        let recoverable_signature = signed_tx.signature.unwrap();
+        let recoverable_signature = signed_tx.signature;
         let signature = recoverable_signature.to_standard(&secp);
         let pubkey = secp.recover(&secp_message, &recoverable_signature).unwrap();
         assert_eq!(pubkey, wallet.public_key);

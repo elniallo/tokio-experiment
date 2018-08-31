@@ -1,8 +1,7 @@
-use std::ops::Deref;
 use std::error::Error;
 
 use common::address::Address;
-use common::tx::{Tx, Valid};
+use common::transaction::{Transaction, Valid, verify_tx};
 use common::genesis_tx::GenesisTx;
 use common::{Encode, Exception, Proto};
 use serialization::tx::GenesisSignedTx as ProtoGenesisSignedTx;
@@ -10,46 +9,56 @@ use serialization::tx::GenesisSignedTx as ProtoGenesisSignedTx;
 use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
 use protobuf::Message as ProtoMessage;
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct GenesisSignedTx(pub GenesisTx);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GenesisSignedTx {
+    to: Address,
+    amount: u64,
+    signature: RecoverableSignature,
+    recovery: RecoveryId,
+}
+
+impl Transaction for GenesisSignedTx {
+    fn get_from(&self) -> Option<Address> {None}
+    fn get_to(&self) -> Option<Address> {Some(self.to)}
+    fn get_amount(&self) -> u64 {self.amount}
+    fn get_fee(&self) -> Option<u64> {None}
+    fn get_nonce(&self) -> Option<u32> {None}
+    fn get_signature(&self) -> Option<RecoverableSignature> {Some(self.signature)}
+    fn get_recovery(&self) -> Option<RecoveryId> {Some(self.recovery)}
+}
 
 impl GenesisSignedTx {
+    pub fn new(to: Address, amount: u64, signature: RecoverableSignature, recovery: RecoveryId) -> GenesisSignedTx {
+        GenesisSignedTx {
+            to,
+            amount,
+            signature,
+            recovery,
+        }
+    }
+
     pub fn decode(proto_tx: ProtoGenesisSignedTx) -> Result<GenesisSignedTx, Box<Error>> {
         let mut to: Address = [0; 20];
-        to.clone_from_slice(&proto_tx.to[..]);
+        to.clone_from_slice(&proto_tx.to);
         let amount = proto_tx.amount;
 
         let secp = Secp256k1::without_caps();
         let recovery = RecoveryId::from_i32(proto_tx.recovery as i32)?;
         let signature = RecoverableSignature::from_compact(&secp, &proto_tx.signature, recovery)?;
-        let tx = Tx::new(None, Some(to), amount, None, None, Some(signature), Some(recovery));
-        let genesis_tx = GenesisTx(tx);
-        Ok(GenesisSignedTx(genesis_tx))
-    }
-}
-
-impl Deref for GenesisSignedTx {
-    type Target = GenesisTx;
-    fn deref(&self) -> &GenesisTx {
-        &self.0
+        let genesis_signed_tx = GenesisSignedTx::new(to, amount, signature, recovery);
+        Ok(genesis_signed_tx)
     }
 }
 
 impl Proto for GenesisSignedTx {
     type ProtoType = ProtoGenesisSignedTx;
-    fn to_proto(&self) -> Result<ProtoGenesisSignedTx, Box<Error>> {
+    fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>> {
         let mut proto_genesis_signed_tx = ProtoGenesisSignedTx::new();
-        let encoding = self.0.encode()?;
-        proto_genesis_signed_tx.merge_from_bytes(&encoding)?;
-        match self.recovery {
-            Some(recovery) => proto_genesis_signed_tx.set_recovery(recovery.to_i32() as u32),
-            None => return Err(Box::new(Exception::new("Signed tx is missing a recovery id")))
-        }
+        proto_genesis_signed_tx.set_to(self.to.to_vec());
+        proto_genesis_signed_tx.set_amount(self.amount);
+        proto_genesis_signed_tx.set_recovery(self.recovery.to_i32() as u32);
         let secp = Secp256k1::without_caps();
-        match self.signature {
-            Some(signature) => proto_genesis_signed_tx.set_signature(signature.serialize_compact(&secp).1.to_vec()),
-            None => return Err(Box::new(Exception::new("Signed tx is missing a signature")))
-        }
+        proto_genesis_signed_tx.set_signature(self.signature.serialize_compact(&secp).1.to_vec());
         Ok(proto_genesis_signed_tx)
     }
 }
@@ -63,20 +72,9 @@ impl Encode for GenesisSignedTx {
 
 impl Valid for GenesisSignedTx {
     fn verify(&self) -> Result<(), Box<Error>> {
-        let to: Address;
-        match self.to {
-            Some(addr) => to = addr,
-            None => return Err(Box::new(Exception::new("Genesis tx has no recipient")))
-        }
-        let tx = Tx::new(None, Some(to), self.amount, None, None, None, None);
-        let genesis_tx = GenesisTx(tx);
+        let genesis_tx = GenesisTx::new(self.to, self.amount);
         let encoding = genesis_tx.encode()?;
-        let signature: RecoverableSignature;
-        match self.signature {
-            Some(sig) => signature = sig,
-            None => return Err(Box::new(Exception::new("Genesis tx has no signature")))
-        }
-        Tx::verify(encoding, to, signature)
+        verify_tx(encoding, self.to, self.signature)
     }
 }
 
@@ -96,13 +94,11 @@ mod tests {
         let recovery = RecoveryId::from_i32(0).unwrap();
         let signature =
             RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
-        let tx = Tx::new(None, Some(to), amount, None, None, Some(signature), Some(recovery));
-        let genesis_tx = GenesisTx(tx);
-        let gen_sign_tx = GenesisSignedTx(genesis_tx);
-        assert_eq!(to, gen_sign_tx.to.unwrap());
-        assert_eq!(amount, gen_sign_tx.amount);
-        assert_eq!(signature, gen_sign_tx.signature.unwrap());
-        assert_eq!(recovery, gen_sign_tx.recovery.unwrap());
+        let genesis_signed_tx = GenesisSignedTx::new(to, amount, signature, recovery);
+        assert_eq!(to, genesis_signed_tx.to);
+        assert_eq!(amount, genesis_signed_tx.amount);
+        assert_eq!(signature, genesis_signed_tx.signature);
+        assert_eq!(recovery, genesis_signed_tx.recovery);
     }
 
     #[test]
@@ -116,10 +112,8 @@ mod tests {
         let recovery = RecoveryId::from_i32(0).unwrap();
         let signature =
             RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
-        let tx = Tx::new(None, Some(to), amount, None, None, Some(signature), Some(recovery));
-        let genesis_tx = GenesisTx(tx);
-        let gen_sign_tx = GenesisSignedTx(genesis_tx);
-        gen_sign_tx.verify().unwrap();
+        let genesis_signed_tx = GenesisSignedTx::new(to, amount, signature, recovery);
+        genesis_signed_tx.verify().unwrap();
     }
     
     #[test]
@@ -133,10 +127,8 @@ mod tests {
         let recovery = RecoveryId::from_i32(0).unwrap();
         let signature =
             RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
-        let tx = Tx::new(None, Some(to), amount, None, None, Some(signature), Some(recovery));
-        let genesis_tx = GenesisTx(tx);
-        let gen_sign_tx = GenesisSignedTx(genesis_tx);
-        match gen_sign_tx.verify() {
+        let genesis_signed_tx = GenesisSignedTx::new(to, amount, signature, recovery);
+        match genesis_signed_tx.verify() {
             Ok(_) => panic!("Invalid signature was reported as verified"),
             Err(_) => {}
         }

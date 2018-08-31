@@ -5,7 +5,7 @@ pub mod address;
 pub mod genesis_tx;
 pub mod genesis_signed_tx;
 pub mod signed_tx;
-pub mod tx;
+pub mod transaction;
 pub mod header;
 pub mod genesis_header;
 pub mod block;
@@ -14,6 +14,7 @@ pub mod meta;
 pub mod wallet;
 pub mod key_store;
 pub mod merkle;
+pub mod tx;
 
 
 pub trait Encode {
