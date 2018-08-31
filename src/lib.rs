@@ -9,12 +9,9 @@ extern crate openssl;
 extern crate hex;
 extern crate tiny_keccak;
 
-#[macro_use]
-extern crate serde_derive;
+#[macro_use] extern crate serde_derive;
 extern crate serde_json;
 extern crate serde;
-#[macro_use]
-extern crate lazy_static;
 
 pub mod common;
 pub mod serialization;

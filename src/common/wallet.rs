@@ -1,19 +1,12 @@
-use std::env;
-use std::fs::{create_dir_all, File};
-use std::io::{Error as FSError, Read, Write};
-use std::path::PathBuf;
-use std::string::FromUtf8Error;
-use rustc_serialize::hex::{ToHex, FromHex, FromHexError};
+use std::error::Error;
 
 use common::tx::Tx;
 use common::signed_tx::SignedTx;
-use common::{Encode, Exception};
-use common::key_store::KeyStore;
+use common::Encode;
 use util::hash::hash;
-use util::aes::{AESError, decrypt_aes, encrypt_aes};
 
 use secp256k1::key::{PublicKey, SecretKey};
-use secp256k1::{Error, Message, RecoverableSignature, Secp256k1};
+use secp256k1::{Message, RecoverableSignature, Secp256k1};
 use rand::{thread_rng, Rng};
 use crypto::symmetriccipher::SymmetricCipherError;
 
@@ -85,7 +78,7 @@ mod tests {
     use super::{Wallet, WalletError};
     use common::address::{Address, ValidAddress};
     use common::tx::Tx;
-    use common::{Encode, EncodingError};
+    use common::Encode;
     use util::hash::hash;
 
     use secp256k1::{Message, Secp256k1};

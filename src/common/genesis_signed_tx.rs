@@ -7,7 +7,7 @@ use common::genesis_tx::GenesisTx;
 use common::{Encode, Exception, Proto};
 use serialization::tx::GenesisSignedTx as ProtoGenesisSignedTx;
 
-use secp256k1::{Error as SecpError, RecoverableSignature, RecoveryId, Secp256k1};
+use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
 use protobuf::Message as ProtoMessage;
 
 #[derive(Clone, Debug, PartialEq)]

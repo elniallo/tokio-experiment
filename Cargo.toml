@@ -1,12 +1,12 @@
 [package]
-name = "rustyphoenix"
+name = "robin"
 version = "0.1.0"
 authors = ["Josiah Evans <koreanhalo@gmail.com>"]
 build = "build.rs"
 exclude = ["artifacts.json", "index.node"]
 
 [lib]
-name = "rustyphoenix"
+name = "hycon_core"
 crate-type = ["dylib"]
 
 [build-dependencies]

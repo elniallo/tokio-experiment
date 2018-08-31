@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::error::Error;
 
 use crypto::aes::{cbc_decryptor, cbc_encryptor, ctr};
 use crypto::aes::KeySize::{KeySize128, KeySize192, KeySize256};

@@ -1,21 +1,20 @@
-use std::string::FromUtf8Error;
 use std::fs::File;
 use std::path::PathBuf;
 use std::error::Error;
 use std::io::{Read, Write};
 
-use common::address::{Address, ValidAddress};
-use common::{Encode, EncodingError};
-use util::aes::{AESError, encrypt_aes, decrypt_aes};
+use common::{Encode, Exception};
+use util::aes::{encrypt_aes, decrypt_aes};
 use util::hash::hash;
-use secp256k1::{Error as SecpError, Secp256k1, PublicKey, SecretKey};
+
+use openssl::pkcs5::scrypt;
+use tiny_keccak::keccak256;
+use secp256k1::{Secp256k1, SecretKey};
 use uuid::Uuid;
 use rand::{thread_rng, Rng};
-use crypto::scrypt::{scrypt, ScryptParams};
-use crypto::sha3::Sha3;
-use crypto::symmetriccipher::SymmetricCipherError;
-use crypto::digest::Digest;
-use serde_json::{to_vec, Error as JSONError};
+use hex;
+
+use serde_json::to_vec;
 use serde_json::de;
 use rustc_serialize::hex::{ToHex, FromHex, FromHexError};
 
@@ -25,8 +24,6 @@ const DEFAULT_P: u32 = 1;
 const DEFAULT_V3_KEYSIZE: usize = 16;
 const DEFAULT_V4_KEYSIZE: usize = 32;
 const MAC_KEY_SIZE: usize = 16;
-const MAC_SIZE: usize = 32;
-const PRIVATE_KEY_SIZE: usize = 32;
 
 #[derive(Debug)]
 pub enum KeyStoreError {
@@ -229,7 +226,7 @@ impl KeyStore {
     }
 
     pub fn load_keystore(path: PathBuf) -> Result<KeyStore, Box<Error>> {
-        let mut file= File::open(path)?;
+        let file= File::open(path)?;
         Ok(de::from_reader(file)?)
     }
 
@@ -357,6 +354,7 @@ impl CipherParams {
 #[cfg(test)]
 mod tests {
     use super::*;
+    const PRIVATE_KEY_SIZE: usize = 32;
 
     #[test]
     fn it_makes_a_v4_keystore() {
@@ -397,23 +395,15 @@ mod tests {
         let scrypt_params = ScryptParams::new(13, r, p);
         let mut derived_key = vec![0u8; dklen];
         let max_mem = 128 * n * r + 1024 * 3;
-        scrypt(password.as_bytes(), &salt, n, r, p, max_mem, &mut derived_key);
+        scrypt(password.as_bytes(), &salt, n, r, p, max_mem, &mut derived_key).unwrap();
         let iv = [
             0x60, 0x87, 0xda, 0xb2, 0xf9, 0xfd, 0xbb, 0xfa,
             0xdd, 0xc3, 0x1a, 0x90, 0x97, 0x35, 0xc1, 0xe6];
         let cipher_params = CipherParams::new(iv.to_hex(), Some(DEFAULT_V3_KEYSIZE));
         let cipher = "aes-128-cbc".to_string();
-        let cipher_text = encrypt_aes(&private_key[..], &derived_key[0..DEFAULT_V3_KEYSIZE], &iv, true, cipher.clone()).unwrap();
-        assert_eq!("e44f58dc0de4183814970d2cd0f72385de469285c07caaad4eda5ab0b579d911419f40fe4412b63b8a50a787cc9403e4".to_string(), cipher_text.to_hex());
-        let mut mac_input = vec![0u8; MAC_KEY_SIZE];
-        mac_input.clone_from_slice(&derived_key[DEFAULT_V3_KEYSIZE..DEFAULT_V3_KEYSIZE + MAC_KEY_SIZE]);
-        mac_input.append(&mut cipher_text.clone());
-        let mut mac_hash = Sha3::keccak256();
-        mac_hash.input(&mac_input);
-        let mut mac = [0u8; MAC_SIZE];
-        mac_hash.result(&mut mac);
-        assert_eq!("f9413c4b594522b2e73e3afb0f475c5013c9954de34bd6ca9ea39042e69f9e58".to_string(), mac.to_hex());
-        let crypto = Crypto::new(cipher_text.to_hex(), cipher_params, cipher.clone(), kdf, kdf_params, mac.to_hex());
+        let cipher_text = encrypt_aes(&private_key[..], &derived_key[0..DEFAULT_V3_KEYSIZE], &iv, cipher.clone()).unwrap();
+        let mac = KeyStore::gen_mac(16, &derived_key, &cipher_text);
+        let crypto = Crypto::new(hex::encode(cipher_text.clone()), cipher_params, cipher.clone(), kdf, kdf_params, hex::encode(mac.clone()));
         let key_store = KeyStore::from_params(network, version, id, crypto).unwrap();
         let encoding = key_store.encode().unwrap();
         let encoding_string = String::from_utf8(encoding).unwrap();
@@ -533,10 +523,6 @@ mod tests {
             }
         }
         private_key
-    }
-
-    fn keystore_file() -> String {
-        "".to_string()
     }
 
     fn expected_v3_encoding() -> String {
