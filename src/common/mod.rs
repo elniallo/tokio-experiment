@@ -1,5 +1,5 @@
-use protobuf::ProtobufError;
-use secp256k1::Error as SecpError;
+use std::error::Error;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 pub mod address;
 pub mod genesis_tx;
@@ -12,19 +12,36 @@ pub mod block;
 pub mod genesis_block;
 pub mod meta;
 
-pub trait Encode<ErrorType> {
-    fn encode(&self) -> Result<Vec<u8>, ErrorType>;
+pub trait Encode {
+    fn encode(&self) -> Result<Vec<u8>, Box<Error>>;
 }
 
-pub trait Proto<ErrorType> {
+pub trait Proto {
     type ProtoType;
-    fn to_proto(&self) -> Result<Self::ProtoType, ErrorType>;
+    fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>>;
 }
 
 #[derive(Debug)]
-pub enum EncodingError {
-    Proto(ProtobufError),
-    Secp(SecpError),
-    Integrity(String)
+pub struct Exception {
+    details:  String
 }
 
+impl Exception {
+    pub fn new(details: &str) -> Exception {
+        Exception {
+            details: details.to_string()
+        }
+    }
+}
+
+impl Display for Exception {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        write!(f,"{}",self.details)
+    }
+}
+
+impl Error for Exception {
+    fn description(&self) -> &str {
+        &self.details
+    }
+}
