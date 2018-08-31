@@ -1,4 +1,8 @@
 use std::string::FromUtf8Error;
+use std::fs::File;
+use std::path::PathBuf;
+use std::error::Error;
+use std::io::Read;
 
 use common::address::{Address, ValidAddress};
 use common::{Encode, EncodingError};
@@ -72,13 +76,13 @@ impl KeyStore {
     fn gen_derived_key(password: String,
                        salt: &[u8],
                        iv: &[u8],
-                       given_n: Option<u32>,
-                       given_r: Option<u32>,
-                       given_p: Option<u32>,
-                       given_keysize: Option<usize>) -> (KdfParams, CipherParams, usize, Vec<u8>) {
-        let n: u32;
-        let r: u32;
-        let p: u32;
+                       given_n: Option<u64>,
+                       given_r: Option<u64>,
+                       given_p: Option<u64>,
+                       given_keysize: Option<usize>) -> Result<(KdfParams, CipherParams, usize, Vec<u8>), Box<Error>> {
+        let n: u64;
+        let r: u64;
+        let p: u64;
         let keysize: usize;
 
         match given_n {
@@ -104,8 +108,8 @@ impl KeyStore {
         let cipher_params = CipherParams::new(iv.to_hex(), Some(keysize));
         let mut derived_key = vec![0u8; dklen];
         let max_mem = 128 * n * r + 1024 * 3;
-        scrypt(password.as_bytes(), &salt, n, r, p, max_mem, &mut derived_key);
-        (kdf_params, cipher_params, keysize, derived_key)
+        scrypt(password.as_bytes(), &salt, n, r, p, max_mem, &mut derived_key)?;
+        Ok((kdf_params, cipher_params, keysize, derived_key))
     }
 
     fn gen_mac(keysize: usize, derived_key: &[u8], cipher_text: &Vec<u8>) -> Vec<u8>{
@@ -138,7 +142,7 @@ impl KeyStore {
         let (kdf_params,
              cipher_params,
              keysize,
-             derived_key) = KeyStore::gen_derived_key(password, &salt, &iv, given_n, given_r, given_p, given_keysize);
+             derived_key) = KeyStore::gen_derived_key(password, &salt, &iv, given_n, given_r, given_p, given_keysize)?;
 
         let cipher: String;
         if keysize == 16 {
@@ -204,7 +208,7 @@ impl KeyStore {
         let p = keystore.crypto.kdfparams.p;
 
         let derived_key =
-            KeyStore::gen_derived_key(password, &salt, &iv, Some(n), Some(r), Some(p), Some(keysize)).3;
+            KeyStore::gen_derived_key(password, &salt, &iv, Some(n), Some(r), Some(p), Some(keysize))?.3;
 
         let derived_mac = KeyStore::gen_mac(keysize, &derived_key, &cipher_text);
         if derived_mac != mac {
@@ -224,17 +228,20 @@ impl KeyStore {
         }
     }
 
-    pub fn load_keystore(encoded_keystore: Vec<u8>) -> Result<KeyStore, JSONError> {
-        de::from_slice(&encoded_keystore)
+    pub fn load_keystore(path: PathBuf) -> Result<KeyStore, Box<Error>> {
+        let mut file= File::open(path)?;
+        Ok(de::from_reader(file)?)
     }
 
-    pub fn load_legacy_keystore(encoded_keystore: Vec<u8>, password: String) -> Result<SecretKey, KeyStoreError> {
-        let loaded_data: String;
-        match String::from_utf8(encoded_keystore) {
-            Ok(data) => loaded_data = data,
-            Err(e) => return Err(KeyStoreError::String(e))
-        }
-        let string_data: Vec<&str> = loaded_data.split(":").collect();
+    pub fn load_legacy_keystore(path: PathBuf, password: String) -> Result<SecretKey, Box<Error>> {
+        let mut file= File::open(path)?;
+        let mut loaded_data = String::new();
+        file.read_to_string(&mut loaded_data)?;
+        Ok(KeyStore::unlock_legacy_keystore(loaded_data, password)?)
+    }
+
+    pub fn unlock_legacy_keystore(encoded_string: String, password: String) -> Result<SecretKey, Box<Error>> {
+        let string_data: Vec<&str> = encoded_string.split(":").collect();
 
         let key = hash(password.as_bytes(), 32);
         let iv: Vec<u8>;
@@ -340,7 +347,6 @@ impl CipherParams {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::wallet::Wallet;
 
     #[test]
     fn it_makes_a_v4_keystore() {
@@ -455,40 +461,6 @@ mod tests {
     }
 
     #[test]
-    fn it_loads_a_v3_keystore() {
-        let keystore = KeyStore::load_keystore(expected_v3_encoding().as_bytes().to_vec()).unwrap();
-        let expected_cipher_params = CipherParams::new("6087dab2f9fdbbfaddc31a909735c1e6".to_string(), Some(16));
-        let expected_kdf_params = KdfParams::new(32, "ae3cd4e7013836a3df6bd7241b12db061dbe2c6785853cce422d148a624ce0bd".to_string(), 8192, 8, 1);
-        let expected_mac = "f9413c4b594522b2e73e3afb0f475c5013c9954de34bd6ca9ea39042e69f9e58".to_string();
-        let expected_crypto = Crypto::new("e44f58dc0de4183814970d2cd0f72385de469285c07caaad4eda5ab0b579d911419f40fe4412b63b8a50a787cc9403e4".to_string(),
-            expected_cipher_params, "aes-128-cbc".to_string(), "scrypt".to_string(), expected_kdf_params, expected_mac);
-        assert_eq!(keystore.network, Some("hycon".to_string()));
-        assert_eq!(keystore.version, 3);
-        assert_eq!(keystore.id, "3198bc9c-6672-5ab3-d995-4942343ae5b6".to_string());
-        assert_eq!(keystore.crypto, expected_crypto);
-    }
-
-    #[test]
-    fn it_loads_a_v4_keystore() {
-        let keystore = KeyStore::load_keystore(expected_v4_encoding().as_bytes().to_vec()).unwrap();
-        let expected_cipher_params = CipherParams::new("6087dab2f9fdbbfaddc31a909735c1e6".to_string(), Some(32));
-        let expected_kdf_params = KdfParams::new(48, "ae3cd4e7013836a3df6bd7241b12db061dbe2c6785853cce422d148a624ce0bd".to_string(), 8192, 8, 1);
-        let expected_mac = "7e4de3e41191fde8156f5677de34a9330f775741145615d5e72ac8e6fb528506".to_string();
-        let expected_crypto = Crypto::new("73bd75ef1556bfd51b647e3860db8109b6f850f8d7598671c54b9727403576d1e3207b6ee10c15f5a0e2d7fb530ec673".to_string(),
-            expected_cipher_params, "aes-256-cbc".to_string(), "scrypt".to_string(), expected_kdf_params, expected_mac);
-        assert_eq!(keystore.network, Some("hycon".to_string()));
-        assert_eq!(keystore.version, 4);
-        assert_eq!(keystore.id, "3198bc9c-6672-5ab3-d995-4942343ae5b6".to_string());
-        assert_eq!(keystore.crypto, expected_crypto);
-    }
-
-    #[test]
-    fn it_loads_a_v3_keystore_with_extra_zeros() {
-        let mut frame = [0u8; 1024];
-
-    }
-
-    #[test]
     fn it_unlocks_a_v3_keystore() {
         let private_key = generate_private_key();
         let keystore = KeyStore::generate_keystore("password".to_string(), private_key, 3, Some(8192), None, None, None).unwrap();
@@ -516,7 +488,7 @@ mod tests {
             0x78, 0x4b, 0xf5, 0x06, 0xfa, 0x95, 0xed, 0xc3,
             0x95, 0xf5, 0xcf, 0x6c, 0x75, 0x14, 0xfe, 0x9d];
         let secret_key = SecretKey::from_slice(&secp, &private_key).unwrap();
-        let keystore = KeyStore::load_keystore(ctr_encrypted_keystore().as_bytes().to_vec()).unwrap();
+        let keystore = de::from_str(&ctr_encrypted_keystore()).unwrap();
         let decrypted_key = KeyStore::unlock_keystore(keystore, "testpassword".to_string()).unwrap();
         assert_eq!(secret_key, decrypted_key);
     }
@@ -531,7 +503,7 @@ mod tests {
             43,  168, 112, 23,  225, 186, 120, 222];
         let password = "password".to_string();
         let expected_private_key = SecretKey::from_slice(&secp, &expected_secret_key).unwrap();
-        let private_key = KeyStore::load_legacy_keystore(legacy_keystore().as_bytes().to_vec(), password).unwrap();
+        let private_key = KeyStore::unlock_legacy_keystore(legacy_keystore(), password).unwrap();
         assert_eq!(private_key, expected_private_key);
     }
 
@@ -551,6 +523,10 @@ mod tests {
             }
         }
         private_key
+    }
+
+    fn keystore_file() -> String {
+        "".to_string()
     }
 
     fn expected_v3_encoding() -> String {
