@@ -16,25 +16,13 @@ use hex;
 
 use serde_json::to_vec;
 use serde_json::de;
-use rustc_serialize::hex::{ToHex, FromHex, FromHexError};
 
-const DEFAULT_N: u32 = 16384;
-const DEFAULT_R: u32 = 8;
-const DEFAULT_P: u32 = 1;
+const DEFAULT_N: u64 = 262144;
+const DEFAULT_R: u64 = 8;
+const DEFAULT_P: u64 = 1;
 const DEFAULT_V3_KEYSIZE: usize = 16;
 const DEFAULT_V4_KEYSIZE: usize = 32;
 const MAC_KEY_SIZE: usize = 16;
-
-#[derive(Debug)]
-pub enum KeyStoreError {
-    Crypto(SymmetricCipherError),
-    Serial(JSONError),
-    Hex(FromHexError),
-    Access(String),
-    Key(SecpError),
-    Aes(AESError),
-    String(FromUtf8Error)
-}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct CipherParams {
@@ -46,9 +34,9 @@ pub struct CipherParams {
 pub struct KdfParams {
     dklen: usize,
     salt: String,
-    n: u32,
-    r: u32,
-    p: u32
+    n: u64,
+    r: u64,
+    p: u64
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -99,10 +87,8 @@ impl KeyStore {
             None => keysize = DEFAULT_V3_KEYSIZE
         }
         let dklen: usize = keysize + MAC_KEY_SIZE;
-        let log_n = ((n as f64).log2()) as u8;
-        let scrypt_params = ScryptParams::new(log_n, r, p);
-        let kdf_params = KdfParams::new(dklen, salt.to_hex(), n, r, p);
-        let cipher_params = CipherParams::new(iv.to_hex(), Some(keysize));
+        let kdf_params = KdfParams::new(dklen, hex::encode(salt), n, r, p);
+        let cipher_params = CipherParams::new(hex::encode(iv), Some(keysize));
         let mut derived_key = vec![0u8; dklen];
         let max_mem = 128 * n * r + 1024 * 3;
         scrypt(password.as_bytes(), &salt, n, r, p, max_mem, &mut derived_key)?;
@@ -113,20 +99,16 @@ impl KeyStore {
         let mut mac_input = vec![0u8; MAC_KEY_SIZE];
         mac_input.clone_from_slice(&derived_key[keysize..keysize + MAC_KEY_SIZE]);
         mac_input.append(&mut cipher_text.clone());
-        let mut mac_hash = Sha3::keccak256();
-        mac_hash.input(&mac_input);
-        let mut mac = vec![0u8; MAC_SIZE];
-        mac_hash.result(&mut mac);
-        mac
+        keccak256(&mac_input).to_vec()
     }
 
     fn generate_keystore(password: String,
-                 private_key: SecretKey,
-                 version: usize,
-                 given_n: Option<u32>,
-                 given_r: Option<u32>,
-                 given_p: Option<u32>,
-                 given_keysize: Option<usize>) -> Result<KeyStore, AESError> {
+                         private_key: SecretKey,
+                         version: usize,
+                         given_n: Option<u64>,
+                         given_r: Option<u64>,
+                         given_p: Option<u64>,
+                         given_keysize: Option<usize>) -> Result<KeyStore, Box<Error>> {
         let network = "hycon".to_string();
         let id = Uuid::new_v4().to_string();
         let kdf = "scrypt".to_string();
@@ -137,29 +119,23 @@ impl KeyStore {
         thread_rng().fill(&mut iv);
 
         let (kdf_params,
-             cipher_params,
-             keysize,
-             derived_key) = KeyStore::gen_derived_key(password, &salt, &iv, given_n, given_r, given_p, given_keysize)?;
+            cipher_params,
+            keysize,
+            derived_key) = KeyStore::gen_derived_key(password, &salt, &iv, given_n, given_r, given_p, given_keysize)?;
 
         let cipher: String;
         if keysize == 16 {
             cipher = "aes-128-cbc".to_string();
-        } else if keysize == 24 {
-            cipher = "aes-192-cbc".to_string();
         } else if keysize == 32 {
             cipher = "aes-256-cbc".to_string();
         } else {
-            return Err(AESError::Cipher(SymmetricCipherError::InvalidLength))
+            return Err(Box::new(Exception::new("Unsupported cipher")))
         }
 
-        let cipher_text;
-        match encrypt_aes(&private_key[..], &derived_key[0..keysize], &iv, true, cipher.clone()) {
-            Ok(c) => cipher_text = c,
-            Err(e) => return Err(e)
-        }
+        let cipher_text = encrypt_aes(&private_key[..], &derived_key[0..keysize], &iv, cipher.clone())?;
         let mac = KeyStore::gen_mac(keysize, &derived_key, &cipher_text);
 
-        let crypto = Crypto::new(cipher_text.to_hex(), cipher_params, cipher, kdf, kdf_params, mac.to_hex());
+        let crypto = Crypto::new(hex::encode(cipher_text), cipher_params, cipher, kdf, kdf_params, hex::encode(mac));
         Ok(KeyStore {
             network: Some(network),
             version,
@@ -168,38 +144,22 @@ impl KeyStore {
         })
     }
 
-    pub fn unlock_keystore(keystore: KeyStore, password: String) -> Result<SecretKey, KeyStoreError> {
+    pub fn unlock_keystore(keystore: KeyStore, password: String) -> Result<SecretKey, Box<Error>> {
         let version = keystore.version;
         if version < 3 || version > 4 {
-            return Err(KeyStoreError::Access("Unsupported Version".to_string()))
+            return Err(Box::new(Exception::new("Unsupported Version")))
         }
         let cipher = keystore.crypto.cipher;
 
-        let salt: Vec<u8>;
-        match keystore.crypto.kdfparams.salt.from_hex() {
-            Ok(s) => salt = s,
-            Err(e) => return Err(KeyStoreError::Hex(e))
-        }
-        let iv: Vec<u8>;
-        match keystore.crypto.cipherparams.iv.from_hex() {
-            Ok(i) => iv = i,
-            Err(e) => return Err(KeyStoreError::Hex(e))
-        }
-        let mac: Vec<u8>;
-        match keystore.crypto.mac.from_hex() {
-            Ok(m) => mac = m,
-            Err(e) => return Err(KeyStoreError::Hex(e))
-        }
+        let salt = hex::decode(keystore.crypto.kdfparams.salt)?;
+        let iv = hex::decode(keystore.crypto.cipherparams.iv)?;
+        let mac = hex::decode(keystore.crypto.mac)?;
         let keysize: usize;
         match keystore.crypto.cipherparams.keysize {
             Some(k) => keysize = k,
             None => keysize = DEFAULT_V3_KEYSIZE
         }
-        let cipher_text: Vec<u8>;
-        match keystore.crypto.ciphertext.from_hex() {
-            Ok(c) => cipher_text = c,
-            Err(e) => return Err(KeyStoreError::Hex(e))
-        }
+        let cipher_text = hex::decode(keystore.crypto.ciphertext)?;
         let n = keystore.crypto.kdfparams.n;
         let r = keystore.crypto.kdfparams.r;
         let p = keystore.crypto.kdfparams.p;
@@ -209,20 +169,15 @@ impl KeyStore {
 
         let derived_mac = KeyStore::gen_mac(keysize, &derived_key, &cipher_text);
         if derived_mac != mac {
-            return Err(KeyStoreError::Access("Invalid Password".to_string()))
+            println!("{:?}", hex::encode(derived_mac.clone()));
+            println!("{:?}", derived_key.clone());
+            return Err(Box::new(Exception::new("Invalid Password")))
         }
 
-        let private_key: Vec<u8>;
-        match decrypt_aes(&cipher_text, &derived_key[0..keysize], &iv, cipher, PRIVATE_KEY_SIZE) {
-            Ok(pk) => private_key = pk,
-            Err(e) => return Err(KeyStoreError::Aes(e))
-        }
+        let private_key = decrypt_aes(&cipher_text, &derived_key[0..keysize], &iv, cipher)?;
 
         let secp = Secp256k1::without_caps();
-        match SecretKey::from_slice(&secp, &private_key) {
-            Ok(sk) => return Ok(sk),
-            Err(e) => return Err(KeyStoreError::Key(e))
-        }
+        Ok(SecretKey::from_slice(&secp, &private_key)?)
     }
 
     pub fn load_keystore(path: PathBuf) -> Result<KeyStore, Box<Error>> {
@@ -241,43 +196,20 @@ impl KeyStore {
         let string_data: Vec<&str> = encoded_string.split(":").collect();
 
         let key = hash(password.as_bytes(), 32);
-        let iv: Vec<u8>;
-        match string_data[1].to_owned().from_hex() {
-            Ok(data) => iv = data,
-            Err(e) => return Err(KeyStoreError::Hex(e))
-        }
+        let iv = hex::decode(string_data[1].to_owned())?;
+
         // The legacy versions encrypted the string representation of the private key.
         // It must be converted from that to bytes which the string represents
         let encrypted_hex_data = string_data[2].to_string();
-        let encrypted_data: Vec<u8>;
-        match encrypted_hex_data.from_hex() {
-            Ok(data) => encrypted_data = data.to_vec(),
-            Err(e) => return Err(KeyStoreError::Hex(e))
-        }
+        let encrypted_data = hex::decode(encrypted_hex_data)?.to_vec();
 
-        let decrypted_string_data_bytes;
-        match decrypt_aes(&encrypted_data, &key, &iv, "aes-256-cbc".to_string(), 64) {
-            Ok(data) => decrypted_string_data_bytes = data,
-            Err(e) => return Err(KeyStoreError::Aes(e))
-        }
+        let decrypted_string_data_bytes = decrypt_aes(&encrypted_data, &key, &iv, "aes-256-cbc".to_string())?;
+        let decrypted_string_data = String::from_utf8(decrypted_string_data_bytes)?;
 
-        let decrypted_string_data;
-        match String::from_utf8(decrypted_string_data_bytes) {
-            Ok(data) => decrypted_string_data = data,
-            Err(e) => return Err(KeyStoreError::String(e))
-        }
-
-        let decrypted_data;
-        match decrypted_string_data.from_hex() {
-            Ok(data) => decrypted_data = data,
-            Err(e) => return Err(KeyStoreError::Hex(e))
-        }
+        let decrypted_data = hex::decode(decrypted_string_data)?;
 
         let secp = Secp256k1::without_caps();
-        match SecretKey::from_slice(&secp, &decrypted_data) {
-            Ok(s_key) => return Ok(s_key),
-            Err(e) => return Err(KeyStoreError::Key(e))
-        }
+        Ok(SecretKey::from_slice(&secp, &decrypted_data)?)
     }
 
     pub fn generate_v3(password: String, private_key: SecretKey) -> Result<KeyStore, Box<Error>> {
@@ -308,12 +240,9 @@ impl KeyStore {
     }
 }
 
-impl Encode<EncodingError> for KeyStore {
-    fn encode(&self) -> Result<Vec<u8>, EncodingError> {
-        match to_vec(&self) {
-            Ok(vec) => Ok(vec),
-            Err(e) => Err(EncodingError::Json(e))
-        }
+impl Encode for KeyStore {
+    fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
+        Ok(to_vec(&self)?)
     }
 }
 
@@ -331,7 +260,7 @@ impl Crypto {
 }
 
 impl KdfParams {
-    pub fn new(dklen: usize, salt: String, n: u32, r: u32, p: u32) -> KdfParams {
+    pub fn new(dklen: usize, salt: String, n: u64, r: u64, p: u64) -> KdfParams {
         KdfParams {
             dklen,
             salt,
@@ -391,15 +320,14 @@ mod tests {
         let n = 8192;
         let r = 8;
         let p = 1;
-        let kdf_params = KdfParams::new(dklen, salt.to_hex(), n, r, p);
-        let scrypt_params = ScryptParams::new(13, r, p);
+        let kdf_params = KdfParams::new(dklen, hex::encode(salt.clone()), n, r, p);
         let mut derived_key = vec![0u8; dklen];
         let max_mem = 128 * n * r + 1024 * 3;
         scrypt(password.as_bytes(), &salt, n, r, p, max_mem, &mut derived_key).unwrap();
         let iv = [
             0x60, 0x87, 0xda, 0xb2, 0xf9, 0xfd, 0xbb, 0xfa,
             0xdd, 0xc3, 0x1a, 0x90, 0x97, 0x35, 0xc1, 0xe6];
-        let cipher_params = CipherParams::new(iv.to_hex(), Some(DEFAULT_V3_KEYSIZE));
+        let cipher_params = CipherParams::new(hex::encode(iv), Some(DEFAULT_V3_KEYSIZE));
         let cipher = "aes-128-cbc".to_string();
         let cipher_text = encrypt_aes(&private_key[..], &derived_key[0..DEFAULT_V3_KEYSIZE], &iv, cipher.clone()).unwrap();
         let mac = KeyStore::gen_mac(16, &derived_key, &cipher_text);
@@ -407,6 +335,9 @@ mod tests {
         let key_store = KeyStore::from_params(network, version, id, crypto).unwrap();
         let encoding = key_store.encode().unwrap();
         let encoding_string = String::from_utf8(encoding).unwrap();
+
+        assert_eq!("e44f58dc0de4183814970d2cd0f72385de469285c07caaad4eda5ab0b579d911419f40fe4412b63b8a50a787cc9403e4".to_string(), hex::encode(cipher_text.clone()));
+        assert_eq!("f9413c4b594522b2e73e3afb0f475c5013c9954de34bd6ca9ea39042e69f9e58".to_string(), hex::encode(mac.clone()));
         assert_eq!(encoding_string, expected_v3_encoding());
     }
 
@@ -433,30 +364,26 @@ mod tests {
         let n = 8192;
         let r = 8;
         let p = 1;
-        let kdf_params = KdfParams::new(dklen, salt.to_hex(), n, r, p);
-        let scrypt_params = ScryptParams::new(13, r, p);
+        let kdf_params = KdfParams::new(dklen, hex::encode(salt.clone()), n, r, p);
         let mut derived_key = vec![0u8; dklen];
         let max_mem = 128 * n * r + 1024 * 3;
         scrypt(password.as_bytes(), &salt, n, r, p, max_mem, &mut derived_key).unwrap();
         let iv = [
             0x60, 0x87, 0xda, 0xb2, 0xf9, 0xfd, 0xbb, 0xfa,
             0xdd, 0xc3, 0x1a, 0x90, 0x97, 0x35, 0xc1, 0xe6];
-        let cipher_params = CipherParams::new(iv.to_hex(), Some(DEFAULT_V4_KEYSIZE));
+        let cipher_params = CipherParams::new(hex::encode(iv), Some(DEFAULT_V4_KEYSIZE));
         let cipher = "aes-256-cbc".to_string();
-        let cipher_text = encrypt_aes(&private_key[..], &derived_key[0..DEFAULT_V4_KEYSIZE], &iv, true, cipher.clone()).unwrap();
-        assert_eq!("73bd75ef1556bfd51b647e3860db8109b6f850f8d7598671c54b9727403576d1e3207b6ee10c15f5a0e2d7fb530ec673".to_string(), cipher_text.to_hex());
-        let mut mac_input = vec![0u8; MAC_KEY_SIZE];
-        mac_input.clone_from_slice(&derived_key[DEFAULT_V4_KEYSIZE..DEFAULT_V4_KEYSIZE + MAC_KEY_SIZE]);
-        mac_input.append(&mut cipher_text.clone());
-        let mut mac_hash = Sha3::keccak256();
-        mac_hash.input(&mac_input);
-        let mut mac = [0u8; MAC_SIZE];
-        mac_hash.result(&mut mac);
-        assert_eq!("7e4de3e41191fde8156f5677de34a9330f775741145615d5e72ac8e6fb528506".to_string(), mac.to_hex());
-        let crypto = Crypto::new(cipher_text.to_hex(), cipher_params, cipher.clone(), kdf, kdf_params, mac.to_hex());
+        let cipher_text = encrypt_aes(&private_key[..], &derived_key[0..DEFAULT_V4_KEYSIZE], &iv, cipher.clone()).unwrap();
+
+        let mac = KeyStore::gen_mac(32, &derived_key, &cipher_text);
+
+        let crypto = Crypto::new(hex::encode(cipher_text.clone()), cipher_params, cipher.clone(), kdf, kdf_params, hex::encode(mac.clone()));
         let key_store = KeyStore::from_params(network, version, id, crypto).unwrap();
         let encoding = key_store.encode().unwrap();
         let encoding_string = String::from_utf8(encoding).unwrap();
+
+        assert_eq!("73bd75ef1556bfd51b647e3860db8109b6f850f8d7598671c54b9727403576d1e3207b6ee10c15f5a0e2d7fb530ec673".to_string(), hex::encode(cipher_text.clone()));
+        assert_eq!("7e4de3e41191fde8156f5677de34a9330f775741145615d5e72ac8e6fb528506".to_string(), hex::encode(mac.clone()));
         assert_eq!(encoding_string, expected_v4_encoding());
     }
 
@@ -476,10 +403,7 @@ mod tests {
         assert_eq!(private_key, decrypted_key);
     }
 
-    // You can ignore this test for the most part since it takes a long time to complete.
-    // However, you should run this test if you are changing the wallet/keystore/crypto functions
     #[test]
-    #[ignore]
     fn it_unlocks_a_ctr_v3_keystore() {
         let secp = Secp256k1::without_caps();
         let private_key = [

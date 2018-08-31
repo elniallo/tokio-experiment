@@ -8,17 +8,6 @@ use util::hash::hash;
 use secp256k1::key::{PublicKey, SecretKey};
 use secp256k1::{Message, RecoverableSignature, Secp256k1};
 use rand::{thread_rng, Rng};
-use crypto::symmetriccipher::SymmetricCipherError;
-
-#[derive(Debug)]
-pub enum WalletError {
-    Fs(FSError),
-    Encrypt(SymmetricCipherError),
-    Load(FromUtf8Error),
-    Hex(FromHexError),
-    Key(Error),
-    Aes(AESError)
-}
 
 pub struct Wallet {
     private_key: SecretKey,
@@ -51,19 +40,15 @@ impl Wallet {
         }
     }
 
-    pub fn sign(&self, message: &Vec<u8>) -> Result<RecoverableSignature, Error> {
+    pub fn sign(&self, message: &Vec<u8>) -> Result<RecoverableSignature, Box<Error>> {
         let msg = Message::from_slice(&message)?;
         let secp = Secp256k1::signing_only();
         Ok(secp.sign_recoverable(&msg, &self.private_key))
     }
 
-    pub fn sign_tx(&self, tx: &Tx) -> Result<SignedTx, EncodingError> {
+    pub fn sign_tx(&self, tx: &Tx) -> Result<SignedTx, Box<Error>> {
         let encoded_tx = hash(&tx.encode()?, 32);
-        let signature: RecoverableSignature;
-        match self.sign(&encoded_tx) {
-            Ok(sig) => signature = sig,
-            Err(e) => return Err(EncodingError::Secp(e))
-        }
+        let signature = self.sign(&encoded_tx)?;
         let secp = Secp256k1::without_caps();
         let recovery = signature.serialize_compact(&secp).0;
         let mut new_tx = tx.clone();
@@ -75,7 +60,7 @@ impl Wallet {
 
 #[cfg(test)]
 mod tests {
-    use super::{Wallet, WalletError};
+    use super::Wallet;
     use common::address::{Address, ValidAddress};
     use common::tx::Tx;
     use common::Encode;
