@@ -7,7 +7,8 @@ use rustc_serialize::hex::{ToHex, FromHex, FromHexError};
 
 use common::tx::Tx;
 use common::signed_tx::SignedTx;
-use common::{Encode, EncodingError};
+use common::{Encode, Exception};
+use common::key_store::KeyStore;
 use util::hash::hash;
 use util::aes::{AESError, decrypt_aes, encrypt_aes};
 
@@ -76,22 +77,6 @@ impl Wallet {
         new_tx.signature = Some(signature);
         new_tx.recovery = Some(recovery);
         Ok(SignedTx(new_tx))
-    }
-
-    pub fn load(path: PathBuf) -> Result<Wallet, WalletError> {
-        let mut file;
-        match File::open(path) {
-            Ok(f) => file = f,
-            Err(e) => return Err(WalletError::Fs(e))
-        }
-
-        let mut read_data = vec![0u8; 1024];
-        match file.read(&mut read_data) {
-            Ok(_) => {},
-            Err(e) => return Err(WalletError::Fs(e))
-        }
-
-
     }
 }
 

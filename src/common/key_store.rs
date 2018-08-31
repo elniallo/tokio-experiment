@@ -2,7 +2,7 @@ use std::string::FromUtf8Error;
 use std::fs::File;
 use std::path::PathBuf;
 use std::error::Error;
-use std::io::Read;
+use std::io::{Read, Write};
 
 use common::address::{Address, ValidAddress};
 use common::{Encode, EncodingError};
@@ -283,15 +283,25 @@ impl KeyStore {
         }
     }
 
-    pub fn to_v3(password: String, private_key: SecretKey) -> Result<KeyStore, AESError> {
+    pub fn generate_v3(password: String, private_key: SecretKey) -> Result<KeyStore, Box<Error>> {
         KeyStore::generate_keystore(password, private_key, 3, None, None, None, Some(DEFAULT_V3_KEYSIZE))
     }
 
-    pub fn to_v4(password: String, private_key: SecretKey) -> Result<KeyStore, AESError> {
+    pub fn generate_v4(password: String, private_key: SecretKey) -> Result<KeyStore, Box<Error>> {
         KeyStore::generate_keystore(password, private_key, 4, None, None, None, Some(DEFAULT_V4_KEYSIZE))
     }
 
-    pub fn from_params(network: String, version: usize, id: String, crypto: Crypto) -> Result<KeyStore, SymmetricCipherError> {
+    pub fn save(path: PathBuf, keystore: KeyStore) -> Result<(), Box<Error>> {
+        if path.exists() {
+            return Err(Box::new(Exception::new("File already exists")))
+        }
+        let mut file = File::create(path)?;
+        let encoded_keystore = keystore.encode()?;
+        file.write(&encoded_keystore)?;
+        Ok(())
+    }
+
+    pub fn from_params(network: String, version: usize, id: String, crypto: Crypto) -> Result<KeyStore, Box<Error>> {
         Ok(KeyStore {
             network: Some(network),
             version,
