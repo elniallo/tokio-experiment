@@ -1,4 +1,6 @@
-use common::{Encode, EncodingError, Proto};
+use std::error::Error;
+
+use common::{Encode, Proto};
 use common::address::{Address, ValidAddress};
 use util::hash::hash;
 use serialization::tx::Tx as ProtoTx;
@@ -17,8 +19,8 @@ pub struct Tx {
     pub recovery: Option<RecoveryId>,
 }
 
-pub trait Valid<ErrorType> {
-    fn verify(&self) -> Result<bool, ErrorType>;
+pub trait Valid {
+    fn verify(&self) -> Result<(), Box<Error>>;
 }
 
 impl Tx {
@@ -51,19 +53,16 @@ impl Tx {
         Tx::new(Some(from), Some(to), amount, Some(fee), Some(nonce), None, None)
     }
 
-    pub fn verify(encoding: Vec<u8>, sender: Address, signature: RecoverableSignature) -> Result<bool, SecpError> {
+    pub fn verify(encoding: Vec<u8>, sender: Address, signature: RecoverableSignature) -> Result<(), Box<Error>> {
         let message = Message::from_slice(&hash(&encoding[..], 32))?;
         let secp = Secp256k1::verification_only();
         let pubkey = secp.recover(&message, &signature)?;
         let address = Address::from_pubkey(pubkey);
         if address != sender {
-            return Err(SecpError::InvalidSignature);
+            return Err(Box::new(SecpError::IncorrectSignature));
         }
         let standard_signature = signature.to_standard(&secp);
-        match secp.verify(&message, &standard_signature, &pubkey) {
-            Ok(_) => return Ok(true),
-            Err(e) => return Err(e)
-        }
+        Ok(secp.verify(&message, &standard_signature, &pubkey)?)
     }
 
     pub fn equals(&self, other_tx: Tx) -> bool {
@@ -83,9 +82,9 @@ impl Tx {
     }
 }
 
-impl Proto<EncodingError> for Tx {
+impl Proto for Tx {
     type ProtoType = ProtoTx;
-    fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> 
+    fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>>
         where Self::ProtoType: ProtoMessage {
         let mut proto_tx = ProtoTx::new();
         match self.from {
@@ -109,13 +108,10 @@ impl Proto<EncodingError> for Tx {
     }
 }
 
-impl Encode<EncodingError> for Tx {
-    fn encode(&self) -> Result<Vec<u8>, EncodingError> {
+impl Encode for Tx {
+    fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
         let proto_tx = self.to_proto()?;
-        match proto_tx.write_to_bytes() {
-            Ok(data) => Ok(data),
-            Err(e) => Err(EncodingError::Proto(e))
-        }
+        Ok(proto_tx.write_to_bytes()?)
     }
 }
 

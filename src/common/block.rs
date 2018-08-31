@@ -1,7 +1,9 @@
+use std::error::Error;
+
 use common::meta::Meta;
 use common::signed_tx::SignedTx;
 use common::header::Header;
-use common::{Encode, EncodingError, Proto};
+use common::{Encode, Exception, Proto};
 
 use serialization::block::{Block as ProtoBlock, BlockDB as ProtoBlockDB};
 use serialization::tx::SignedTx as ProtoTx;
@@ -15,7 +17,7 @@ pub struct Block<HeaderType, TxType> {
 }
 
 impl<HeaderType, TxType> Block<HeaderType, TxType> 
-    where HeaderType: Clone + Encode<EncodingError> {
+    where HeaderType: Clone + Encode {
     pub fn new(header: HeaderType, txs: Option<Vec<TxType>>, meta: Option<Meta>) -> Block<HeaderType, TxType> {
         Block {
             header,
@@ -23,6 +25,7 @@ impl<HeaderType, TxType> Block<HeaderType, TxType>
             meta
         }
     }
+
     pub fn from_header(header: HeaderType)-> Block<HeaderType, TxType> {
         Block {
             header,
@@ -30,39 +33,31 @@ impl<HeaderType, TxType> Block<HeaderType, TxType>
             meta: None
         }
     }
-    pub fn save(&self) -> Result<ProtoBlockDB, EncodingError> {
+
+    pub fn save(&self) -> Result<ProtoBlockDB, Box<Error>> {
         let mut proto_meta: ProtoBlockDB;
         match self.meta.clone() {
             Some(meta) => proto_meta = meta.to_proto()?,
-            None => return Err(EncodingError::Integrity("Block is missing meta data to save".to_string()))
+            None => return Err(Box::new(Exception::new("Block is missing meta data to save")))
         }
         let header_bytes = self.header.encode()?;
-        match proto_meta.merge_from_bytes(&header_bytes) {
-            Ok(_) => Ok(proto_meta),
-            Err(e) => Err(EncodingError::Proto(e))
-        }
+        proto_meta.merge_from_bytes(&header_bytes)?;
+        Ok(proto_meta)
     }
 }
 
-impl Encode<EncodingError> for Block<Header, SignedTx> {
-    fn encode(&self) -> Result<Vec<u8>, EncodingError> {
+impl Encode for Block<Header, SignedTx> {
+    fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
         let proto_block = self.to_proto()?;
-        let block_bytes = proto_block.write_to_bytes();
-        match block_bytes {
-            Ok(data) => Ok(data),
-            Err(e) => Err(EncodingError::Proto(e))
-        }
+        Ok(proto_block.write_to_bytes()?)
     }
 }
 
-impl Proto<EncodingError> for Block<Header, SignedTx> {
+impl Proto for Block<Header, SignedTx> {
     type ProtoType = ProtoBlock;
-    fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
+    fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>> {
         let mut proto_block = Self::ProtoType::new();
-        match self.header.to_proto() {
-            Ok(proto_header) => proto_block.set_header(proto_header),
-            Err(e) => return Err(e)
-        }
+        proto_block.set_header(self.header.to_proto()?);
         match self.txs.clone() {
             Some(tx_vec) => {
                 let mut proto_txs: Vec<ProtoTx> = vec![];

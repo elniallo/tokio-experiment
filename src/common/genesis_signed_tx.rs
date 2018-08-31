@@ -1,18 +1,20 @@
 use std::ops::Deref;
+use std::error::Error;
+
 use common::address::Address;
 use common::tx::{Tx, Valid};
 use common::genesis_tx::GenesisTx;
-use common::{Encode, EncodingError, Proto};
+use common::{Encode, Exception, Proto};
 use serialization::tx::GenesisSignedTx as ProtoGenesisSignedTx;
 
-use secp256k1::{Error, RecoverableSignature, RecoveryId, Secp256k1};
+use secp256k1::{Error as SecpError, RecoverableSignature, RecoveryId, Secp256k1};
 use protobuf::Message as ProtoMessage;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GenesisSignedTx(pub GenesisTx);
 
 impl GenesisSignedTx {
-    pub fn decode(proto_tx: ProtoGenesisSignedTx) -> Result<GenesisSignedTx, Error> {
+    pub fn decode(proto_tx: ProtoGenesisSignedTx) -> Result<GenesisSignedTx, Box<Error>> {
         let mut to: Address = [0; 20];
         to.clone_from_slice(&proto_tx.to[..]);
         let amount = proto_tx.amount;
@@ -33,65 +35,48 @@ impl Deref for GenesisSignedTx {
     }
 }
 
-impl Proto<EncodingError> for GenesisSignedTx {
+impl Proto for GenesisSignedTx {
     type ProtoType = ProtoGenesisSignedTx;
-    fn to_proto(&self) -> Result<ProtoGenesisSignedTx, EncodingError> {
+    fn to_proto(&self) -> Result<ProtoGenesisSignedTx, Box<Error>> {
         let mut proto_genesis_signed_tx = ProtoGenesisSignedTx::new();
-        let encoding: Vec<u8>;
-        match self.0.encode() {
-            Ok(data) => encoding = data,
-            Err(e) => return Err(e)
-        }
-        match proto_genesis_signed_tx.merge_from_bytes(&encoding[..]) {
-            Ok(_) => {},
-            Err(e) => return Err(EncodingError::Proto(e))
-        }
+        let encoding = self.0.encode()?;
+        proto_genesis_signed_tx.merge_from_bytes(&encoding[..])?;
         match self.recovery {
             Some(recovery) => proto_genesis_signed_tx.set_recovery(recovery.to_i32() as u32),
-            None => return Err(EncodingError::Integrity("Signed tx is missing a recovery id".to_string()))
+            None => return Err(Box::new(Exception::new("Signed tx is missing a recovery id")))
         }
         let secp = Secp256k1::without_caps();
         match self.signature {
             Some(signature) => proto_genesis_signed_tx.set_signature(signature.serialize_compact(&secp).1.to_vec()),
-            None => return Err(EncodingError::Integrity("Signed tx is missing a signature".to_string()))
+            None => return Err(Box::new(Exception::new("Signed tx is missing a signature")))
         }
         Ok(proto_genesis_signed_tx)
     }
 }
 
-impl Encode<EncodingError> for GenesisSignedTx {
-    fn encode(&self) -> Result<Vec<u8>, EncodingError> {
+impl Encode for GenesisSignedTx {
+    fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
         let proto_genesis_signed_tx = self.to_proto()?;
-        match proto_genesis_signed_tx.write_to_bytes() {
-            Ok(data) => Ok(data),
-            Err(e) => Err(EncodingError::Proto(e))
-        }
+        Ok(proto_genesis_signed_tx.write_to_bytes()?)
     }
 }
 
-impl Valid<EncodingError> for GenesisSignedTx {
-    fn verify(&self) -> Result<bool, EncodingError> {
+impl Valid for GenesisSignedTx {
+    fn verify(&self) -> Result<(), Box<Error>> {
         let to: Address;
         match self.to {
             Some(addr) => to = addr,
-            None => return Err(EncodingError::Integrity("Genesis tx has no recipient".to_string()))
+            None => return Err(Box::new(Exception::new("Genesis tx has no recipient")))
         }
         let tx = Tx::new(None, Some(to), self.amount, None, None, None, None);
         let genesis_tx = GenesisTx(tx);
-        let encoding: Vec<u8>;
-        match genesis_tx.encode() {
-            Ok(data) => encoding = data,
-            Err(e) => return Err(e)
-        }
+        let encoding = genesis_tx.encode()?;
         let signature: RecoverableSignature;
         match self.signature {
             Some(sig) => signature = sig,
-            None => return Err(EncodingError::Integrity("Genesis tx has no signature".to_string()))
+            None => return Err(Box::new(Exception::new("Genesis tx has no signature")))
         }
-        match Tx::verify(encoding, to, signature) {
-            Ok(result) => return Ok(result),
-            Err(e) => return Err(EncodingError::Secp(e))
-        }
+        Tx::verify(encoding, to, signature)
     }
 }
 
@@ -134,7 +119,7 @@ mod tests {
         let tx = Tx::new(None, Some(to), amount, None, None, Some(signature), Some(recovery));
         let genesis_tx = GenesisTx(tx);
         let gen_sign_tx = GenesisSignedTx(genesis_tx);
-        assert_eq!(true, gen_sign_tx.verify().unwrap());
+        gen_sign_tx.verify().unwrap();
     }
     
     #[test]

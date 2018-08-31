@@ -1,5 +1,6 @@
 use std::ops::Deref;
-use common::{Encode, EncodingError, Proto};
+use std::error::Error;
+use common::{Encode, Exception, Proto};
 use common::address::Address;
 use common::tx::Tx;
 use serialization::tx::GenesisTx as ProtoGenesisTx;
@@ -26,26 +27,23 @@ impl Deref for GenesisTx {
     }
 }
 
-impl Proto<EncodingError> for GenesisTx {
+impl Proto for GenesisTx {
     type ProtoType = ProtoGenesisTx;
-    fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
+    fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>> {
         let mut proto_genesis_tx = Self::ProtoType::new();
         match self.to {
             Some(to) => proto_genesis_tx.set_to(to.to_vec()),
-            None => return Err(EncodingError::Integrity("Genesis tx has to recipient".to_string()))
+            None => return Err(Box::new(Exception::new("Genesis tx has to recipient")))
         }
         proto_genesis_tx.set_amount(self.amount);
         Ok(proto_genesis_tx)
     }
 }
 
-impl Encode<EncodingError> for GenesisTx {
-    fn encode(&self) -> Result<Vec<u8>, EncodingError> {
+impl Encode for GenesisTx {
+    fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
         let proto_tx = self.to_proto()?;
-        match proto_tx.write_to_bytes() {
-            Ok(data) => Ok(data),
-            Err(e) => Err(EncodingError::Proto(e))
-        }
+        Ok(proto_tx.write_to_bytes()?)
     }
 }
 

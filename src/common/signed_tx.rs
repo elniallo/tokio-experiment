@@ -1,7 +1,9 @@
 use std::ops::Deref;
+use std::error::Error;
+
 use common::address::Address;
 use common::tx::{Tx, Valid};
-use common::{Encode, EncodingError, Proto};
+use common::{Encode, Exception, Proto};
 
 use serialization::tx::SignedTx as ProtoSignedTx;
 
@@ -36,63 +38,46 @@ impl Deref for SignedTx {
     }
 }
 
-impl Proto<EncodingError> for SignedTx {
+impl Proto for SignedTx {
     type ProtoType = ProtoSignedTx;
-    fn to_proto(&self) -> Result<ProtoSignedTx, EncodingError> {
+    fn to_proto(&self) -> Result<ProtoSignedTx, Box<Error>> {
         let mut proto_signed_tx = ProtoSignedTx::new();
-        let encoding: Vec<u8>;
-        match self.0.encode() {
-            Ok(data) => encoding = data,
-            Err(e) => return Err(e)
-        }
-        match proto_signed_tx.merge_from_bytes(&encoding[..]) {
-            Ok(_) => {},
-            Err(e) => return Err(EncodingError::Proto(e))
-        }
+        let encoding = self.0.encode()?;
+        proto_signed_tx.merge_from_bytes(&encoding[..])?;
         match self.recovery {
             Some(recovery) => proto_signed_tx.set_recovery(recovery.to_i32() as u32),
-            None => return Err(EncodingError::Integrity("Signed tx is missing a recovery id".to_string()))
+            None => return Err(Box::new(Exception::new("Signed tx is missing a recovery id")))
         }
         let secp = Secp256k1::without_caps();
         match self.signature {
             Some(signature) => proto_signed_tx.set_signature(signature.serialize_compact(&secp).1.to_vec()),
-            None => return Err(EncodingError::Integrity("Signed tx is missing a signature".to_string()))
+            None => return Err(Box::new(Exception::new("Signed tx is missing a signature")))
         }
         Ok(proto_signed_tx)
     }
 }
 
-impl Encode<EncodingError> for SignedTx {
-    fn encode(&self) -> Result<Vec<u8>, EncodingError> {
+impl Encode for SignedTx {
+    fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
         let proto_signed_tx = self.to_proto()?;
-        match proto_signed_tx.write_to_bytes() {
-            Ok(data) => Ok(data),
-            Err(e) => Err(EncodingError::Proto(e))
-        }
+        Ok(proto_signed_tx.write_to_bytes()?)
     }
 }
 
-impl Valid<EncodingError> for SignedTx {
-    fn verify(&self) -> Result<bool, EncodingError> {
-        let encoding: Vec<u8>;
-        match self.0.encode() {
-            Ok(data) => encoding = data,
-            Err(e) => return Err(e)
-        }
+impl Valid for SignedTx {
+    fn verify(&self) -> Result<(), Box<Error>> {
+        let encoding = self.0.encode()?;
         let sender: Address;
         match self.from {
             Some(addr) => sender = addr,
-            None => return Err(EncodingError::Integrity("Tx has no sender".to_string()))
+            None => return Err(Box::new(Exception::new("Tx has no sender")))
         }
         let signature: RecoverableSignature;
         match self.signature {
             Some(sig) => signature = sig,
-            None => return Err(EncodingError::Integrity("Tx has no signature".to_string()))
+            None => return Err(Box::new(Exception::new("Tx has no signature")))
         }
-        match Tx::verify(encoding, sender, signature) {
-            Ok(result) => return Ok(result),
-            Err(e) => return Err(EncodingError::Secp(e))
-        }
+        Tx::verify(encoding, sender, signature)
     }
 }
 
@@ -124,7 +109,7 @@ mod tests {
 
         let tx = Tx::new(Some(from_addr), Some(to_addr), amount, Some(fee), Some(nonce), Some(signature), Some(recovery));
         let signed_tx = SignedTx(tx);
-        assert_eq!(true, signed_tx.verify().unwrap());
+        signed_tx.verify().unwrap();
     }
 
     #[test]

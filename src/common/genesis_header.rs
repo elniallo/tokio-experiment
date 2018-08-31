@@ -1,6 +1,8 @@
 use std::ops::Deref;
+use std::error::Error;
+
 use common::header::Header;
-use common::{Encode, EncodingError, Proto};
+use common::{Encode, Proto};
 use serialization::blockHeader::GenesisHeader as ProtoGenesisHeader;
 use protobuf::Message;
 
@@ -15,9 +17,9 @@ impl Deref for GenesisHeader {
     }
 }
 
-impl Proto<EncodingError> for GenesisHeader {
+impl Proto for GenesisHeader {
     type ProtoType = ProtoGenesisHeader;
-    fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
+    fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>> {
         let mut proto_genesis_block_header = Self::ProtoType::new();
         proto_genesis_block_header.set_merkleRoot(self.merkle_root.clone());
         proto_genesis_block_header.set_timeStamp(self.time_stamp);
@@ -27,13 +29,10 @@ impl Proto<EncodingError> for GenesisHeader {
     }
 }
 
-impl Encode<EncodingError> for GenesisHeader {
-    fn encode(&self) -> Result<Vec<u8>, EncodingError> {
+impl Encode for GenesisHeader {
+    fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
         let proto_genesis_block_header: ProtoGenesisHeader = self.to_proto()?;
-        match proto_genesis_block_header.write_to_bytes() {
-            Ok(data) => return Ok(data),
-            Err(e) => return Err(EncodingError::Proto(e))
-        }
+        Ok(proto_genesis_block_header.write_to_bytes()?)
     }
 }
 

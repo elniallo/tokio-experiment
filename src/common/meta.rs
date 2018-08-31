@@ -1,4 +1,6 @@
-use common::{Encode, EncodingError, Proto};
+use std::error::Error;
+
+use common::{Encode, Proto};
 
 use serialization::block::BlockDB as ProtoBlockDB;
 
@@ -31,9 +33,9 @@ impl Meta {
     }
 }
 
-impl Proto<EncodingError> for Meta {
+impl Proto for Meta {
     type ProtoType = ProtoBlockDB;
-    fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
+    fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>> {
         let mut proto_meta = Self::ProtoType::new();
         proto_meta.set_height(self.height);
         proto_meta.set_tEMA(self.t_ema);
@@ -56,13 +58,10 @@ impl Proto<EncodingError> for Meta {
     }
 }
 
-impl Encode<EncodingError> for Meta {
-    fn encode(&self) -> Result<Vec<u8>, EncodingError> {
+impl Encode for Meta {
+    fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
         let proto_meta = self.to_proto()?;
-        match proto_meta.write_to_bytes() {
-            Ok(data) => Ok(data),
-            Err(e) => Err(EncodingError::Proto(e))
-        }
+        Ok(proto_meta.write_to_bytes()?)
     }
 }
 

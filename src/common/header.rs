@@ -1,5 +1,7 @@
+use std::error::Error;
+
 use common::address::Address;
-use common::{Encode, EncodingError, Proto};
+use common::{Encode, Exception, Proto};
 use util::hash::hash;
 
 use serialization::blockHeader::{HeaderPrehash, BlockHeader};
@@ -36,7 +38,7 @@ impl Header {
                    }
     }
 
-    pub fn prehash(&self) -> Result<Vec<u8>, EncodingError> {
+    pub fn prehash(&self) -> Result<Vec<u8>, Box<Error>> {
         let mut proto_header = HeaderPrehash::new();
         proto_header.set_merkleRoot(self.merkle_root.clone());
         proto_header.set_timeStamp(self.time_stamp);
@@ -44,34 +46,27 @@ impl Header {
         proto_header.set_stateRoot(self.state_root.clone());
         match self.previous_hash.clone() {
             Some(previous_hash) => proto_header.set_previousHash(RepeatedField::from(previous_hash)),
-            None => return Err(EncodingError::Integrity("Header is missing a previous hash".to_string()))
+            None => return Err(Box::new(Exception::new("Header is missing a previous hash")))
         }
         match self.miner {
             Some(miner) => proto_header.set_miner(miner.to_vec()),
-            None => return Err(EncodingError::Integrity("Header is missing a miner".to_string()))
+            None => return Err(Box::new(Exception::new("Header is missing a miner")))
         }
-        let encoding: Vec<u8>;
-        match proto_header.write_to_bytes() {
-            Ok(data) => encoding = data,
-            Err(e) => return Err(EncodingError::Proto(e))
-        }
+        let encoding = proto_header.write_to_bytes()?;
         Ok(hash(&encoding, 64))
     }
 }
 
-impl Encode<EncodingError> for Header {
-    fn encode(&self) -> Result<Vec<u8>, EncodingError> {
+impl Encode for Header {
+    fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
         let proto_block_header = self.to_proto()?;
-        match proto_block_header.write_to_bytes() {
-            Ok(data) => return Ok(data),
-            Err(e) => return Err(EncodingError::Proto(e))
-        }
+        Ok(proto_block_header.write_to_bytes()?)
     }
 }
 
-impl Proto<EncodingError> for Header {
+impl Proto for Header {
     type ProtoType = BlockHeader;
-    fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
+    fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>> {
         let mut proto_header = Self::ProtoType::new();
         proto_header.set_merkleRoot(self.merkle_root.clone());
         proto_header.set_timeStamp(self.time_stamp);

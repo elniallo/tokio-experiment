@@ -1,8 +1,10 @@
 use std::ops::Deref;
+use std::error::Error;
+
 use common::block::Block;
 use common::genesis_signed_tx::GenesisSignedTx;
 use common::genesis_header::GenesisHeader;
-use common::{Encode, EncodingError, Proto};
+use common::{Encode, Proto};
 
 use serialization::tx::GenesisSignedTx as ProtoTx;
 use serialization::block::GenesisBlock as ProtoBlock;
@@ -18,9 +20,9 @@ impl Deref for GenesisBlock {
     }
 }
 
-impl Proto<EncodingError> for GenesisBlock {
+impl Proto for GenesisBlock {
     type ProtoType = ProtoBlock;
-    fn to_proto(&self) -> Result<Self::ProtoType, EncodingError> {
+    fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>> {
         let mut proto_block = Self::ProtoType::new();
         let proto_header = self.header.to_proto()?;
         proto_block.set_header(proto_header);
@@ -35,20 +37,16 @@ impl Proto<EncodingError> for GenesisBlock {
                 }
                 proto_block.set_txs(RepeatedField::from(proto_txs));
             },
-            _ => {}
+            None => {}
         }
         Ok(proto_block)
     }
 }
 
-impl Encode<EncodingError> for GenesisBlock {
-    fn encode(&self) -> Result<Vec<u8>, EncodingError> {
+impl Encode for GenesisBlock {
+    fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
         let proto_block = self.to_proto()?;
-        let block_bytes = proto_block.write_to_bytes();
-        match block_bytes {
-            Ok(data) => Ok(data),
-            Err(e) => Err(EncodingError::Proto(e))
-        }
+        Ok(proto_block.write_to_bytes()?)
     }
 }
 
