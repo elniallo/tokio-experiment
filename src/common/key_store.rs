@@ -103,7 +103,8 @@ impl KeyStore {
         let kdf_params = KdfParams::new(dklen, salt.to_hex(), n, r, p);
         let cipher_params = CipherParams::new(iv.to_hex(), Some(keysize));
         let mut derived_key = vec![0u8; dklen];
-        scrypt(password.as_bytes(), &salt, &scrypt_params, &mut derived_key);
+        let max_mem = 128 * n * r + 1024 * 3;
+        scrypt(password.as_bytes(), &salt, n, r, p, max_mem, &mut derived_key);
         (kdf_params, cipher_params, keysize, derived_key)
     }
 
@@ -379,7 +380,8 @@ mod tests {
         let kdf_params = KdfParams::new(dklen, salt.to_hex(), n, r, p);
         let scrypt_params = ScryptParams::new(13, r, p);
         let mut derived_key = vec![0u8; dklen];
-        scrypt(password.as_bytes(), &salt, &scrypt_params, &mut derived_key);
+        let max_mem = 128 * n * r + 1024 * 3;
+        scrypt(password.as_bytes(), &salt, n, r, p, max_mem, &mut derived_key);
         let iv = [
             0x60, 0x87, 0xda, 0xb2, 0xf9, 0xfd, 0xbb, 0xfa,
             0xdd, 0xc3, 0x1a, 0x90, 0x97, 0x35, 0xc1, 0xe6];
@@ -428,7 +430,8 @@ mod tests {
         let kdf_params = KdfParams::new(dklen, salt.to_hex(), n, r, p);
         let scrypt_params = ScryptParams::new(13, r, p);
         let mut derived_key = vec![0u8; dklen];
-        scrypt(password.as_bytes(), &salt, &scrypt_params, &mut derived_key);
+        let max_mem = 128 * n * r + 1024 * 3;
+        scrypt(password.as_bytes(), &salt, n, r, p, max_mem, &mut derived_key).unwrap();
         let iv = [
             0x60, 0x87, 0xda, 0xb2, 0xf9, 0xfd, 0xbb, 0xfa,
             0xdd, 0xc3, 0x1a, 0x90, 0x97, 0x35, 0xc1, 0xe6];
