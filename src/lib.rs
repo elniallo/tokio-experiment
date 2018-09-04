@@ -14,6 +14,7 @@ extern crate serde_json;
 extern crate serde;
 
 pub mod common;
+pub mod consensus;
 pub mod serialization;
 pub mod util;
 
