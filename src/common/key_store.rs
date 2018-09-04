@@ -169,8 +169,6 @@ impl KeyStore {
 
         let derived_mac = KeyStore::gen_mac(keysize, &derived_key, &cipher_text);
         if derived_mac != mac {
-            println!("{:?}", hex::encode(derived_mac.clone()));
-            println!("{:?}", derived_key.clone());
             return Err(Box::new(Exception::new("Invalid Password")))
         }
 
