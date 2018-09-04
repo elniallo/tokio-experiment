@@ -1,8 +1,9 @@
 use std::ops::Deref;
 use std::error::Error;
 
-use common::header::Header;
+use common::header::{BlockHeader, Header};
 use common::{Encode, Proto};
+use common::address::Address;
 use serialization::blockHeader::GenesisHeader as ProtoGenesisHeader;
 use protobuf::Message;
 
@@ -14,6 +15,37 @@ impl Deref for GenesisHeader {
 
     fn deref(&self) -> &Header {
         &self.0
+    }
+}
+
+impl BlockHeader for GenesisHeader {
+    fn get_merkle_root(&self) -> &Vec<u8> {
+        &self.merkle_root
+    }
+    fn get_time_stamp(&self) -> u64 {
+        self.time_stamp
+    }
+    fn get_difficulty(&self) -> f64 {
+        self.difficulty
+    }
+    fn get_state_root(&self) -> &Vec<u8> {
+        &self.state_root
+    }
+    fn get_previous_hash(&self) -> Option<&Vec<Vec<u8>>> {
+        None
+    }
+    fn get_nonce(&self) -> Option<u64> {
+        None
+    }
+    fn get_miner(&self) -> Option<&Address> {
+        None
+    }
+}
+
+impl GenesisHeader {
+    pub fn new(merkle_root: Vec<u8>, time_stamp: u64, difficulty: f64, state_root: Vec<u8>) -> GenesisHeader {
+        let header = Header::new(merkle_root, time_stamp, difficulty, state_root, vec![vec![]], 0, [0u8; 20]);
+        GenesisHeader(header)
     }
 }
 
@@ -51,8 +83,7 @@ mod tests {
         let time_stamp = 1515003305000;
         let difficulty: f64 = 0 as f64;
 
-        let header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), None, None, None);
-        let genesis_header = GenesisHeader(header);
+        let genesis_header = GenesisHeader::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone());
         let encoding = genesis_header.encode().unwrap();
         let expected_encoding = vec![18,32,218,175,98,56,136,59,157,43,
             178,250,66,194,50,129,87,37,147,54,157,79,238,83,118,209,

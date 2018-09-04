@@ -2,7 +2,7 @@ use std::error::Error;
 
 use common::meta::Meta;
 use common::signed_tx::SignedTx;
-use common::header::Header;
+use common::header::{BlockHeader, Header};
 use common::{Encode, Exception, Proto};
 
 use serialization::block::{Block as ProtoBlock, BlockDB as ProtoBlockDB};
@@ -17,7 +17,7 @@ pub struct Block<HeaderType, TxType> {
 }
 
 impl<HeaderType, TxType> Block<HeaderType, TxType> 
-    where HeaderType: Clone + Encode {
+    where HeaderType: Clone + Encode + BlockHeader {
     pub fn new(header: HeaderType, txs: Option<Vec<TxType>>, meta: Option<Meta>) -> Block<HeaderType, TxType> {
         Block {
             header,
@@ -95,7 +95,7 @@ mod tests {
         let nonce = 0;
         let miner = Address::from_string(&"H3yGUaF38TxQxoFrqCqPdB2pN9jyBHnaj".to_string()).unwrap();
         let previous_hash = vec!["G4qXusbRyXmf62c8Tsha7iZoyLsVGfka7ynkvb3Esd1d".from_base58().unwrap()];
-        let header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), Some(previous_hash.clone()), Some(nonce), Some(miner));
+        let header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), previous_hash.clone(), nonce, miner);
         let block: Block<Header, SignedTx> = Block::from_header(header.clone());
         match block.txs {
             Some(_) => panic!("Only a header was provided, but the block has transactions!"),
@@ -121,7 +121,7 @@ mod tests {
         let block_nonce = 430;
         let miner = Address::from_string(&"H3yGUaF38TxQxoFrqCqPdB2pN9jyBHnaj".to_string()).unwrap();
         let time_stamp = 1533891416560;
-        let header = Header::new(merkle_root, time_stamp, difficulty, state_root, Some(previous_hash), Some(block_nonce), Some(miner));
+        let header = Header::new(merkle_root, time_stamp, difficulty, state_root, previous_hash, block_nonce, miner);
 
         // Set up transaction
         let from = Address::from_string(&"H2aorYbNUbmwvsbupWKLZW7ZUD6VTAc65".to_string()).unwrap();
@@ -164,7 +164,7 @@ mod tests {
         let difficulty = 0.000001277063050333107;
         let nonce = 655;
         let miner = Address::from_string(&"H3yGUaF38TxQxoFrqCqPdB2pN9jyBHnaj".to_string()).unwrap();
-        let header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), Some(previous_hash.clone()), Some(nonce), Some(miner));
+        let header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), previous_hash.clone(), nonce, miner);
         let block = Block::from_header(header.clone());
         match block.txs {
             Some(_) => panic!("Only a header was provided, but the block has transactions!"),
@@ -200,7 +200,7 @@ mod tests {
         let block_nonce = 430;
         let miner = Address::from_string(&"H3yGUaF38TxQxoFrqCqPdB2pN9jyBHnaj".to_string()).unwrap();
         let time_stamp = 1533891416560;
-        let header = Header::new(merkle_root, time_stamp, difficulty, state_root, Some(previous_hash), Some(block_nonce), Some(miner));
+        let header = Header::new(merkle_root, time_stamp, difficulty, state_root, previous_hash, block_nonce, miner);
 
         // Set up transaction
         let from = Address::from_string(&"H2aorYbNUbmwvsbupWKLZW7ZUD6VTAc65".to_string()).unwrap();
@@ -251,7 +251,7 @@ mod tests {
         let block_nonce = 430;
         let miner = Address::from_string(&"H3yGUaF38TxQxoFrqCqPdB2pN9jyBHnaj".to_string()).unwrap();
         let time_stamp = 1533891416560;
-        let header = Header::new(merkle_root, time_stamp, difficulty, state_root, Some(previous_hash), Some(block_nonce), Some(miner));
+        let header = Header::new(merkle_root, time_stamp, difficulty, state_root, previous_hash, block_nonce, miner);
 
         // Set up transaction
         let from = Address::from_string(&"H2aorYbNUbmwvsbupWKLZW7ZUD6VTAc65".to_string()).unwrap();

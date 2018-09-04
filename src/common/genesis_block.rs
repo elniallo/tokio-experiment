@@ -131,8 +131,7 @@ mod tests {
             58,142,150,220,236,119,144,1,181,107,19,130,67,220,241,192,46,94,69,215,134,11];
         let time_stamp = 1515003305000;
         let difficulty: f64 = 0 as f64;
-        let header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), None, None, None);
-        GenesisHeader(header)
+        GenesisHeader::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone())
     }
 
     fn create_genesis_txs() -> Vec<GenesisSignedTx> {
