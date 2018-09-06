@@ -4,6 +4,7 @@ use common::signed_tx::SignedTx;
 use std::cmp::Ordering;
 use std::cmp::PartialOrd;
 use std::collections::BinaryHeap;
+
 pub struct ITxQueue {
     pub sum: u64,
     pub queue: Vec<SignedTx>,
@@ -22,6 +23,14 @@ impl PartialOrd for ITxQueue {
         Some(self.sum.cmp(&other.sum))
     }
 }
+
+impl Ord for ITxQueue {
+    fn cmp(&self, other: &ITxQueue) -> Ordering {
+        self.sum.cmp(&other.sum)
+    }
+}
+
+impl Eq for ITxQueue {}
 
 impl PartialEq for ITxQueue {
     fn eq(&self, other: &ITxQueue) -> bool {
@@ -74,10 +83,10 @@ mod tests {
         let tx_pool = TxPool::new();
 
         // Test Transaction
-        let from_addr_string = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
-        let from_addr = Address::from_string(&from_addr_string).unwrap();
-        let to_addr_str = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
-        let to_addr = Address::from_string(&to_addr_str).unwrap();
+        let from_addr = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
+        let from = Address::from_string(&from_addr).unwrap();
+        let to_addr = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
+        let to = Address::from_string(&to_addr).unwrap();
         let amount = 100;
         let fee = 1;
         let nonce = 1;
@@ -92,26 +101,17 @@ mod tests {
         let secp = Secp256k1::without_caps();
         let signature =
             RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
-
-        let tx = Tx::new(
-            Some(from_addr),
-            Some(to_addr),
-            amount,
-            Some(fee),
-            Some(nonce),
-            Some(signature),
-            Some(recovery),
-        );
-        let signed_tx = SignedTx(tx);
+        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
         let signed_txs = vec![signed_tx];
 
         // Test Method
         tx_pool.put_txs(&signed_txs);
 
         // Test Results
-        assert_eq!(tx_pool.pool.len(), 1);
-        assert_eq!(tx_pool.pool[0].address, from_addr_string);
-        assert_eq!(tx_pool.pool[0].sum, fee);
+        let pool = tx_pool.pool.into_sorted_vec();
+        assert_eq!(pool.len(), 1);
+        assert_eq!(pool[0].address, from_addr);
+        assert_eq!(pool[0].sum, fee);
     }
     #[test]
     fn remove_from_tx_pool() {
@@ -119,10 +119,10 @@ mod tests {
         let tx_pool = TxPool::new();
 
         // Test Transaction
-        let from_addr_string = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
-        let from_addr = Address::from_string(&from_addr_string).unwrap();
-        let to_addr_str = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
-        let to_addr = Address::from_string(&to_addr_str).unwrap();
+        let from_addr = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
+        let from = Address::from_string(&from_addr).unwrap();
+        let to_addr = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
+        let to = Address::from_string(&to_addr).unwrap();
         let amount = 100;
         let fee = 1;
         let nonce = 1;
@@ -138,16 +138,7 @@ mod tests {
         let signature =
             RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
 
-        let tx = Tx::new(
-            Some(from_addr),
-            Some(to_addr),
-            amount,
-            Some(fee),
-            Some(nonce),
-            Some(signature),
-            Some(recovery),
-        );
-        let signed_tx = SignedTx(tx);
+        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
         let signed_txs = vec![signed_tx];
 
         // Test Method

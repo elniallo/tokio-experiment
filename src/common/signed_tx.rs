@@ -1,5 +1,6 @@
 use std::ops::Deref;
 use std::error::Error;
+use std::cmp::{Ord, Ordering, PartialOrd};
 
 use common::address::Address;
 use common::transaction::{verify_tx, Transaction, Valid};
@@ -11,7 +12,7 @@ use serialization::tx::SignedTx as ProtoSignedTx;
 use protobuf::Message as ProtoMessage;
 use secp256k1::{Error as SecpError, RecoverableSignature, RecoveryId, Secp256k1};
 
-#[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SignedTx {
     pub from: Address,
     pub to: Address,
@@ -77,6 +78,24 @@ impl SignedTx {
             signature,
             recovery,
         }
+    }
+}
+
+impl Ord for SignedTx {
+    fn cmp(&self, other: &SignedTx) -> Ordering {
+        self.nonce
+            .cmp(&other.nonce)
+            .then((self.fee).cmp(&other.fee).reverse())
+    }
+}
+
+impl PartialOrd for SignedTx {
+    fn partial_cmp(&self, other: &SignedTx) -> Option<Ordering> {
+        Some(
+            Some(self.nonce)
+                .cmp(&Some(other.nonce))
+                .then(Some(self.fee).cmp(&Some(other.fee)).reverse()),
+        )
     }
 }
 
@@ -231,11 +250,11 @@ mod tests {
     }
     #[test]
     fn it_orders_by_nonce_then_fee() {
-        let from_addr_string = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
-        let from_addr = Address::from_string(&from_addr_string).unwrap();
-        let to_addr_str = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
-        let to_addr = Address::from_string(&to_addr_str).unwrap();
-        let amount = 200;
+        let from_addr = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
+        let from = Address::from_string(&from_addr).unwrap();
+        let to_addr = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
+        let to = Address::from_string(&to_addr).unwrap();
+        let amount = 100;
         let fee = 1;
         let nonce = 1;
         let recovery = RecoveryId::from_i32(0).unwrap();
@@ -249,32 +268,15 @@ mod tests {
         let secp = Secp256k1::without_caps();
         let signature =
             RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
-
-        let tx1 = Tx::new(
-            Some(from_addr),
-            Some(to_addr),
-            amount,
-            Some(fee),
-            Some(nonce),
-            Some(signature),
-            Some(recovery),
-        );
         let nonce2 = 2;
-        let tx2 = Tx::new(
-            Some(from_addr),
-            Some(to_addr),
-            amount,
-            Some(fee),
-            Some(nonce2),
-            Some(signature),
-            Some(recovery),
-        );
-        let signed_tx = SignedTx(tx1);
-        let signed_tx2 = SignedTx(tx2);
-        let mut txs: Vec<SignedTx> = vec![signed_tx2, signed_tx];
-        assert_eq!(txs[0].nonce.unwrap(), 2);
-        let mut sorted = txs.clone();
-        sorted.sort();
-        assert_eq!(sorted[0].nonce.unwrap(), 1);
+        let fee2 = 2;
+        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
+        let signed_tx2 = SignedTx::new(from, to, amount, fee, nonce2, signature, recovery);
+        let signed_tx3 = SignedTx::new(from, to, amount, fee2, nonce2, signature, recovery);
+        let mut txs: Vec<SignedTx> = vec![signed_tx2, signed_tx, signed_tx3];
+        assert_eq!(txs[0].nonce, 2);
+        txs.sort();
+        assert_eq!(txs[0].nonce, 1);
+        assert_eq!(txs[1].fee, 2);
     }
 }
