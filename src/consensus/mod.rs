@@ -1,1 +1,1 @@
-pub mod difficultyAdjuster;
+pub mod difficulty_adjuster;

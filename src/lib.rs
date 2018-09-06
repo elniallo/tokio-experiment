@@ -1,4 +1,5 @@
 extern crate blake2_rfc;
+extern crate byteorder;
 extern crate cryptonight;
 extern crate protobuf;
 extern crate rust_base58;
