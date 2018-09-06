@@ -16,7 +16,7 @@ message BlockDB {
     uint32 height = 1;
     BlockHeader header = 2;
     uint32 fileNumber = 3;
-    uint32 offset = 4;
+    uint64 offset = 4;
     uint32 length = 5;
     double tEMA = 6;
     double pEMA = 7;

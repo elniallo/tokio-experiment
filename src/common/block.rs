@@ -1,14 +1,18 @@
 use std::error::Error;
 
-use common::meta::Meta;
-use common::signed_tx::SignedTx;
+use common::genesis_header::GenesisHeader;
 use common::header::{BlockHeader, Header};
-use common::{Encode, Exception, Proto};
+use common::meta::Meta;
+use common::signed_genesis_tx::SignedGenesisTx;
+use common::signed_tx::SignedTx;
+use common::{Decode, Encode, Exception, Proto};
 
-use serialization::block::{Block as ProtoBlock, BlockDB as ProtoBlockDB};
+use protobuf::{CodedInputStream, Message as ProtoMessage, RepeatedField};
+use serialization::block::{
+    Block as ProtoBlock, BlockDB as ProtoBlockDB, GenesisBlock as ProtoGenesisBlock,
+};
 use serialization::tx::SignedTx as ProtoTx;
-
-use protobuf::{Message as ProtoMessage, RepeatedField};
+use std::result::Result;
 
 pub struct Block<HeaderType, TxType> {
     pub header: HeaderType,
@@ -52,6 +56,69 @@ where
     }
 }
 
+impl Decode for Block<Header, SignedTx> {
+    type ProtoType = ProtoBlock;
+    fn decode(bytes: &Vec<u8>) -> Result<Block<Header, SignedTx>, Box<Error>> {
+        let mut serialised = ProtoBlock::new();
+        if let Err(_) = serialised.merge_from(&mut CodedInputStream::from_bytes(bytes.as_slice())) {
+            return Err(Box::new(Exception::new("Decoding fail")));
+        }
+        let serial_header = serialised.get_header();
+        if serial_header.miner.len() == 0 {
+            return Err(Box::new(Exception::new("Miner data length 0")));
+        }
+        let mut miner_address = [0u8; 20];
+        miner_address.copy_from_slice(serial_header.miner.as_slice());
+        let header = Header::new(
+            serial_header.merkleRoot.clone(),
+            serial_header.timeStamp,
+            serial_header.difficulty,
+            serial_header.stateRoot.clone(),
+            serial_header.previousHash.to_vec(),
+            serial_header.nonce,
+            miner_address,
+        );
+        let mut txs: Vec<::common::signed_tx::SignedTx> = Vec::new();
+        for tx in serialised.get_txs().to_vec() {
+            let mut bytes = Vec::new();
+            tx.write_to_vec(&mut bytes)?;
+            txs.push(match SignedTx::decode(&bytes) {
+                Ok(good_result) => good_result,
+                Err(_) => return Err(Box::new(Exception::new("Decoding fail"))),
+            });
+        }
+        Ok(Block::new(header, Some(txs.to_vec()), None))
+    }
+}
+
+impl Decode for Block<GenesisHeader, SignedGenesisTx> {
+    type ProtoType = ProtoBlock;
+    fn decode(bytes: &Vec<u8>) -> Result<Block<GenesisHeader, SignedGenesisTx>, Box<Error>> {
+        let mut serialised = ProtoGenesisBlock::new();
+        if let Err(_) = serialised.merge_from(&mut CodedInputStream::from_bytes(bytes.as_slice())) {
+            return Err(Box::new(Exception::new("Decoding fail")));
+        }
+
+        let serial_header = serialised.get_header();
+        let header = GenesisHeader::new(
+            serial_header.merkleRoot.clone(),
+            serial_header.timeStamp,
+            serial_header.difficulty,
+            serial_header.stateRoot.clone(),
+        );
+        let mut txs: Vec<::common::signed_genesis_tx::SignedGenesisTx> = Vec::new();
+        for tx in serialised.get_txs().to_vec() {
+            let mut bytes = Vec::new();
+            tx.write_to_vec(&mut bytes)?;
+            txs.push(match SignedGenesisTx::decode(&bytes) {
+                Ok(good_result) => good_result,
+                Err(_) => return Err(Box::new(Exception::new("Decoding fail"))),
+            });
+        }
+        Ok(Block::new(header, Some(txs.to_vec()), None))
+    }
+}
+
 impl Encode for Block<Header, SignedTx> {
     fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
         let proto_block = self.to_proto()?;
@@ -82,12 +149,12 @@ impl Proto for Block<Header, SignedTx> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use common::address::{Address, ValidAddress};
     use common::signed_tx::SignedTx;
-    use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
     use rust_base58::FromBase58;
+    use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
 
     #[test]
     fn it_makes_a_block_from_header() {
@@ -132,52 +199,10 @@ mod tests {
     #[test]
     fn it_makes_a_block_with_txs() {
         // Set up header
-        let previous_hash = vec![
-            vec![
-                74, 248, 206, 224, 124, 114, 100, 237, 205, 62, 60, 165, 198, 225, 77, 241, 138,
-                87, 77, 236, 55, 60, 183, 46, 88, 192, 18, 199, 125, 23, 169, 171,
-            ],
-        ];
-        let merkle_root = vec![
-            213, 169, 1, 8, 101, 229, 19, 22, 130, 84, 151, 145, 203, 76, 212, 233, 112, 233, 14,
-            158, 72, 47, 144, 205, 35, 39, 124, 171, 111, 208, 24, 178,
-        ];
-        let state_root = vec![
-            55, 0, 90, 28, 144, 19, 210, 55, 242, 210, 228, 153, 10, 149, 25, 138, 245, 207, 148,
-            195, 66, 155, 204, 100, 46, 118, 70, 150, 151, 113, 71, 7,
-        ];
-        let difficulty = 5.570758908578445e-7;
-        let block_nonce = 430;
-        let miner = Address::from_string(&"H3yGUaF38TxQxoFrqCqPdB2pN9jyBHnaj".to_string()).unwrap();
-        let time_stamp = 1533891416560;
-        let header = Header::new(
-            merkle_root,
-            time_stamp,
-            difficulty,
-            state_root,
-            previous_hash,
-            block_nonce,
-            miner,
-        );
+        let header = create_test_header();
 
         // Set up transaction
-        let from = Address::from_string(&"H2aorYbNUbmwvsbupWKLZW7ZUD6VTAc65".to_string()).unwrap();
-        let to = Address::from_string(&"H2eztpq215SA3k7bLsnUdriT5MXDMBYEg".to_string()).unwrap();
-        let amount = 792673;
-        let fee = 97;
-        let nonce = 147;
-        let signature_bytes = vec![
-            232, 181, 248, 214, 104, 238, 209, 39, 141, 146, 180, 89, 155, 42, 167, 166, 4, 172,
-            51, 166, 189, 138, 7, 35, 100, 76, 86, 242, 143, 165, 171, 178, 73, 219, 2, 255, 123,
-            68, 168, 35, 104, 15, 200, 149, 92, 37, 38, 242, 0, 132, 2, 201, 195, 19, 85, 25, 93,
-            229, 34, 4, 173, 6, 48, 46,
-        ];
-        let recovery = RecoveryId::from_i32(0 as i32).unwrap();
-        let secp = Secp256k1::without_caps();
-        let signature =
-            RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
-        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
-        let txs = vec![signed_tx];
+        let txs = create_test_txs();
 
         // Set up block
         let block = Block::new(header.clone(), Some(txs.clone()), None);
@@ -193,12 +218,10 @@ mod tests {
 
     #[test]
     fn it_encodes_a_block_with_no_txs() {
-        let previous_hash = vec![
-            vec![
-                167, 196, 139, 41, 65, 52, 154, 132, 218, 236, 238, 209, 119, 24, 195, 185, 74,
-                193, 125, 161, 51, 205, 18, 11, 115, 28, 81, 195, 181, 95, 204, 235,
-            ],
-        ];
+        let previous_hash = vec![vec![
+            167, 196, 139, 41, 65, 52, 154, 132, 218, 236, 238, 209, 119, 24, 195, 185, 74, 193,
+            125, 161, 51, 205, 18, 11, 115, 28, 81, 195, 181, 95, 204, 235,
+        ]];
         let merkle_root = vec![
             84, 167, 41, 3, 47, 127, 205, 91, 122, 244, 148, 190, 74, 247, 105, 123, 204, 221, 41,
             133, 35, 203, 168, 232, 140, 88, 114, 64, 153, 220, 39, 74,
@@ -246,58 +269,37 @@ mod tests {
 
     #[test]
     fn it_encodes_a_block_with_txs() {
-        // Set up header
-        let previous_hash = vec![
-            vec![
-                74, 248, 206, 224, 124, 114, 100, 237, 205, 62, 60, 165, 198, 225, 77, 241, 138,
-                87, 77, 236, 55, 60, 183, 46, 88, 192, 18, 199, 125, 23, 169, 171,
-            ],
-        ];
-        let merkle_root = vec![
-            213, 169, 1, 8, 101, 229, 19, 22, 130, 84, 151, 145, 203, 76, 212, 233, 112, 233, 14,
-            158, 72, 47, 144, 205, 35, 39, 124, 171, 111, 208, 24, 178,
-        ];
-        let state_root = vec![
-            55, 0, 90, 28, 144, 19, 210, 55, 242, 210, 228, 153, 10, 149, 25, 138, 245, 207, 148,
-            195, 66, 155, 204, 100, 46, 118, 70, 150, 151, 113, 71, 7,
-        ];
-        let difficulty = 5.570758908578445e-7;
-        let block_nonce = 430;
-        let miner = Address::from_string(&"H3yGUaF38TxQxoFrqCqPdB2pN9jyBHnaj".to_string()).unwrap();
-        let time_stamp = 1533891416560;
-        let header = Header::new(
-            merkle_root,
-            time_stamp,
-            difficulty,
-            state_root,
-            previous_hash,
-            block_nonce,
-            miner,
-        );
-
-        // Set up transaction
-        let from = Address::from_string(&"H2aorYbNUbmwvsbupWKLZW7ZUD6VTAc65".to_string()).unwrap();
-        let to = Address::from_string(&"H2eztpq215SA3k7bLsnUdriT5MXDMBYEg".to_string()).unwrap();
-        let amount = 792673;
-        let fee = 97;
-        let nonce = 147;
-        let signature_bytes = vec![
-            232, 181, 248, 214, 104, 238, 209, 39, 141, 146, 180, 89, 155, 42, 167, 166, 4, 172,
-            51, 166, 189, 138, 7, 35, 100, 76, 86, 242, 143, 165, 171, 178, 73, 219, 2, 255, 123,
-            68, 168, 35, 104, 15, 200, 149, 92, 37, 38, 242, 0, 132, 2, 201, 195, 19, 85, 25, 93,
-            229, 34, 4, 173, 6, 48, 46,
-        ];
-        let recovery = RecoveryId::from_i32(0 as i32).unwrap();
-        let secp = Secp256k1::without_caps();
-        let signature =
-            RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
-        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
-        let txs = vec![signed_tx];
-
         // Set up block
-        let block = Block::new(header.clone(), Some(txs.clone()), None);
+        let block = create_test_block_without_meta();
         let encoding = block.encode().unwrap();
-        let expected_encoding = vec![
+        assert_eq!(encoding, create_expected_block_encoding());
+    }
+
+    #[test]
+    fn it_encodes_a_block_with_txs_and_meta() {
+        // Set up block
+        let block = create_test_block_with_meta();
+        let encoding = block.encode().unwrap();
+        assert_eq!(encoding, create_expected_block_encoding());
+    }
+
+    pub fn create_test_block_without_meta() -> Block<Header, SignedTx> {
+        Block::new(
+            create_test_header().clone(),
+            Some(create_test_txs().clone()),
+            None,
+        )
+    }
+    pub fn create_test_block_with_meta() -> Block<Header, SignedTx> {
+        Block::new(
+            create_test_header().clone(),
+            Some(create_test_txs().clone()),
+            Some(create_test_meta().clone()),
+        )
+    }
+
+    pub fn create_expected_block_encoding() -> Vec<u8> {
+        vec![
             10, 143, 1, 10, 32, 74, 248, 206, 224, 124, 114, 100, 237, 205, 62, 60, 165, 198, 225,
             77, 241, 138, 87, 77, 236, 55, 60, 183, 46, 88, 192, 18, 199, 125, 23, 169, 171, 18,
             32, 213, 169, 1, 8, 101, 229, 19, 22, 130, 84, 151, 145, 203, 76, 212, 233, 112, 233,
@@ -313,63 +315,11 @@ mod tests {
             76, 86, 242, 143, 165, 171, 178, 73, 219, 2, 255, 123, 68, 168, 35, 104, 15, 200, 149,
             92, 37, 38, 242, 0, 132, 2, 201, 195, 19, 85, 25, 93, 229, 34, 4, 173, 6, 48, 46, 56,
             0,
-        ];
-        assert_eq!(encoding, expected_encoding);
+        ]
     }
 
-    #[test]
-    fn it_encodes_a_block_with_txs_and_meta() {
-        // Set up header
-
-        let previous_hash = vec![
-            vec![
-                74, 248, 206, 224, 124, 114, 100, 237, 205, 62, 60, 165, 198, 225, 77, 241, 138,
-                87, 77, 236, 55, 60, 183, 46, 88, 192, 18, 199, 125, 23, 169, 171,
-            ],
-        ];
-        let merkle_root = vec![
-            213, 169, 1, 8, 101, 229, 19, 22, 130, 84, 151, 145, 203, 76, 212, 233, 112, 233, 14,
-            158, 72, 47, 144, 205, 35, 39, 124, 171, 111, 208, 24, 178,
-        ];
-        let state_root = vec![
-            55, 0, 90, 28, 144, 19, 210, 55, 242, 210, 228, 153, 10, 149, 25, 138, 245, 207, 148,
-            195, 66, 155, 204, 100, 46, 118, 70, 150, 151, 113, 71, 7,
-        ];
-        let difficulty = 5.570758908578445e-7;
-        let block_nonce = 430;
-        let miner = Address::from_string(&"H3yGUaF38TxQxoFrqCqPdB2pN9jyBHnaj".to_string()).unwrap();
-        let time_stamp = 1533891416560;
-        let header = Header::new(
-            merkle_root,
-            time_stamp,
-            difficulty,
-            state_root,
-            previous_hash,
-            block_nonce,
-            miner,
-        );
-
-        // Set up transaction
-        let from = Address::from_string(&"H2aorYbNUbmwvsbupWKLZW7ZUD6VTAc65".to_string()).unwrap();
-        let to = Address::from_string(&"H2eztpq215SA3k7bLsnUdriT5MXDMBYEg".to_string()).unwrap();
-        let amount = 792673;
-        let fee = 97;
-        let nonce = 147;
-        let signature_bytes = vec![
-            232, 181, 248, 214, 104, 238, 209, 39, 141, 146, 180, 89, 155, 42, 167, 166, 4, 172,
-            51, 166, 189, 138, 7, 35, 100, 76, 86, 242, 143, 165, 171, 178, 73, 219, 2, 255, 123,
-            68, 168, 35, 104, 15, 200, 149, 92, 37, 38, 242, 0, 132, 2, 201, 195, 19, 85, 25, 93,
-            229, 34, 4, 173, 6, 48, 46,
-        ];
-        let recovery = RecoveryId::from_i32(0 as i32).unwrap();
-        let secp = Secp256k1::without_caps();
-        let signature =
-            RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
-        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
-        let txs = vec![signed_tx];
-
-        // Set up Meta
-        let meta = Meta::new(
+    fn create_test_meta() -> Meta {
+        Meta::new(
             1,
             2 as f64,
             3 as f64,
@@ -378,27 +328,55 @@ mod tests {
             Some(6),
             Some(7),
             Some(8),
-        );
-        // Set up block
-        let block = Block::new(header.clone(), Some(txs.clone()), Some(meta.clone()));
-        let encoding = block.encode().unwrap();
-        let expected_encoding = vec![
-            10, 143, 1, 10, 32, 74, 248, 206, 224, 124, 114, 100, 237, 205, 62, 60, 165, 198, 225,
-            77, 241, 138, 87, 77, 236, 55, 60, 183, 46, 88, 192, 18, 199, 125, 23, 169, 171, 18,
-            32, 213, 169, 1, 8, 101, 229, 19, 22, 130, 84, 151, 145, 203, 76, 212, 233, 112, 233,
-            14, 158, 72, 47, 144, 205, 35, 39, 124, 171, 111, 208, 24, 178, 26, 32, 55, 0, 90, 28,
-            144, 19, 210, 55, 242, 210, 228, 153, 10, 149, 25, 138, 245, 207, 148, 195, 66, 155,
-            204, 100, 46, 118, 70, 150, 151, 113, 71, 7, 33, 211, 128, 207, 214, 62, 177, 162, 62,
-            40, 240, 163, 182, 152, 210, 44, 48, 174, 3, 58, 20, 213, 49, 13, 190, 194, 137, 35,
-            119, 16, 249, 57, 125, 207, 78, 117, 246, 36, 136, 151, 210, 18, 121, 10, 20, 113, 158,
-            71, 197, 83, 100, 207, 140, 177, 10, 169, 167, 65, 166, 7, 77, 173, 138, 90, 182, 18,
-            20, 118, 205, 217, 87, 194, 165, 97, 21, 105, 47, 106, 64, 100, 210, 68, 68, 107, 251,
-            151, 100, 24, 225, 176, 48, 32, 97, 40, 147, 1, 50, 64, 232, 181, 248, 214, 104, 238,
-            209, 39, 141, 146, 180, 89, 155, 42, 167, 166, 4, 172, 51, 166, 189, 138, 7, 35, 100,
-            76, 86, 242, 143, 165, 171, 178, 73, 219, 2, 255, 123, 68, 168, 35, 104, 15, 200, 149,
-            92, 37, 38, 242, 0, 132, 2, 201, 195, 19, 85, 25, 93, 229, 34, 4, 173, 6, 48, 46, 56,
-            0,
+        )
+    }
+
+    fn create_test_txs() -> Vec<SignedTx> {
+        // Set up transaction
+        let from = Address::from_string(&"H2aorYbNUbmwvsbupWKLZW7ZUD6VTAc65".to_string()).unwrap();
+        let to = Address::from_string(&"H2eztpq215SA3k7bLsnUdriT5MXDMBYEg".to_string()).unwrap();
+        let amount = 792673;
+        let fee = 97;
+        let nonce = 147;
+        let signature_bytes = vec![
+            232, 181, 248, 214, 104, 238, 209, 39, 141, 146, 180, 89, 155, 42, 167, 166, 4, 172,
+            51, 166, 189, 138, 7, 35, 100, 76, 86, 242, 143, 165, 171, 178, 73, 219, 2, 255, 123,
+            68, 168, 35, 104, 15, 200, 149, 92, 37, 38, 242, 0, 132, 2, 201, 195, 19, 85, 25, 93,
+            229, 34, 4, 173, 6, 48, 46,
         ];
-        assert_eq!(encoding, expected_encoding);
+        let recovery = RecoveryId::from_i32(0 as i32).unwrap();
+        let secp = Secp256k1::without_caps();
+        let signature =
+            RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
+        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
+        vec![signed_tx]
+    }
+
+    fn create_test_header() -> Header {
+        let previous_hash = vec![vec![
+            74, 248, 206, 224, 124, 114, 100, 237, 205, 62, 60, 165, 198, 225, 77, 241, 138, 87,
+            77, 236, 55, 60, 183, 46, 88, 192, 18, 199, 125, 23, 169, 171,
+        ]];
+        let merkle_root = vec![
+            213, 169, 1, 8, 101, 229, 19, 22, 130, 84, 151, 145, 203, 76, 212, 233, 112, 233, 14,
+            158, 72, 47, 144, 205, 35, 39, 124, 171, 111, 208, 24, 178,
+        ];
+        let state_root = vec![
+            55, 0, 90, 28, 144, 19, 210, 55, 242, 210, 228, 153, 10, 149, 25, 138, 245, 207, 148,
+            195, 66, 155, 204, 100, 46, 118, 70, 150, 151, 113, 71, 7,
+        ];
+        let difficulty = 5.570758908578445e-7;
+        let block_nonce = 430;
+        let miner = Address::from_string(&"H3yGUaF38TxQxoFrqCqPdB2pN9jyBHnaj".to_string()).unwrap();
+        let time_stamp = 1533891416560;
+        Header::new(
+            merkle_root,
+            time_stamp,
+            difficulty,
+            state_root,
+            previous_hash,
+            block_nonce,
+            miner,
+        )
     }
 }

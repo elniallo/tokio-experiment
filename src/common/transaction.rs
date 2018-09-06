@@ -1,11 +1,8 @@
 use std::error::Error;
 
-use common::{Encode, Proto};
 use common::address::{Address, ValidAddress};
 use util::hash::hash;
-use serialization::tx::Tx as ProtoTx;
 
-use protobuf::{Message as ProtoMessage};
 use secp256k1::{Message, RecoverableSignature, RecoveryId, Secp256k1, Error as SecpError};
 
 pub fn verify_tx(encoding: Vec<u8>, signer: Address, signature: RecoverableSignature) -> Result<(), Box<Error>> {

@@ -3,7 +3,7 @@ use std::error::Error;
 use common::address::Address;
 use common::transaction::{Transaction, Valid, verify_tx};
 use common::genesis_tx::GenesisTx;
-use common::{Decode, Encode, Exception, Proto};
+use common::{Decode, Encode, Proto};
 use serialization::tx::GenesisSignedTx as ProtoGenesisSignedTx;
 
 use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};

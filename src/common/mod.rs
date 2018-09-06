@@ -1,5 +1,7 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::marker::Sized;
+use std::result::Result;
 
 pub mod address;
 pub mod block;

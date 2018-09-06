@@ -1,16 +1,15 @@
-use std::ops::Deref;
 use std::error::Error;
 use std::cmp::{Ord, Ordering, PartialOrd};
 
 use common::address::Address;
 use common::transaction::{verify_tx, Transaction, Valid};
 use common::tx::Tx;
-use common::{Decode, Encode, Exception, Proto};
+use common::{Decode, Encode, Proto};
 
 use serialization::tx::SignedTx as ProtoSignedTx;
 
 use protobuf::Message as ProtoMessage;
-use secp256k1::{Error as SecpError, RecoverableSignature, RecoveryId, Secp256k1};
+use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SignedTx {

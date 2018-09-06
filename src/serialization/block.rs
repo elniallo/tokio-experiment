@@ -481,7 +481,7 @@ pub struct BlockDB {
     pub height: u32,
     pub header: ::protobuf::SingularPtrField<super::blockHeader::BlockHeader>,
     pub fileNumber: u32,
-    pub offset: u32,
+    pub offset: u64,
     pub length: u32,
     pub tEMA: f64,
     pub pEMA: f64,
@@ -560,18 +560,18 @@ impl BlockDB {
         self.fileNumber
     }
 
-    // uint32 offset = 4;
+    // uint64 offset = 4;
 
     pub fn clear_offset(&mut self) {
         self.offset = 0;
     }
 
     // Param is passed by value, moved
-    pub fn set_offset(&mut self, v: u32) {
+    pub fn set_offset(&mut self, v: u64) {
         self.offset = v;
     }
 
-    pub fn get_offset(&self) -> u32 {
+    pub fn get_offset(&self) -> u64 {
         self.offset
     }
 
@@ -686,7 +686,7 @@ impl ::protobuf::Message for BlockDB {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     }
-                    let tmp = is.read_uint32()?;
+                    let tmp = is.read_uint64()?;
                     self.offset = tmp;
                 },
                 5 => {
@@ -782,7 +782,7 @@ impl ::protobuf::Message for BlockDB {
             os.write_uint32(3, self.fileNumber)?;
         }
         if true {
-            os.write_uint32(4, self.offset)?;
+            os.write_uint64(4, self.offset)?;
         }
         if true {
             os.write_uint32(5, self.length)?;
@@ -856,7 +856,7 @@ impl ::protobuf::Message for BlockDB {
                     |m: &BlockDB| { &m.fileNumber },
                     |m: &mut BlockDB| { &mut m.fileNumber },
                 ));
-                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeUint32>(
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeUint64>(
                     "offset",
                     |m: &BlockDB| { &m.offset },
                     |m: &mut BlockDB| { &mut m.offset },
@@ -942,8 +942,8 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x02\n\x07BlockDB\x12\x16\n\x06height\x18\x01\x20\x01(\rR\x06height\x12$\
     \n\x06header\x18\x02\x20\x01(\x0b2\x0c.BlockHeaderR\x06header\x12\x1e\n\
     \nfileNumber\x18\x03\x20\x01(\rR\nfileNumber\x12\x16\n\x06offset\x18\x04\
-    \x20\x01(\rR\x06offset\x12\x16\n\x06length\x18\x05\x20\x01(\rR\x06length\
-    \x12\x12\n\x04tEMA\x18\x06\x20\x01(\x01R\x04tEMA\x12\x12\n\x04pEMA\x18\
+    \x20\x01(\x04R\x06offset\x12\x16\n\x06length\x18\x05\x20\x01(\rR\x06leng\
+    th\x12\x12\n\x04tEMA\x18\x06\x20\x01(\x01R\x04tEMA\x12\x12\n\x04pEMA\x18\
     \x07\x20\x01(\x01R\x04pEMA\x12&\n\x0enextDifficulty\x18\x08\x20\x01(\x01\
     R\x0enextDifficulty\x12\x1c\n\ttotalWork\x18\t\x20\x01(\x01R\ttotalWorkb\
     \x06proto3\

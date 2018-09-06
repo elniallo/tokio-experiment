@@ -1,6 +1,5 @@
-use std::ops::Deref;
 use std::error::Error;
-use common::{Decode, Encode, Exception, Proto};
+use common::{Decode, Encode, Proto};
 use common::address::Address;
 use common::transaction::Transaction;
 use serialization::tx::GenesisTx as ProtoGenesisTx;

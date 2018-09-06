@@ -2,7 +2,7 @@ use std::error::Error;
 
 use common::tx::Tx;
 use common::signed_tx::SignedTx;
-use common::{Encode, Exception};
+use common::Encode;
 use util::hash::hash;
 
 use secp256k1::key::{PublicKey, SecretKey};

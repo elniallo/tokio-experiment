@@ -1,10 +1,7 @@
-use std::error::Error;
-
 use common::{Encode, Proto};
-
-use serialization::block::BlockDB as ProtoBlockDB;
-
 use protobuf::Message as ProtoMessage;
+use serialization::block::BlockDB as ProtoBlockDB;
+use std::error::Error;
 
 #[derive(Clone)]
 pub struct Meta {
@@ -14,12 +11,12 @@ pub struct Meta {
     pub next_difficulty: f64,
     pub total_work: f64,
     pub file_number: Option<u32>,
-    pub offset: Option<u32>,
+    pub offset: Option<u64>,
     pub length: Option<u32>,
 }
 
 impl Meta {
-    pub fn new(height: u32, t_ema: f64, p_ema: f64, next_difficulty: f64, total_work: f64, file_number: Option<u32>, offset: Option<u32>, length: Option<u32>) -> Meta {
+    pub fn new(height: u32, t_ema: f64, p_ema: f64, next_difficulty: f64, total_work: f64, file_number: Option<u32>, offset: Option<u64>, length: Option<u32>) -> Meta {
         Meta {
             height,
             t_ema,

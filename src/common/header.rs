@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use common::address::Address;
-use common::{Encode, Exception, Proto};
+use common::{Encode, Proto};
 use util::hash::hash;
 
 use serialization::blockHeader::{HeaderPrehash, BlockHeader as ProtoBlockHeader};
