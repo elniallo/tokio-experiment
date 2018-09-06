@@ -98,6 +98,8 @@ pub fn get_target(difficulty: f64, length: usize) -> Result<Vec<u8>, Box<Error>>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::{thread_rng, Rng};
+    use std::cmp;
 
     #[test]
     fn it_calculates_a_target_for_powers_of_two() {
@@ -122,9 +124,7 @@ mod tests {
         let mut difficulty = 1.0;
         let length = 32;
         for exponent in 0..161 {
-            println!("exponent: {}", exponent);
             difficulty = 1.0 / (3f64.powf(exponent as f64));
-            println!("difficulty: {}", difficulty);
             let target = get_target(difficulty, length).unwrap();
             let mut index = (exponent / 8) as usize;
             if exponent != 0 && exponent % 8 == 0 {
@@ -139,13 +139,33 @@ mod tests {
             for i in 0..index {
                 scaled_difficulty *= 2f64.powf(8.0);
             }
-            let scale = -1 * difficulty.log2() as i64 / 8;
-            println!("scale: {}", scale);
-            println!("scaled_difficulty: {}", scaled_difficulty);
             let mut expected_value = 0xFFFFFFFFFFFFFFFFu64 as f64 * scaled_difficulty - 1.0;
-            println!("expected_value: {}", expected_value);
             let value = BigEndian::read_u64(&target[index..index+8]);
             assert_eq!(value as f64, expected_value.ceil());
+        }
+    }
+
+    #[test]
+    fn it_calculates_a_target_for_fractional_values() {
+        let mut difficulty = 1.0;
+        let length = 32;
+        for base in 3..16 {
+            let exponents = ((256.0 * 2f64.ln()) / (base as f64).ln()) as u64;
+            for exponent in 1..exponents {
+                let coefficients = ((base as f64).powf(exponent as f64) - 1.0);
+                let coefficient = thread_rng().gen_range(1.0, coefficients).floor();
+                difficulty = coefficient / (base as f64).powf(exponent as f64);
+                let target = get_target(difficulty, length).unwrap();
+                let mut index = (-1.0 * difficulty.log2() / 8.0) as usize;
+
+                let mut scaled_difficulty = difficulty;
+                for i in 0..index {
+                    scaled_difficulty *= 2f64.powf(8.0);
+                }
+                let mut expected_value = 0xFFFF_FFFF_FFFF_FFFFu64 as f64 * scaled_difficulty - 1.0;
+                let value = BigEndian::read_u64(&target[index..index+8]);
+                assert_eq!(value as f64, expected_value.ceil());
+            }
         }
     }
 }
