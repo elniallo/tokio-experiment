@@ -116,8 +116,75 @@ mod tests {
     use super::*;
     use rand::{Rng, SeedableRng, StdRng};
     use std::cmp;
+    use common::header::Header;
+    use common::meta::Meta;
+    use common::signed_tx::SignedTx;
 
+    #[test]
+    fn it_adjusts_difficulty() {
+        let previous_block_header = Header::new(vec![0u8; 32], 0, 0.5, vec![0u8; 32], vec![vec![0u8; 32]], 0, [0u8; 20]);
+        let meta = Meta::new(1, 0.5, 0.5, 0.5, 0.0, None, None, None);
+        let previous_block: Block<Header, SignedTx> = Block::new(previous_block_header,None, Some(meta));
+        let (next_difficulty, time_ema, difficulty_ema) = adjust_difficulty(previous_block,1.0).unwrap();
+        let expected_next_difficulty = 0.000005793555184180208;
+        let expected_time_ema = 0.5015;
+        let expected_difficulty_ema = 0.5;
+        assert_eq!(next_difficulty, expected_next_difficulty);
+        assert_eq!(time_ema, expected_time_ema);
+        assert_eq!(difficulty_ema, expected_difficulty_ema);
+    }
 
+    #[test]
+    fn it_converges_to_a_correct_difficulty() {
+        let merkle_root = vec![0u8; 32];
+        let mut time_stamp = 1536298261602;
+        let mut difficulty = 1.0;
+        let state_root = vec![0u8; 32];
+        let previous_hash = vec![vec![0u8; 32]];
+        let nonce = 0;
+        let miner = [0u8; 20];
+        let mut previous_block_header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), previous_hash.clone(), nonce, miner);
+        let height = 1;
+        let mut t_ema = 0.5;
+        let mut p_ema = 0.5;
+        let mut next_difficulty = 1.0;
+        let total_work = 0.0;
+        let file_number = None;
+        let offset = None;
+        let length = None;
+        let mut meta = Meta::new(height, t_ema, p_ema, next_difficulty, total_work, file_number, offset, length);
+        let mut block: Block<Header, SignedTx> = Block::new(previous_block_header, None, Some(meta));
+        for _ in 0..30000 {
+            time_stamp += TARGET_TIME as u64;
+            let adjustment = adjust_difficulty(block, time_stamp as f64).unwrap();
+            next_difficulty = adjustment.0;
+            t_ema = adjustment.1;
+            p_ema = adjustment.2;
+            meta = Meta::new(height, t_ema, p_ema, next_difficulty, total_work, file_number, offset, length);
+            previous_block_header = Header::new(merkle_root.clone(), time_stamp, next_difficulty, state_root.clone(), previous_hash.clone(), nonce, miner);
+            block = Block::new(previous_block_header, None, Some(meta));
+        }
+
+        assert_eq!(block.meta.unwrap().t_ema.ceil(), TARGET_TIME.floor());
+    }
+
+    #[test]
+    fn it_calculates_an_ema() {
+        let new_value = 0.5;
+        let old_value = 0.5;
+        let alpha = 0.5;
+        let ema = calc_ema(new_value, old_value, alpha);
+        assert_eq!(ema, 0.5);
+    }
+
+    #[test]
+    fn it_calculates_another_ema() {
+        let new_value = 0.5;
+        let old_value = 0.25;
+        let alpha = 0.5;
+        let ema = calc_ema(new_value, old_value, alpha);
+        assert_eq!(ema, 0.375);
+    }
 
     #[test]
     fn it_calculates_a_target_for_powers_of_two() {
