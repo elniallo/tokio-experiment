@@ -68,35 +68,48 @@ pub fn get_target(difficulty: f64, length: usize) -> Result<Vec<u8>, Box<Error>>
     }
 
     let exponent = -1.0 * difficulty.log2();
-    let mut index = (exponent / 8.0) as usize;
+    let mut index = length - ((exponent / 8.0) as usize);
     if exponent != 0.0 && exponent % 8.0 == 0.0 {
-        index -= 1;
+        index += 1;
     }
 
-    if index + 8 > length {
-        index = length - 8
+    if index < 8 {
+        index = 8
     }
 
     let mut scaled_difficulty = difficulty;
-    for i in 0..index {
+    for i in (index..length).rev() {
         target[i] = 0;
         scaled_difficulty *= 2f64.powf(8.0);
     }
-    let num = BigEndian::read_u64(&target[index..(index+8)]);
+    let num = LittleEndian::read_u64(&target[index-8..index]);
     let product = num as f64 * scaled_difficulty;
     let product_converted = product as u64 - 1;
 
-    BigEndian::write_u64(&mut target[index..(index+8)], product_converted);
+    LittleEndian::write_u64(&mut target[index-8..index], product_converted);
 
     Ok(target)
 }
 
 // The old version can produce delays of up to 2 hours due to inaccuracies in calculating the target.
-//pub fn get_legacy_target(difficulty: f64, length: usize) -> Vec<u8> {
-//    let mut target = vec![0xFF, length];
-//    let carry = 0;
-//    for i in 0..
-//}
+pub fn get_legacy_target(difficulty: f64, length: usize) -> Vec<u8> {
+    let mut adjusted_difficulty = difficulty;
+
+    if difficulty > MAX_DIFFICULTY {
+        adjusted_difficulty = 1.0;
+    } else if difficulty < 256f64.powf(-1.0 * length as f64) {
+        adjusted_difficulty = 256f64.powf(-1.0 * length as f64);
+    }
+
+    let mut target = vec![0xFFu8; length];
+    let mut carry = 0.0;
+    for i in (0..length).rev() {
+        carry = (0x100 as f64 * carry) + (adjusted_difficulty * 0xFF as f64);
+        target[i] = carry.floor() as u8;
+        carry -= target[i] as f64;
+    }
+    target
+}
 
 #[cfg(test)]
 mod tests {
@@ -113,13 +126,12 @@ mod tests {
         for exponent in 0..256 {
             difficulty = 1.0 / (2f64.powf(exponent as f64));
             let target = get_target(difficulty, length).unwrap();
-            let mut index = exponent as usize / 8;
+            let mut index = length - (exponent as usize / 8) - 1;
             let mut expected_value = (0xFF as f64 * 1.0 / 2f64.powf(exponent as f64 % 8.0)) as u8;
             if exponent != 0 && exponent % 8 == 0 {
-                index -= 1;
+                index += 1;
                 expected_value = 0;
             }
-
             assert_eq!(target[index], expected_value);
         }
     }
@@ -131,32 +143,32 @@ mod tests {
         for exponent in 0..161 {
             difficulty = 1.0 / (3f64.powf(exponent as f64));
             let target = get_target(difficulty, length).unwrap();
-            let mut index = (exponent / 8) as usize;
+            let mut index = length - ((exponent / 8) as usize);
             if exponent != 0 && exponent % 8 == 0 {
-                index -= 1;
+                index += 1;
             }
 
-            if index + 8 > length {
-                index = length - 8
+            if index < 8 {
+                index = 8
             }
 
             let mut scaled_difficulty = difficulty;
-            for i in 0..index {
+            for i in (index..length).rev() {
                 scaled_difficulty *= 2f64.powf(8.0);
             }
             let mut expected_value = 0xFFFF_FFFF_FFFF_FFFF_u64 as f64 * scaled_difficulty - 1.0;
-            let value = BigEndian::read_u64(&target[index..index+8]);
+            let value = LittleEndian::read_u64(&target[index-8..index]);
             assert_eq!(value as f64, expected_value.ceil());
         }
     }
 
     #[test]
     fn it_calculates_a_target_for_fractional_values() {
-        let seed = [0xFFu8; 32];
+        let seed = [0x27u8; 32];
         let mut rng: StdRng = SeedableRng::from_seed(seed);
         let mut difficulty = 1.0;
         let length = 32;
-        for _ in 0..1000000 {
+        for _ in 0..1000 {
             for base in 3..16 {
                 let exponents = ((256.0 * 2f64.ln()) / (base as f64).ln()) as u64;
                 for exponent in 1..exponents {
@@ -164,17 +176,55 @@ mod tests {
                     let coefficient = rng.gen_range(1.0, coefficients).floor();
                     difficulty = coefficient / (base as f64).powf(exponent as f64);
                     let target = get_target(difficulty, length).unwrap();
-                    let mut index = (-1.0 * difficulty.log2() / 8.0) as usize;
+                    let mut index = length - (-1.0 * difficulty.log2() / 8.0) as usize;
 
                     let mut scaled_difficulty = difficulty;
-                    for i in 0..index {
+                    for i in (index..length).rev() {
                         scaled_difficulty *= 2f64.powf(8.0);
                     }
                     let mut expected_value = 0xFFFF_FFFF_FFFF_FFFF_u64 as f64 * scaled_difficulty - 1.0;
-                    let value = BigEndian::read_u64(&target[index..index+8]);
+                    let value = LittleEndian::read_u64(&target[index-8..index]);
                     assert_eq!(value as f64, expected_value.ceil());
                 }
             }
         }
+    }
+
+    #[test]
+    fn it_calculates_a_basic_legacy_target() {
+        let difficulty = 0.5;
+        let length = 32;
+        let target = get_legacy_target(difficulty, length);
+        let expected_target = vec![
+            255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 127];
+        assert_eq!(target, expected_target);
+    }
+
+    #[test]
+    fn it_calculates_a_simple_legacy_target() {
+        let difficulty = 0.0003;
+        let length = 32;
+        let target = get_legacy_target(difficulty, length);
+        let expected_target = vec![
+            51, 51, 51, 51, 51, 51, 51, 51,
+            51, 51, 51, 51, 51, 51, 51, 51,
+            51, 51, 49, 51, 49, 51, 51, 53,
+            97, 50, 85, 48, 42, 169, 19, 0];
+        assert_eq!(target, expected_target);
+    }
+
+    fn it_calculates_a_random_legacy_target() {
+        let difficulty = 0.5817765075630095;
+        let length = 32;
+        let target = get_legacy_target(difficulty, length);
+        let expected_target = vec![
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 224,
+            224, 224, 112, 143, 32, 77, 238, 148];
+        assert_eq!(target, expected_target);
     }
 }
