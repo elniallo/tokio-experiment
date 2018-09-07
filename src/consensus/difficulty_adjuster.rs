@@ -1,13 +1,11 @@
 use std::f64::consts;
-use std::num;
 use std::error::Error;
 
 use common::block::Block;
 use common::header::BlockHeader;
-use common::meta::Meta;
 use common::Exception;
 
-use byteorder::{ByteOrder, BigEndian, LittleEndian};
+use byteorder::{ByteOrder, LittleEndian};
 
 pub const TARGET_TIME: f64 = 30000.0 / consts::LN_2;
 pub const MAX_DIFFICULTY: f64 = 1.0;
@@ -130,7 +128,6 @@ pub fn acceptable(hash: Vec<u8>, target: Vec<u8>) -> Result<bool, Box<Error>>{
 mod tests {
     use super::*;
     use rand::{Rng, SeedableRng, StdRng};
-    use std::cmp;
     use common::header::Header;
     use common::meta::Meta;
     use common::signed_tx::SignedTx;
@@ -153,11 +150,11 @@ mod tests {
     fn it_converges_to_a_correct_difficulty() {
         let merkle_root = vec![0u8; 32];
         let mut time_stamp = 1536298261602;
-        let mut difficulty = 1.0;
         let state_root = vec![0u8; 32];
         let previous_hash = vec![vec![0u8; 32]];
         let nonce = 0;
         let miner = [0u8; 20];
+        let difficulty = 1.0;
         let mut previous_block_header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), previous_hash.clone(), nonce, miner);
         let height = 1;
         let mut t_ema = 0.5;
@@ -203,7 +200,7 @@ mod tests {
 
     #[test]
     fn it_calculates_a_target_for_powers_of_two() {
-        let mut difficulty = 1.0;
+        let mut difficulty: f64;
         let length = 32;
         for exponent in 0..256 {
             difficulty = 1.0 / (2f64.powf(exponent as f64));
@@ -220,7 +217,7 @@ mod tests {
 
     #[test]
     fn it_calculates_a_target_for_powers_of_three() {
-        let mut difficulty = 1.0;
+        let mut difficulty: f64;
         let length = 32;
         for exponent in 0..161 {
             difficulty = 1.0 / (3f64.powf(exponent as f64));
@@ -235,7 +232,7 @@ mod tests {
             }
 
             let mut scaled_difficulty = difficulty;
-            for i in (index..length).rev() {
+            for _ in (index..length).rev() {
                 scaled_difficulty *= 2f64.powf(8.0);
             }
             let mut expected_value = 0xFFFF_FFFF_FFFF_FFFF_u64 as f64 * scaled_difficulty - 1.0;
@@ -248,20 +245,20 @@ mod tests {
     fn it_calculates_a_target_for_fractional_values() {
         let seed = [0x27u8; 32];
         let mut rng: StdRng = SeedableRng::from_seed(seed);
-        let mut difficulty = 1.0;
+        let mut difficulty: f64;
         let length = 32;
         for _ in 0..1000 {
             for base in 3..16 {
                 let exponents = ((256.0 * 2f64.ln()) / (base as f64).ln()) as u64;
                 for exponent in 1..exponents {
-                    let coefficients = ((base as f64).powf(exponent as f64) - 1.0);
+                    let coefficients = (base as f64).powf(exponent as f64) - 1.0;
                     let coefficient = rng.gen_range(1.0, coefficients).floor();
                     difficulty = coefficient / (base as f64).powf(exponent as f64);
                     let target = get_target(difficulty, length).unwrap();
                     let mut index = length - (-1.0 * difficulty.log2() / 8.0) as usize;
 
                     let mut scaled_difficulty = difficulty;
-                    for i in (index..length).rev() {
+                    for _ in (index..length).rev() {
                         scaled_difficulty *= 2f64.powf(8.0);
                     }
                     let mut expected_value = 0xFFFF_FFFF_FFFF_FFFF_u64 as f64 * scaled_difficulty - 1.0;
