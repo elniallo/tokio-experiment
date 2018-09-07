@@ -101,14 +101,29 @@ pub fn get_legacy_target(difficulty: f64, length: usize) -> Vec<u8> {
         adjusted_difficulty = 256f64.powf(-1.0 * length as f64);
     }
 
-    let mut target = vec![0xFFu8; length];
+    let mut target = vec![0x0u8; length];
     let mut carry = 0.0;
     for i in (0..length).rev() {
         carry = (0x100 as f64 * carry) + (adjusted_difficulty * 0xFF as f64);
-        target[i] = carry.floor() as u8;
+        target[i] = (carry.floor() % 256.0) as u8;
         carry -= target[i] as f64;
     }
     target
+}
+
+pub fn acceptable(hash: Vec<u8>, target: Vec<u8>) -> Result<bool, Box<Error>>{
+    if hash.len() != target.len() {
+        return Err(Box::new(Exception::new("Hash and target are of different lengths")))
+    }
+
+    for i in (0..target.len()).rev() {
+        if hash[i] < target[i] {
+            return Ok(true)
+        } else if hash[i] > target[i] {
+            return Ok(false)
+        }
+    }
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -283,6 +298,7 @@ mod tests {
         assert_eq!(target, expected_target);
     }
 
+    #[test]
     fn it_calculates_a_random_legacy_target() {
         let difficulty = 0.5817765075630095;
         let length = 32;
@@ -293,5 +309,41 @@ mod tests {
             0, 0, 0, 0, 0, 0, 0, 224,
             224, 224, 112, 143, 32, 77, 238, 148];
         assert_eq!(target, expected_target);
+    }
+
+    #[test]
+    fn it_accepts_a_valid_hash_on_edge() {
+        let difficulty = 0.5;
+        let target = get_target(difficulty, 32).unwrap();
+        let solution = vec![
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F];
+        assert_eq!(acceptable(solution, target).unwrap(), true);
+    }
+
+    #[test]
+    fn it_accepts_a_valid_hash() {
+        let difficulty = 0.5;
+        let target = get_target(difficulty, 32).unwrap();
+        let solution = vec![
+            0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F];
+        assert_eq!(acceptable(solution, target).unwrap(), true);
+    }
+
+    #[test]
+    fn it_rejects_an_invalid_hash() {
+        let difficulty = 0.5;
+        let target = get_target(difficulty, 32).unwrap();
+        let solution = vec![
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x80];
+        assert_eq!(acceptable(solution, target).unwrap(), false);
     }
 }
