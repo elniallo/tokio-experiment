@@ -10,7 +10,7 @@ use std::collections::{BinaryHeap, HashMap};
 #[derive(Debug, Clone)]
 pub struct ITxQueue {
     pub sum: u64,
-    pub queue: BinaryHeap<SignedTx>,
+    pub queue: Vec<SignedTx>,
     pub address: Address,
     pub last_nonce: u32,
 }
@@ -76,14 +76,14 @@ impl TxPool {
     }
 
     fn put_tx(&mut self, tx: SignedTx) -> Option<SignedTx> {
-        // Retrieve Account ITxQueue - Slow and dirty just implementing to get done
+        // Retrieve Account ITxQueue
         let tx_queue: ITxQueue;
         match self.pool.clone().get(&tx.from.to_vec()) {
             Some(account) => {}
             None => {
                 tx_queue = ITxQueue {
                     sum: tx.fee,
-                    queue: BinaryHeap::from(vec![tx.clone()]),
+                    queue: vec![tx.clone()],
                     address: tx.from,
                     last_nonce: tx.nonce,
                 };
@@ -94,7 +94,34 @@ impl TxPool {
         None
     }
 
-    pub fn remove_txs(&self, txs: &Vec<SignedTx>) {}
+    pub fn remove_txs(&mut self, txs: &Vec<SignedTx>) {
+        let mut removal: Vec<Address> = Vec::new();
+        for tx in txs {
+            self.remove_tx(&mut removal, tx);
+            // remove account if necessary
+        }
+        for address in removal {
+            self.remove_account(&address);
+        }
+    }
+
+    fn remove_tx(&mut self, removal: &mut Vec<Address>, tx: &SignedTx) {
+        // Get Correct Queue
+        match self.pool.get_mut(&tx.from.to_vec()) {
+            Some(account) => {
+                account.queue.retain(|pool_tx| pool_tx != tx);
+                account.queue.sort();
+                if (account.queue.len() == 0) {
+                    removal.push(account.address);
+                }
+            }
+            None => {} // Sort
+        }
+    }
+
+    fn remove_account(&mut self, address: &Address) {
+        self.pool.remove(&address.to_vec());
+    }
 
     pub fn get_txs(&self, count: u16) -> Vec<SignedTx> {
         Vec::new()
@@ -107,7 +134,7 @@ impl TxPool {
     pub fn get_txs_of_address(&self, address: &Address) -> Vec<SignedTx> {
         let add = address;
         match self.pool.get(&add.to_vec()) {
-            Some(queue) => queue.queue.clone().into_sorted_vec(),
+            Some(queue) => queue.queue.clone(),
             None => vec![],
         }
     }
@@ -206,8 +233,11 @@ mod tests {
 
         // Test Method
         tx_pool.put_txs(signed_txs.clone());
+        assert_eq!(tx_pool.get_txs_of_address(&from).len(), 1);
+        assert_eq!(tx_pool.pool.len(), 1);
         tx_pool.remove_txs(&signed_txs);
         // Test Results
+        assert_eq!(tx_pool.get_txs_of_address(&from).len(), 0);
         assert_eq!(tx_pool.pool.len(), 0);
     }
     #[test]
