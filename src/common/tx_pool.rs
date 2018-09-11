@@ -5,7 +5,7 @@ use util::hash::hash;
 
 use std::cmp::Ordering;
 use std::cmp::PartialOrd;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{HashMap, VecDeque};
 
 #[derive(Debug, Clone)]
 pub struct ITxQueue {
@@ -44,14 +44,14 @@ impl PartialEq for ITxQueue {
 
 pub struct TxPool {
     pub pool: HashMap<Vec<u8>, ITxQueue>,
-    tx_seen_list: Vec<Vec<u8>>,
+    tx_seen_list: VecDeque<Vec<u8>>,
 }
 
 impl TxPool {
     pub fn new() -> TxPool {
         TxPool {
             pool: HashMap::new(),
-            tx_seen_list: Vec::with_capacity(100000),
+            tx_seen_list: VecDeque::with_capacity(100000),
         }
     }
 
@@ -65,11 +65,18 @@ impl TxPool {
             if self.tx_seen_list.contains(&hash(&tx.encode().unwrap(), 32)) {
                 continue;
             }
+            if self.tx_seen_list.len() == self.tx_seen_list.capacity() - 1 {
+                self.tx_seen_list.pop_front();
+            }
+            self.tx_seen_list.push_back(hash(&tx.encode().unwrap(), 32));
             // Put Tx in pool
             match self.put_tx(tx) {
                 Some(put_tx) => broadcast.push(put_tx),
                 None => {}
             }
+        }
+        for ref tx in &broadcast {
+            self.tx_seen_list.push_back(hash(&tx.encode().unwrap(), 32));
         }
         // Return New Txs To Be returned for Broadcast
         broadcast
@@ -77,21 +84,34 @@ impl TxPool {
 
     fn put_tx(&mut self, tx: SignedTx) -> Option<SignedTx> {
         // Retrieve Account ITxQueue
-        let tx_queue: ITxQueue;
-        match self.pool.clone().get(&tx.from.to_vec()) {
-            Some(account) => {}
+        let mut queue: Vec<ITxQueue> = Vec::new();
+        match self.pool.get_mut(&tx.from.to_vec()) {
+            Some(account) => {
+                if tx.nonce == account.last_nonce + 1 {
+                    account.queue.push(tx.clone());
+                    account.sum += tx.fee;
+                    account.last_nonce = tx.nonce;
+                    queue.push(account.clone());
+                }
+            }
             None => {
-                tx_queue = ITxQueue {
+                let tx_queue = ITxQueue {
                     sum: tx.fee,
                     queue: vec![tx.clone()],
                     address: tx.from,
                     last_nonce: tx.nonce,
                 };
-                self.pool.insert(tx.clone().from.to_vec(), tx_queue);
-                return Some(tx);
+                queue.push(tx_queue);
             }
         }
-        None
+        for q in &queue {
+            self.pool.insert(tx.clone().from.to_vec(), q.clone());
+        }
+        if queue.len() != 0 {
+            Some(tx)
+        } else {
+            None
+        }
     }
 
     pub fn remove_txs(&mut self, txs: &Vec<SignedTx>) {
@@ -101,7 +121,7 @@ impl TxPool {
             // remove account if necessary
         }
         for address in removal {
-            self.remove_account(&address);
+            self.pool.remove(&address.to_vec());
         }
     }
 
@@ -111,16 +131,12 @@ impl TxPool {
             Some(account) => {
                 account.queue.retain(|pool_tx| pool_tx != tx);
                 account.queue.sort();
-                if (account.queue.len() == 0) {
+                if account.queue.len() == 0 {
                     removal.push(account.address);
                 }
             }
             None => {} // Sort
         }
-    }
-
-    fn remove_account(&mut self, address: &Address) {
-        self.pool.remove(&address.to_vec());
     }
 
     pub fn get_txs(&self, count: u16) -> Vec<SignedTx> {
@@ -141,13 +157,6 @@ impl TxPool {
 
     pub fn prepare_for_broadcast(&self) -> Vec<SignedTx> {
         Vec::new()
-    }
-
-    fn update_nonce(&self, mut queue: &ITxQueue, txs: &Vec<SignedTx>) {
-        // let las
-        // if last_nonce > queue.lastNonce {
-        //     queue.lastNonce = last_nonce;
-        // }
     }
 }
 
@@ -186,7 +195,8 @@ mod tests {
         let signature =
             RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
         let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
-        let signed_txs = vec![signed_tx];
+        let signed_tx2 = SignedTx::new(from, to, amount, fee, 2, signature, recovery);
+        let signed_txs = vec![signed_tx, signed_tx2];
 
         // Test Method
         let broadcast = tx_pool.put_txs(signed_txs);
@@ -194,10 +204,10 @@ mod tests {
         // Test Results
         let pool = Vec::from_iter(tx_pool.pool.iter());
         assert_eq!(pool.len(), 1);
-        assert_eq!(broadcast.len(), 1);
+        assert_eq!(broadcast.len(), 2);
         match tx_pool.pool.get(&from.to_vec()) {
             Some(queue) => {
-                assert_eq!(queue.sum, fee);
+                assert_eq!(queue.sum, 2 * fee);
                 assert_eq!(queue.address, from);
             }
             None => {}
@@ -238,6 +248,44 @@ mod tests {
         tx_pool.remove_txs(&signed_txs);
         // Test Results
         assert_eq!(tx_pool.get_txs_of_address(&from).len(), 0);
+        assert_eq!(tx_pool.pool.len(), 0);
+    }
+    #[test]
+    fn should_not_add_already_seen_tx() {
+        // Initialise Pool
+        let mut tx_pool = TxPool::new();
+
+        // Test Transaction
+        let from_addr = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
+        let from = Address::from_string(&from_addr).unwrap();
+        let to_addr = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
+        let to = Address::from_string(&to_addr).unwrap();
+        let amount = 100;
+        let fee = 1;
+        let nonce = 1;
+        let recovery = RecoveryId::from_i32(0).unwrap();
+
+        let signature_bytes = [
+            208, 50, 197, 4, 84, 254, 196, 173, 123, 37, 234, 93, 48, 249, 247, 56, 156, 54, 7,
+            211, 17, 121, 174, 74, 111, 1, 7, 184, 82, 196, 94, 176, 73, 221, 78, 105, 137, 12,
+            165, 212, 15, 47, 134, 101, 221, 69, 158, 19, 237, 120, 63, 173, 92, 215, 144, 224,
+            100, 78, 84, 128, 237, 25, 234, 206,
+        ];
+        let secp = Secp256k1::without_caps();
+        let signature =
+            RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
+
+        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
+        let signed_txs = vec![signed_tx.clone()];
+
+        tx_pool.put_txs(signed_txs.clone());
+        assert_eq!(tx_pool.get_txs_of_address(&from).len(), 1);
+        assert_eq!(tx_pool.pool.len(), 1);
+        tx_pool.remove_txs(&signed_txs);
+        // Test Results
+        assert_eq!(tx_pool.get_txs_of_address(&from).len(), 0);
+        assert_eq!(tx_pool.pool.len(), 0);
+        tx_pool.put_txs(signed_txs.clone());
         assert_eq!(tx_pool.pool.len(), 0);
     }
     #[test]
