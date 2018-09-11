@@ -5,7 +5,8 @@ use util::hash::hash;
 
 use std::cmp::Ordering;
 use std::cmp::PartialOrd;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap};
+
 #[derive(Debug, Clone)]
 pub struct ITxQueue {
     pub sum: u64,
@@ -42,16 +43,14 @@ impl PartialEq for ITxQueue {
 }
 
 pub struct TxPool {
-    pub pool: BinaryHeap<ITxQueue>,
-    address_map: Vec<Address>,
+    pub pool: HashMap<Vec<u8>, ITxQueue>,
     tx_seen_list: Vec<Vec<u8>>,
 }
 
 impl TxPool {
     pub fn new() -> TxPool {
         TxPool {
-            pool: BinaryHeap::new(),
-            address_map: Vec::new(),
+            pool: HashMap::new(),
             tx_seen_list: Vec::with_capacity(100000),
         }
     }
@@ -79,19 +78,18 @@ impl TxPool {
     fn put_tx(&mut self, tx: SignedTx) -> Option<SignedTx> {
         // Retrieve Account ITxQueue - Slow and dirty just implementing to get done
         let tx_queue: ITxQueue;
-        if self.address_map.contains(&tx.from) {
-            // Check For Nonce Ordering
-            // Add to pool
-            // Return New Tx For Broadcast
-        } else {
-            tx_queue = ITxQueue {
-                sum: tx.fee,
-                queue: BinaryHeap::from(vec![tx.clone()]),
-                address: tx.from,
-                last_nonce: tx.nonce,
-            };
-            self.pool.push(tx_queue);
-            return Some(tx);
+        match self.pool.clone().get(&tx.from.to_vec()) {
+            Some(account) => {}
+            None => {
+                tx_queue = ITxQueue {
+                    sum: tx.fee,
+                    queue: BinaryHeap::from(vec![tx.clone()]),
+                    address: tx.from,
+                    last_nonce: tx.nonce,
+                };
+                self.pool.insert(tx.clone().from.to_vec(), tx_queue);
+                return Some(tx);
+            }
         }
         None
     }
@@ -107,13 +105,11 @@ impl TxPool {
     }
 
     pub fn get_txs_of_address(&self, address: &Address) -> Vec<SignedTx> {
-        let add = address.to_string();
-        for account in &self.pool {
-            match &account.address {
-                add => return account.queue.clone().into_sorted_vec(),
-            };
+        let add = address;
+        match self.pool.get(&add.to_vec()) {
+            Some(queue) => queue.queue.clone().into_sorted_vec(),
+            None => vec![],
         }
-        vec![]
     }
 
     pub fn prepare_for_broadcast(&self) -> Vec<SignedTx> {
@@ -134,6 +130,9 @@ mod tests {
     use common::address::{Address, ValidAddress};
     use common::signed_tx::SignedTx;
     use common::tx::Tx;
+
+    use std::iter::FromIterator;
+
     use secp256k1::{Error as SecpError, Message, RecoverableSignature, RecoveryId, Secp256k1};
     #[test]
     fn add_tx_to_pool() {
@@ -166,11 +165,16 @@ mod tests {
         let broadcast = tx_pool.put_txs(signed_txs);
 
         // Test Results
-        let pool = tx_pool.pool.into_sorted_vec();
+        let pool = Vec::from_iter(tx_pool.pool.iter());
         assert_eq!(pool.len(), 1);
         assert_eq!(broadcast.len(), 1);
-        assert_eq!(pool[0].address, from);
-        assert_eq!(pool[0].sum, fee);
+        match tx_pool.pool.get(&from.to_vec()) {
+            Some(queue) => {
+                assert_eq!(queue.sum, fee);
+                assert_eq!(queue.address, from);
+            }
+            None => {}
+        }
     }
     #[test]
     fn remove_from_tx_pool() {
@@ -235,6 +239,7 @@ mod tests {
             RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
 
         let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
+        tx_pool.put_txs(vec![signed_tx.clone()]);
         tx_pool.put_txs(vec![signed_tx.clone()]);
         assert_eq!(tx_pool.get_txs_of_address(&from).len(), 1);
     }
