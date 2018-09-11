@@ -68,7 +68,6 @@ impl TxPool {
             if self.tx_seen_list.len() == self.tx_seen_list.capacity() - 1 {
                 self.tx_seen_list.pop_front();
             }
-            self.tx_seen_list.push_back(hash(&tx.encode().unwrap(), 32));
             // Put Tx in pool
             match self.put_tx(tx) {
                 Some(put_tx) => broadcast.push(put_tx),
@@ -84,14 +83,16 @@ impl TxPool {
 
     fn put_tx(&mut self, tx: SignedTx) -> Option<SignedTx> {
         // Retrieve Account ITxQueue
-        let mut queue: Vec<ITxQueue> = Vec::new();
+        let mut opt: Option<ITxQueue> = None;
+        let mut broadcast: bool = false;
         match self.pool.get_mut(&tx.from.to_vec()) {
             Some(account) => {
-                if tx.nonce == account.last_nonce + 1 {
+                if tx.nonce <= account.last_nonce + 1 {
                     account.queue.push(tx.clone());
                     account.sum += tx.fee;
                     account.last_nonce = tx.nonce;
-                    queue.push(account.clone());
+                    account.queue.sort();
+                    broadcast = true;
                 }
             }
             None => {
@@ -101,13 +102,17 @@ impl TxPool {
                     address: tx.from,
                     last_nonce: tx.nonce,
                 };
-                queue.push(tx_queue);
+                broadcast = true;
+                opt = Some(tx_queue);
             }
         }
-        for q in &queue {
-            self.pool.insert(tx.clone().from.to_vec(), q.clone());
+        match opt {
+            Some(queue) => {
+                self.pool.insert(tx.clone().from.to_vec(), queue);
+            }
+            None => {}
         }
-        if queue.len() != 0 {
+        if broadcast {
             Some(tx)
         } else {
             None
@@ -115,25 +120,18 @@ impl TxPool {
     }
 
     pub fn remove_txs(&mut self, txs: &Vec<SignedTx>) {
-        let mut removal: Vec<Address> = Vec::new();
         for tx in txs {
-            self.remove_tx(&mut removal, tx);
-            // remove account if necessary
+            self.remove_tx(tx);
         }
-        for address in removal {
-            self.pool.remove(&address.to_vec());
-        }
+        self.pool.retain(|key, account| account.queue.len() > 0);
     }
 
-    fn remove_tx(&mut self, removal: &mut Vec<Address>, tx: &SignedTx) {
+    fn remove_tx(&mut self, tx: &SignedTx) {
         // Get Correct Queue
         match self.pool.get_mut(&tx.from.to_vec()) {
             Some(account) => {
                 account.queue.retain(|pool_tx| pool_tx != tx);
                 account.queue.sort();
-                if account.queue.len() == 0 {
-                    removal.push(account.address);
-                }
             }
             None => {} // Sort
         }
