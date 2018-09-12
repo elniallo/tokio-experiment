@@ -22,6 +22,10 @@ pub struct PendingTxs<'a> {
     pub total_fee: u64,
 }
 
+const BROADCAST_TX_NUMBER: usize = 30;
+const MAX_TXS_PER_ADDRESS: usize = 64;
+const MAX_ADDRESSES: usize = 36000;
+
 impl PartialOrd for ITxQueue {
     fn partial_cmp(&self, other: &ITxQueue) -> Option<Ordering> {
         Some(self.sum.cmp(&other.sum).reverse())
@@ -82,12 +86,15 @@ impl TxPool {
     }
 
     fn put_tx(&mut self, tx: SignedTx) -> Option<SignedTx> {
+        if self.pool.len() >= MAX_ADDRESSES {
+            return None;
+        }
         // Retrieve Account ITxQueue
         let mut opt: Option<ITxQueue> = None;
         let mut broadcast: bool = false;
         match self.pool.get_mut(&tx.from.to_vec()) {
             Some(account) => {
-                if tx.nonce <= account.last_nonce + 1 {
+                if tx.nonce <= account.last_nonce + 1 && account.queue.len() < MAX_TXS_PER_ADDRESS {
                     account.queue.push(tx.clone());
                     account.sum += tx.fee;
                     account.last_nonce = tx.nonce;
@@ -142,7 +149,7 @@ impl TxPool {
         let mut txs: Vec<&SignedTx> = Vec::with_capacity(count as usize);
         let mut accounts: Vec<&ITxQueue> = self.pool
             .iter()
-            .map(|(key, queue)| queue)
+            .map(|(_key, queue)| queue)
             .collect::<Vec<_>>();
         accounts.sort();
         for queue in accounts {
@@ -191,8 +198,35 @@ impl TxPool {
         txs
     }
 
-    pub fn prepare_for_broadcast(&self) -> Vec<SignedTx> {
-        Vec::new()
+    pub fn prepare_for_broadcast(&self) -> Vec<&SignedTx> {
+        let mut broadcast: Vec<&SignedTx> = Vec::with_capacity(BROADCAST_TX_NUMBER);
+        let mut accounts: Vec<&ITxQueue> = self.pool
+            .iter()
+            .map(|(_key, queue)| queue)
+            .collect::<Vec<_>>();
+        accounts.sort();
+        let max_length = self.get_max_length(&accounts);
+        for i in 0..max_length {
+            for account in &accounts {
+                if i >= account.queue.len() {
+                    continue;
+                }
+                broadcast.push(&account.queue[i]);
+                if broadcast.len() == BROADCAST_TX_NUMBER {
+                    return broadcast;
+                }
+            }
+        }
+        broadcast
+    }
+    fn get_max_length(&self, pool: &Vec<&ITxQueue>) -> usize {
+        let mut max = 0;
+        for account in pool {
+            if account.queue.len() > max {
+                max = account.queue.len()
+            }
+        }
+        max
     }
 }
 
@@ -440,5 +474,40 @@ mod tests {
         tx_pool.put_txs(vec![signed_tx.clone()]);
         tx_pool.put_txs(vec![signed_tx.clone()]);
         assert_eq!(tx_pool.get_txs_of_address(&from).len(), 1);
+    }
+
+    #[test]
+    fn it_should_return_priority_transactions_to_be_broadcast() {
+        let mut tx_pool = TxPool::new();
+        let to_addr = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
+        let to = Address::from_string(&to_addr).unwrap();
+        assert_eq!(tx_pool.get_txs_of_address(&to).len(), 0);
+        let from_addr = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
+        let from = Address::from_string(&from_addr).unwrap();
+        let amount = 100;
+        let fee = 1;
+        let nonce = 1;
+        let recovery = RecoveryId::from_i32(0).unwrap();
+
+        let signature_bytes = [
+            208, 50, 197, 4, 84, 254, 196, 173, 123, 37, 234, 93, 48, 249, 247, 56, 156, 54, 7,
+            211, 17, 121, 174, 74, 111, 1, 7, 184, 82, 196, 94, 176, 73, 221, 78, 105, 137, 12,
+            165, 212, 15, 47, 134, 101, 221, 69, 158, 19, 237, 120, 63, 173, 92, 215, 144, 224,
+            100, 78, 84, 128, 237, 25, 234, 206,
+        ];
+        let secp = Secp256k1::without_caps();
+        let signature =
+            RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
+
+        let stx1 = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
+        let stx2 = SignedTx::new(to, from, amount, fee, nonce, signature, recovery);
+        let stx3 = SignedTx::new(from, to, amount, fee, 2, signature, recovery);
+        let stx4 = SignedTx::new(to, from, amount, fee, 2, signature, recovery);
+        let stx5 = SignedTx::new(to, from, amount, fee, 3, signature, recovery);
+        tx_pool.put_txs(vec![stx1, stx2, stx3, stx4, stx5]);
+
+        // Test
+        let broadcast = tx_pool.prepare_for_broadcast();
+        assert_eq!(broadcast.len(), 5);
     }
 }
