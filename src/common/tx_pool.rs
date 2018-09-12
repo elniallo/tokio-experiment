@@ -61,7 +61,7 @@ impl TxPool {
 
     pub fn put_txs(&mut self, mut txs: Vec<SignedTx>) -> Vec<SignedTx> {
         txs.sort();
-        let mut broadcast = Vec::new();
+        let mut broadcast = Vec::with_capacity(txs.len());
         // Assume Txs that reach here have passed world state validation (TODO)
         // Loop through Txs
         for tx in txs {
@@ -103,12 +103,13 @@ impl TxPool {
                 }
             }
             None => {
-                let tx_queue = ITxQueue {
+                let mut tx_queue = ITxQueue {
                     sum: tx.fee,
-                    queue: vec![tx.clone()],
+                    queue: Vec::with_capacity(MAX_TXS_PER_ADDRESS),
                     address: tx.from,
                     last_nonce: tx.nonce,
                 };
+                tx_queue.queue.push(tx.clone());
                 broadcast = true;
                 opt = Some(tx_queue);
             }
@@ -130,7 +131,7 @@ impl TxPool {
         for tx in txs {
             self.remove_tx(tx);
         }
-        self.pool.retain(|key, account| account.queue.len() > 0);
+        self.pool.retain(|_key, account| account.queue.len() > 0);
     }
 
     fn remove_tx(&mut self, tx: &SignedTx) {
@@ -189,7 +190,7 @@ impl TxPool {
 
     pub fn get_txs_of_address(&self, address: &Address) -> Vec<&SignedTx> {
         let add = address;
-        let mut txs: Vec<&SignedTx> = Vec::new();
+        let mut txs: Vec<&SignedTx> = Vec::with_capacity(MAX_TXS_PER_ADDRESS);
         match self.pool.get(&add.to_vec()) {
             Some(queue) => for tx in &queue.queue {
                 txs.push(tx)
@@ -219,6 +220,7 @@ impl TxPool {
                 }
             }
         }
+        broadcast.shrink_to_fit();
         broadcast
     }
     fn get_max_length(&self, pool: &Vec<&ITxQueue>) -> usize {
@@ -310,13 +312,14 @@ mod tests {
             RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
 
         let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
+        let signed_tx2 = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
         let signed_txs = vec![signed_tx];
 
         // Test Method
         tx_pool.put_txs(signed_txs.clone());
         assert_eq!(tx_pool.get_txs_of_address(&from).len(), 1);
         assert_eq!(tx_pool.pool.len(), 1);
-        tx_pool.remove_txs(&signed_txs);
+        tx_pool.remove_txs(&vec![signed_tx2]);
         // Test Results
         assert_eq!(tx_pool.get_txs_of_address(&from).len(), 0);
         assert_eq!(tx_pool.pool.len(), 0);
