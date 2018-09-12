@@ -141,9 +141,8 @@ mod tests {
             Ok(sig)=>sig,
             Err(err)=>panic!("{:?}",err)
         };
-        let tx = Tx::new(Some(from_addr), Some(to_addr), amount, Some(fee), Some(nonce), Some(signature), Some(recovery));
-        let signed_tx=SignedTx(tx);
-        let tx_to_return=Tx::new(signed_tx.from, signed_tx.to, signed_tx.amount, signed_tx.fee, signed_tx.nonce, None, None);
+        let signed_tx=SignedTx::new((from_addr), (to_addr), amount, (fee), (nonce), (signature), (recovery));
+        let tx_to_return=Tx::new(signed_tx.from, signed_tx.to, signed_tx.amount, signed_tx.fee, signed_tx.nonce);
         tx_to_return
     }
 
