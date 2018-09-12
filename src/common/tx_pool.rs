@@ -69,9 +69,6 @@ impl TxPool {
             if self.tx_seen_list.contains(&hash(&tx.encode().unwrap(), 32)) {
                 continue;
             }
-            if self.tx_seen_list.len() == self.tx_seen_list.capacity() - 1 {
-                self.tx_seen_list.pop_front();
-            }
             // Put Tx in pool
             match self.put_tx(tx) {
                 Some(put_tx) => broadcast.push(put_tx),
@@ -79,6 +76,9 @@ impl TxPool {
             }
         }
         for ref tx in &broadcast {
+            if self.tx_seen_list.len() == self.tx_seen_list.capacity() - 1 {
+                self.tx_seen_list.pop_front();
+            }
             self.tx_seen_list.push_back(hash(&tx.encode().unwrap(), 32));
         }
         // Return New Txs To Be returned for Broadcast
@@ -147,7 +147,8 @@ impl TxPool {
     pub fn get_txs(&self, count: u16) -> Vec<&SignedTx> {
         // let mut accounts: Vec<&ITxQueue> = Vec::with_capacity(self.pool.len());
         let mut txs: Vec<&SignedTx> = Vec::with_capacity(count as usize);
-        let mut accounts: Vec<&ITxQueue> = self.pool
+        let mut accounts: Vec<&ITxQueue> = self
+            .pool
             .iter()
             .map(|(_key, queue)| queue)
             .collect::<Vec<_>>();
@@ -200,7 +201,8 @@ impl TxPool {
 
     pub fn prepare_for_broadcast(&self) -> Vec<&SignedTx> {
         let mut broadcast: Vec<&SignedTx> = Vec::with_capacity(BROADCAST_TX_NUMBER);
-        let mut accounts: Vec<&ITxQueue> = self.pool
+        let mut accounts: Vec<&ITxQueue> = self
+            .pool
             .iter()
             .map(|(_key, queue)| queue)
             .collect::<Vec<_>>();
