@@ -15,22 +15,22 @@ pub struct ITxQueue {
     pub last_nonce: u32,
 }
 
-pub struct PendingTxs {
-    pub txs: Vec<SignedTx>,
-    pub length: u16,
+pub struct PendingTxs<'a> {
+    pub txs: Vec<&'a SignedTx>,
+    pub length: usize,
     pub total_amount: u64,
     pub total_fee: u64,
 }
 
 impl PartialOrd for ITxQueue {
     fn partial_cmp(&self, other: &ITxQueue) -> Option<Ordering> {
-        Some(self.sum.cmp(&other.sum))
+        Some(self.sum.cmp(&other.sum).reverse())
     }
 }
 
 impl Ord for ITxQueue {
     fn cmp(&self, other: &ITxQueue) -> Ordering {
-        self.sum.cmp(&other.sum)
+        self.sum.cmp(&other.sum).reverse()
     }
 }
 
@@ -137,20 +137,58 @@ impl TxPool {
         }
     }
 
-    pub fn get_txs(&self, count: u16) -> Vec<SignedTx> {
-        Vec::new()
-    }
-
-    pub fn get_pending(&self, index: u16, count: u16) -> Vec<SignedTx> {
-        Vec::new()
-    }
-
-    pub fn get_txs_of_address(&self, address: &Address) -> Vec<SignedTx> {
-        let add = address;
-        match self.pool.get(&add.to_vec()) {
-            Some(queue) => queue.queue.clone(),
-            None => vec![],
+    pub fn get_txs(&self, count: u16) -> Vec<&SignedTx> {
+        // let mut accounts: Vec<&ITxQueue> = Vec::with_capacity(self.pool.len());
+        let mut txs: Vec<&SignedTx> = Vec::with_capacity(count as usize);
+        let mut accounts: Vec<&ITxQueue> = self.pool
+            .iter()
+            .map(|(key, queue)| queue)
+            .collect::<Vec<_>>();
+        accounts.sort();
+        for queue in accounts {
+            if txs.len() == txs.capacity() {
+                break;
+            }
+            for tx in &queue.queue {
+                if txs.len() < txs.capacity() {
+                    txs.push(&tx);
+                } else {
+                    break;
+                }
+            }
         }
+        txs.shrink_to_fit();
+        txs
+    }
+
+    pub fn get_pending(&self, index: usize, count: usize) -> PendingTxs {
+        let pool_txs: Vec<&SignedTx> = self.get_txs(4096);
+        let mut sums: (u64, u64) = (0, 0);
+        for tx in &pool_txs {
+            sums = (sums.0 + tx.amount, sums.1 + tx.fee)
+        }
+        let mut last: usize = index + count;
+        if &last > &pool_txs.len() {
+            last = pool_txs.len();
+        }
+        PendingTxs {
+            length: pool_txs.len(),
+            txs: pool_txs[index..last].to_vec(),
+            total_amount: sums.0,
+            total_fee: sums.1,
+        }
+    }
+
+    pub fn get_txs_of_address(&self, address: &Address) -> Vec<&SignedTx> {
+        let add = address;
+        let mut txs: Vec<&SignedTx> = Vec::new();
+        match self.pool.get(&add.to_vec()) {
+            Some(queue) => for tx in &queue.queue {
+                txs.push(tx)
+            },
+            None => {}
+        }
+        txs
     }
 
     pub fn prepare_for_broadcast(&self) -> Vec<SignedTx> {
@@ -200,8 +238,7 @@ mod tests {
         let broadcast = tx_pool.put_txs(signed_txs);
 
         // Test Results
-        let pool = Vec::from_iter(tx_pool.pool.iter());
-        assert_eq!(pool.len(), 1);
+        assert_eq!(tx_pool.pool.len(), 1);
         assert_eq!(broadcast.len(), 2);
         match tx_pool.pool.get(&from.to_vec()) {
             Some(queue) => {
@@ -287,7 +324,92 @@ mod tests {
         assert_eq!(tx_pool.pool.len(), 0);
     }
     #[test]
-    fn should_get_txs() {}
+    fn should_get_txs() {
+        let mut tx_pool = TxPool::new();
+        //Check Empty for missing Address
+        let to_addr = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
+        let to = Address::from_string(&to_addr).unwrap();
+        assert_eq!(tx_pool.get_txs_of_address(&to).len(), 0);
+        let from_addr = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
+        let from = Address::from_string(&from_addr).unwrap();
+        let amount = 100;
+        let fee = 1;
+        let nonce = 1;
+        let recovery = RecoveryId::from_i32(0).unwrap();
+
+        let signature_bytes = [
+            208, 50, 197, 4, 84, 254, 196, 173, 123, 37, 234, 93, 48, 249, 247, 56, 156, 54, 7,
+            211, 17, 121, 174, 74, 111, 1, 7, 184, 82, 196, 94, 176, 73, 221, 78, 105, 137, 12,
+            165, 212, 15, 47, 134, 101, 221, 69, 158, 19, 237, 120, 63, 173, 92, 215, 144, 224,
+            100, 78, 84, 128, 237, 25, 234, 206,
+        ];
+        let secp = Secp256k1::without_caps();
+        let signature =
+            RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
+
+        let stx1 = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
+        let stx2 = SignedTx::new(to, from, amount, fee, nonce, signature, recovery);
+        let stx3 = SignedTx::new(from, to, amount, fee, 2, signature, recovery);
+        let stx4 = SignedTx::new(to, from, amount, fee, 2, signature, recovery);
+        let stx5 = SignedTx::new(to, from, amount, fee, 3, signature, recovery);
+        tx_pool.put_txs(vec![stx1, stx2, stx3, stx4, stx5]);
+        assert_eq!(tx_pool.pool.len(), 2);
+        match tx_pool.pool.get(&from.to_vec()) {
+            Some(queue) => assert_eq!(queue.sum, 2),
+            None => {}
+        }
+        match tx_pool.pool.get(&to.to_vec()) {
+            Some(queue) => assert_eq!(queue.sum, 3),
+            None => {}
+        }
+        //Test Method
+        let txs = tx_pool.get_txs(100);
+        assert_eq!(txs.len(), 5);
+        assert_eq!(tx_pool.get_txs(4).len(), 4);
+        assert_eq!(txs[0].from, to);
+    }
+
+    #[test]
+    fn should_allow_for_pagination_of_pending_txs() {
+        let mut tx_pool = TxPool::new();
+        //Check Empty for missing Address
+        let to_addr = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
+        let to = Address::from_string(&to_addr).unwrap();
+        assert_eq!(tx_pool.get_txs_of_address(&to).len(), 0);
+        let from_addr = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
+        let from = Address::from_string(&from_addr).unwrap();
+        let amount = 100;
+        let fee = 1;
+        let nonce = 1;
+        let recovery = RecoveryId::from_i32(0).unwrap();
+
+        let signature_bytes = [
+            208, 50, 197, 4, 84, 254, 196, 173, 123, 37, 234, 93, 48, 249, 247, 56, 156, 54, 7,
+            211, 17, 121, 174, 74, 111, 1, 7, 184, 82, 196, 94, 176, 73, 221, 78, 105, 137, 12,
+            165, 212, 15, 47, 134, 101, 221, 69, 158, 19, 237, 120, 63, 173, 92, 215, 144, 224,
+            100, 78, 84, 128, 237, 25, 234, 206,
+        ];
+        let secp = Secp256k1::without_caps();
+        let signature =
+            RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
+
+        let stx1 = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
+        let stx2 = SignedTx::new(to, from, amount, fee, nonce, signature, recovery);
+        let stx3 = SignedTx::new(from, to, amount, fee, 2, signature, recovery);
+        let stx4 = SignedTx::new(to, from, amount, fee, 2, signature, recovery);
+        let stx5 = SignedTx::new(to, from, amount, fee, 3, signature, recovery);
+        tx_pool.put_txs(vec![stx1, stx2, stx3, stx4, stx5]);
+
+        //Test Function
+        let pending = tx_pool.get_pending(0, 3);
+        assert_eq!(pending.txs.len(), 3);
+        assert_eq!(pending.length, 5);
+        assert_eq!(pending.total_amount, 500);
+        let page2 = tx_pool.get_pending(3, 3);
+        assert_eq!(page2.txs.len(), 2);
+        assert_eq!(page2.length, 5);
+        assert_eq!(page2.total_amount, 500);
+    }
 
     #[test]
     fn should_get_txs_from_address() {
