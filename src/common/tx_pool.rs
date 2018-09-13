@@ -25,6 +25,7 @@ pub struct PendingTxs<'a> {
 const BROADCAST_TX_NUMBER: usize = 30;
 const MAX_TXS_PER_ADDRESS: usize = 64;
 const MAX_ADDRESSES: usize = 36000;
+const MAX_SEEN_TXS: usize = 100000;
 
 impl PartialOrd for ITxQueue {
     fn partial_cmp(&self, other: &ITxQueue) -> Option<Ordering> {
@@ -55,32 +56,40 @@ impl TxPool {
     pub fn new() -> TxPool {
         TxPool {
             pool: HashMap::new(),
-            tx_seen_list: VecDeque::with_capacity(100000),
+            tx_seen_list: VecDeque::with_capacity(MAX_SEEN_TXS),
         }
     }
 
     pub fn put_txs(&mut self, mut txs: Vec<SignedTx>) -> Vec<SignedTx> {
         txs.sort();
         let mut broadcast = Vec::with_capacity(txs.len());
+        let mut hash_list = Vec::with_capacity(txs.len());
+        let mut tx_hash: Vec<u8> = Vec::with_capacity(32);
         // Assume Txs that reach here have passed world state validation (TODO)
         // Loop through Txs
         for tx in txs {
             // Check if tx already processed
-            if self.tx_seen_list.contains(&hash(&tx.encode().unwrap(), 32)) {
+            match &tx.encode() {
+                Ok(encoded) => {
+                    tx_hash = hash(encoded.as_slice(), 32);
+                }
+                Err(_error) => {
+                    continue;
+                }
+            }
+            if self.tx_seen_list.contains(&tx_hash) {
                 continue;
             }
             // Put Tx in pool
             match self.put_tx(tx) {
-                Some(put_tx) => broadcast.push(put_tx),
+                Some(put_tx) => {
+                    broadcast.push(put_tx);
+                    hash_list.push(tx_hash.clone());
+                }
                 None => {}
             }
         }
-        for ref tx in &broadcast {
-            if self.tx_seen_list.len() == self.tx_seen_list.capacity() - 1 {
-                self.tx_seen_list.pop_front();
-            }
-            self.tx_seen_list.push_back(hash(&tx.encode().unwrap(), 32));
-        }
+        self.update_seen_tx_list(hash_list);
         // Return New Txs To Be returned for Broadcast
         broadcast
     }
@@ -124,6 +133,24 @@ impl TxPool {
             Some(tx)
         } else {
             None
+        }
+    }
+
+    fn update_seen_tx_list(&mut self, hash_list: Vec<Vec<u8>>) {
+        match &self.tx_seen_list.len() {
+            length if length > &MAX_SEEN_TXS || hash_list.len() >= MAX_SEEN_TXS => {
+                self.tx_seen_list.clear()
+            }
+            length
+                if length > &(MAX_SEEN_TXS - hash_list.len()) && hash_list.len() < MAX_SEEN_TXS =>
+            {
+                self.tx_seen_list = self.tx_seen_list.split_off(hash_list.len())
+            }
+            _ => {}
+        }
+        self.tx_seen_list.append(&mut VecDeque::from(hash_list));
+        while self.tx_seen_list.len() > MAX_SEEN_TXS {
+            self.tx_seen_list.pop_front();
         }
     }
 
@@ -360,6 +387,7 @@ mod tests {
         assert_eq!(tx_pool.get_txs_of_address(&from).len(), 0);
         assert_eq!(tx_pool.pool.len(), 0);
         tx_pool.put_txs(signed_txs.clone());
+        assert_eq!(tx_pool.tx_seen_list.len(), 1);
         assert_eq!(tx_pool.pool.len(), 0);
     }
     #[test]
@@ -404,6 +432,7 @@ mod tests {
         //Test Method
         let txs = tx_pool.get_txs(100);
         assert_eq!(txs.len(), 5);
+        assert_eq!(tx_pool.tx_seen_list.len(), 5);
         assert_eq!(tx_pool.get_txs(4).len(), 4);
         assert_eq!(txs[0].from, to);
     }
