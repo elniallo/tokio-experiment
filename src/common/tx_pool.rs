@@ -164,13 +164,8 @@ impl TxPool {
     }
 
     pub fn get_txs(&self, count: u16) -> Vec<&SignedTx> {
-        // let mut accounts: Vec<&ITxQueue> = Vec::with_capacity(self.pool.len());
         let mut txs: Vec<&SignedTx> = Vec::with_capacity(count as usize);
-        let mut accounts: Vec<&TxQueue> = self
-            .pool
-            .iter()
-            .map(|(_key, queue)| queue)
-            .collect::<Vec<_>>();
+        let mut accounts: Vec<&TxQueue> = self.pool.iter().map(|(_key, queue)| queue).collect();
         accounts.sort();
         for queue in accounts {
             if txs.len() == txs.capacity() {
@@ -222,7 +217,7 @@ impl TxPool {
             .pool
             .iter()
             .map(|(_key, queue)| queue)
-            .collect::<Vec<_>>();
+            .collect::<Vec<&TxQueue>>();
         accounts.sort();
         let max_length = self.get_max_length(&accounts);
         for i in 0..max_length {
