@@ -8,7 +8,7 @@ use std::cmp::PartialOrd;
 use std::collections::{HashMap, VecDeque};
 
 #[derive(Debug, Clone)]
-pub struct ITxQueue {
+pub struct TxQueue {
     pub sum: u64,
     pub queue: Vec<SignedTx>,
     pub address: Address,
@@ -27,28 +27,28 @@ const MAX_TXS_PER_ADDRESS: usize = 64;
 const MAX_ADDRESSES: usize = 36000;
 const MAX_SEEN_TXS: usize = 100000;
 
-impl PartialOrd for ITxQueue {
-    fn partial_cmp(&self, other: &ITxQueue) -> Option<Ordering> {
+impl PartialOrd for TxQueue {
+    fn partial_cmp(&self, other: &TxQueue) -> Option<Ordering> {
         Some(self.sum.cmp(&other.sum).reverse())
     }
 }
 
-impl Ord for ITxQueue {
-    fn cmp(&self, other: &ITxQueue) -> Ordering {
+impl Ord for TxQueue {
+    fn cmp(&self, other: &TxQueue) -> Ordering {
         self.sum.cmp(&other.sum).reverse()
     }
 }
 
-impl Eq for ITxQueue {}
+impl Eq for TxQueue {}
 
-impl PartialEq for ITxQueue {
-    fn eq(&self, other: &ITxQueue) -> bool {
+impl PartialEq for TxQueue {
+    fn eq(&self, other: &TxQueue) -> bool {
         self.address == other.address
     }
 }
 
 pub struct TxPool {
-    pub pool: HashMap<Vec<u8>, ITxQueue>,
+    pub pool: HashMap<Address, TxQueue>,
     tx_seen_list: VecDeque<Vec<u8>>,
 }
 
@@ -71,7 +71,7 @@ impl TxPool {
             // Check if tx already processed
             match &tx.encode() {
                 Ok(encoded) => {
-                    tx_hash = hash(encoded.as_slice(), 32);
+                    tx_hash = hash(&encoded, 32);
                 }
                 Err(_error) => {
                     continue;
@@ -81,12 +81,9 @@ impl TxPool {
                 continue;
             }
             // Put Tx in pool
-            match self.put_tx(tx) {
-                Some(put_tx) => {
-                    broadcast.push(put_tx);
-                    hash_list.push(tx_hash.clone());
-                }
-                None => {}
+            if let Some(put_tx) = self.put_tx(tx) {
+                broadcast.push(put_tx);
+                hash_list.push(tx_hash.clone());
             }
         }
         self.update_seen_tx_list(hash_list);
@@ -99,9 +96,9 @@ impl TxPool {
             return None;
         }
         // Retrieve Account ITxQueue
-        let mut opt: Option<ITxQueue> = None;
+        let mut opt: Option<TxQueue> = None;
         let mut broadcast: bool = false;
-        match self.pool.get_mut(&tx.from.to_vec()) {
+        match self.pool.get_mut(&tx.from) {
             Some(account) => {
                 if tx.nonce <= account.last_nonce + 1 && account.queue.len() < MAX_TXS_PER_ADDRESS {
                     account.queue.push(tx.clone());
@@ -112,7 +109,7 @@ impl TxPool {
                 }
             }
             None => {
-                let mut tx_queue = ITxQueue {
+                let mut tx_queue = TxQueue {
                     sum: tx.fee,
                     queue: Vec::with_capacity(MAX_TXS_PER_ADDRESS),
                     address: tx.from,
@@ -123,11 +120,8 @@ impl TxPool {
                 opt = Some(tx_queue);
             }
         }
-        match opt {
-            Some(queue) => {
-                self.pool.insert(tx.clone().from.to_vec(), queue);
-            }
-            None => {}
+        if let Some(queue) = opt {
+            self.pool.insert(tx.clone().from, queue);
         }
         if broadcast {
             Some(tx)
@@ -163,19 +157,16 @@ impl TxPool {
 
     fn remove_tx(&mut self, tx: &SignedTx) {
         // Get Correct Queue
-        match self.pool.get_mut(&tx.from.to_vec()) {
-            Some(account) => {
-                account.queue.retain(|pool_tx| pool_tx != tx);
-                account.queue.sort();
-            }
-            None => {} // Sort
+        if let Some(account) = self.pool.get_mut(&tx.from) {
+            account.queue.retain(|pool_tx| pool_tx != tx);
+            account.queue.sort();
         }
     }
 
     pub fn get_txs(&self, count: u16) -> Vec<&SignedTx> {
         // let mut accounts: Vec<&ITxQueue> = Vec::with_capacity(self.pool.len());
         let mut txs: Vec<&SignedTx> = Vec::with_capacity(count as usize);
-        let mut accounts: Vec<&ITxQueue> = self
+        let mut accounts: Vec<&TxQueue> = self
             .pool
             .iter()
             .map(|(_key, queue)| queue)
@@ -216,20 +207,18 @@ impl TxPool {
     }
 
     pub fn get_txs_of_address(&self, address: &Address) -> Vec<&SignedTx> {
-        let add = address;
         let mut txs: Vec<&SignedTx> = Vec::with_capacity(MAX_TXS_PER_ADDRESS);
-        match self.pool.get(&add.to_vec()) {
-            Some(queue) => for tx in &queue.queue {
+        if let Some(queue) = self.pool.get(address) {
+            for tx in &queue.queue {
                 txs.push(tx)
-            },
-            None => {}
+            }
         }
         txs
     }
 
     pub fn prepare_for_broadcast(&self) -> Vec<&SignedTx> {
         let mut broadcast: Vec<&SignedTx> = Vec::with_capacity(BROADCAST_TX_NUMBER);
-        let mut accounts: Vec<&ITxQueue> = self
+        let mut accounts: Vec<&TxQueue> = self
             .pool
             .iter()
             .map(|(_key, queue)| queue)
@@ -250,7 +239,7 @@ impl TxPool {
         broadcast.shrink_to_fit();
         broadcast
     }
-    fn get_max_length(&self, pool: &Vec<&ITxQueue>) -> usize {
+    fn get_max_length(&self, pool: &Vec<&TxQueue>) -> usize {
         let mut max = 0;
         for account in pool {
             if account.queue.len() > max {
@@ -305,7 +294,7 @@ mod tests {
         // Test Results
         assert_eq!(tx_pool.pool.len(), 1);
         assert_eq!(broadcast.len(), 2);
-        match tx_pool.pool.get(&from.to_vec()) {
+        match tx_pool.pool.get(&from) {
             Some(queue) => {
                 assert_eq!(queue.sum, 2 * fee);
                 assert_eq!(queue.address, from);
@@ -421,11 +410,11 @@ mod tests {
         let stx5 = SignedTx::new(to, from, amount, fee, 3, signature, recovery);
         tx_pool.put_txs(vec![stx1, stx2, stx3, stx4, stx5]);
         assert_eq!(tx_pool.pool.len(), 2);
-        match tx_pool.pool.get(&from.to_vec()) {
+        match tx_pool.pool.get(&from) {
             Some(queue) => assert_eq!(queue.sum, 2),
             None => {}
         }
-        match tx_pool.pool.get(&to.to_vec()) {
+        match tx_pool.pool.get(&to) {
             Some(queue) => assert_eq!(queue.sum, 3),
             None => {}
         }
