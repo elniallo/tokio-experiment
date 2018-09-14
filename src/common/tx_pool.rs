@@ -160,6 +160,11 @@ impl TxPool {
         if let Some(account) = self.pool.get_mut(&tx.from) {
             account.queue.retain(|pool_tx| pool_tx != tx);
             account.queue.sort();
+            let fee:u64 = 0;
+            for tx in account.queue {
+                fee+= tx.fee;
+            }
+            account.sum = fee;
         }
     }
 
