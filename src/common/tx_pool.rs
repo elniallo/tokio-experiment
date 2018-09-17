@@ -1,4 +1,4 @@
-use common::address::{Address, ValidAddress};
+use common::address::Address;
 use common::signed_tx::SignedTx;
 use common::Encode;
 use util::hash::hash;
@@ -64,10 +64,10 @@ impl TxPool {
         txs.sort();
         let mut broadcast = Vec::with_capacity(txs.len());
         let mut hash_list = Vec::with_capacity(txs.len());
-        let mut tx_hash: Vec<u8> = Vec::with_capacity(32);
         // Assume Txs that reach here have passed world state validation (TODO)
         // Loop through Txs
         for tx in txs {
+            let mut tx_hash: Vec<u8> = Vec::with_capacity(32);
             // Check if tx already processed
             match &tx.encode() {
                 Ok(encoded) => {
@@ -83,7 +83,7 @@ impl TxPool {
             // Put Tx in pool
             if let Some(put_tx) = self.put_tx(tx) {
                 broadcast.push(put_tx);
-                hash_list.push(tx_hash.clone());
+                hash_list.push(tx_hash);
             }
         }
         self.update_seen_tx_list(hash_list);
@@ -160,9 +160,9 @@ impl TxPool {
         if let Some(account) = self.pool.get_mut(&tx.from) {
             account.queue.retain(|pool_tx| pool_tx != tx);
             account.queue.sort();
-            let fee:u64 = 0;
-            for tx in account.queue {
-                fee+= tx.fee;
+            let mut fee: u64 = 0;
+            for tx in &account.queue {
+                fee += tx.fee;
             }
             account.sum = fee;
         }
@@ -255,11 +255,8 @@ mod tests {
     use super::*;
     use common::address::{Address, ValidAddress};
     use common::signed_tx::SignedTx;
-    use common::tx::Tx;
 
-    use std::iter::FromIterator;
-
-    use secp256k1::{Error as SecpError, Message, RecoverableSignature, RecoveryId, Secp256k1};
+    use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
     #[test]
     fn add_tx_to_pool() {
         // Initialise Pool
@@ -329,14 +326,28 @@ mod tests {
 
         let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
         let signed_tx2 = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
-        let signed_txs = vec![signed_tx];
+        let signed_tx3 = SignedTx::new(from, to, amount, fee, 2, signature, recovery);
+        let signed_tx4 = SignedTx::new(from, to, amount, fee, 2, signature, recovery);
+        let signed_txs = vec![signed_tx, signed_tx3];
 
         // Test Method
         tx_pool.put_txs(signed_txs.clone());
-        assert_eq!(tx_pool.get_txs_of_address(&from).len(), 1);
+        assert_eq!(tx_pool.get_txs_of_address(&from).len(), 2);
         assert_eq!(tx_pool.pool.len(), 1);
         tx_pool.remove_txs(&vec![signed_tx2]);
         // Test Results
+        assert_eq!(tx_pool.get_txs_of_address(&from).len(), 1);
+        assert_eq!(tx_pool.pool.len(), 1);
+        assert_eq!(
+            tx_pool
+                .pool
+                .iter()
+                .map(|(_key, queue)| queue)
+                .collect::<Vec<_>>()[0]
+                .sum,
+            1
+        );
+        tx_pool.remove_txs(&vec![signed_tx4]);
         assert_eq!(tx_pool.get_txs_of_address(&from).len(), 0);
         assert_eq!(tx_pool.pool.len(), 0);
     }
