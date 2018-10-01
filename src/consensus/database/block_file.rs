@@ -487,10 +487,7 @@ mod tests {
     fn it_returns_object() {
         let mut path = PathBuf::new();
         path.push("test");
-        let block_file = match BlockFile::<MockFile>::new(&path, 0, 0) {
-            Ok(blk_file) => blk_file,
-            Err(e) => panic!(e.to_string()),
-        };
+        let block_file = BlockFile::<MockFile>::new(&path, 0, 0).unwrap_or_else(|e| {panic!(e.to_string());});
         assert_eq!(block_file.file_number, 0);
         assert_eq!(block_file.file_position, 0);
         assert_eq!(block_file.path, path);
@@ -505,14 +502,8 @@ mod tests {
         let mut test_block = create_test_block_without_meta();
         let mut path = PathBuf::new();
         path.push("./test");
-        let mut block_file = match BlockFile::<MockFile>::new(&path, 0, 0) {
-            Ok(blk_file) => blk_file,
-            Err(e) => panic!(e.to_string()),
-        };
-        let put_result = match block_file.put(&mut test_block) {
-            Ok(good_result) => good_result,
-            Err(_) => panic!("block put fail"),
-        };
+        let mut block_file = BlockFile::<MockFile>::new(&path, 0, 0).unwrap_or_else(|e| {panic!(e.to_string());});
+        let put_result = block_file.put(&mut test_block).unwrap_or_else(|_|{panic!("block put fail");});
         let mut encode_data = create_expected_block_encoding();
         let encode_data_len = encode_data.len().clone();
         let mut encode_prefix = usize_to_bytes_array(encode_data_len);
@@ -530,14 +521,8 @@ mod tests {
         let mut test_block = create_genesis_block();
         let mut path=PathBuf::new();
         path.push("./test");
-        let mut block_file = match BlockFile::<MockFile>::new(&path, 0, 0) {
-            Ok(blk_file) => blk_file,
-            Err(e) => panic!(e.to_string()),
-        };
-        let put_result = match block_file.put(&mut test_block) {
-            Ok(good_result) => good_result,
-            Err(_) => panic!("genesis block put fail"),
-        };
+        let mut block_file = BlockFile::<MockFile>::new(&path, 0, 0).unwrap_or_else(|e| {panic!(e.to_string());});
+        let put_result = block_file.put(&mut test_block).unwrap_or_else(|_| {panic!("genesis block put fail");});
         let mut encode_data = create_expected_genesis_encoding();
         let encode_data_len = encode_data.len().clone();
         let mut encode_prefix = usize_to_bytes_array(encode_data_len);
@@ -559,36 +544,32 @@ mod tests {
         let mut test_block = create_genesis_block();
         let mut path=PathBuf::new();
         path.push("./test");
-        let mut block_file = match BlockFile::<MockFile>::new(&path, 0, 0) {
-            Ok(blk_file) => blk_file,
-            Err(e) => panic!(e.to_string()),
-        };
-        if let Some(ref mockfile) = block_file.file {
+        let mut block_file = BlockFile::<MockFile>::new(&path, 0, 0).unwrap_or_else( |e| {panic!(e.to_string());});
+        block_file.file.clone().and_then(|mockfile| {
             mockfile
                 .get_file_size
                 .return_value(Ok((MAX_FILE_SIZE + 1) as u64));
             block_file.file_position = mockfile.get_file_size().unwrap();
-        } else {
+            Some(mockfile)
+        } ).or_else( || {
             panic!("Mockfile Read return value set fail");
-        }
-        let put_result = match block_file.put(&mut test_block) {
-            Ok(good_result) => good_result,
-            Err(e) => panic!("genesis block put fail : {:?}", e),
-        };
+        });
+        let put_result = block_file.put(&mut test_block).unwrap_or_else( |e| { panic!("genesis block put fail : {:?}", e); });
         let mut encode_data = create_expected_genesis_encoding();
         let encode_data_len = encode_data.len().clone();
         let mut encode_prefix = usize_to_bytes_array(encode_data_len);
         let mut write_bytes = vec![];
         write_bytes.append(&mut encode_prefix);
         write_bytes.append(&mut encode_data);
-        if let Some(ref mockfile) = block_file.file {
+        block_file.file.as_ref().and_then( |mockfile| {
             assert!(
                 mockfile
                     .write
                     .has_calls_exactly(vec![vec![0; UNIT_TO_EXPAND], write_bytes.clone()])
             );
             assert!(mockfile.get_file_size.called());
-        }
+            return Some(mockfile)
+        });
         assert_eq!(encode_data_len as u32, put_result.length);
         assert_ne!(block_file.file.unwrap().get_file_size().unwrap(), 0);
         assert_ne!(block_file.file_position, 0);
@@ -614,55 +595,50 @@ mod tests {
         }
         let get_result = block_file.get::<Block<Header, SignedTx>>(0, 0, 269);
 
-        if let Err(e) = get_result {
+        let anyblock = get_result.unwrap_or_else(|e|{
             panic!(
                 "Any block doesn't have any block information. {}",
                 e.to_string()
             )
-        } else if let Ok(anyblock) = get_result {
-            if let Some(ref mockfile) = block_file.file {
-                assert!(mockfile.read.called());
-                assert!(mockfile.seek.called());
-            }
+        });
 
-            let block = anyblock;
-            let compare_block = create_test_block_without_meta();
-            assert_block(block, compare_block);
+        if let Some(ref mockfile) = block_file.file {
+            assert!(mockfile.read.called());
+            assert!(mockfile.seek.called());
         }
+
+        let block = anyblock;
+        let compare_block = create_test_block_without_meta();
+        assert_block(block, compare_block);
     }
 
     #[test]
     fn it_reads_encoded_genesis_block() {
         let mut path=PathBuf::new();
         path.push("./test");
-        let mut block_file = match BlockFile::<MockFile>::new(&path, 0, 0) {
-            Ok(blk_file) => blk_file,
-            Err(e) => panic!(e.to_string()),
-        };
+        let mut block_file = BlockFile::<MockFile>::new(&path, 0, 0).unwrap_or_else(|e| { panic!(e.to_string());} );
         let mut encode_data = create_expected_genesis_encoding();
         let encode_data_len = encode_data.len().clone();
         let mut encode_prefix = usize_to_bytes_array(encode_data_len);
         let mut read_bytes = vec![];
         read_bytes.append(&mut encode_prefix);
         read_bytes.append(&mut encode_data);
-        if let Some(ref mockfile) = block_file.file {
-            mockfile.read.return_value(Ok(read_bytes));
-        }
+        block_file.file.as_ref().and_then(|mockfile| {mockfile.read.return_value(Ok(read_bytes)); Some(mockfile)});
         let get_result = block_file.get::<GenesisBlock>(0, 0, 698);
-        if let Err(e) = get_result {
+        let anyblock = get_result.unwrap_or_else(|e|{
             panic!(
                 "Any block doesn't have any block information. {}",
                 e.to_string()
             )
-        } else if let Ok(anyblock) = get_result {
-            if let Some(ref mockfile) = block_file.file {
-                assert!(mockfile.read.called());
-                assert!(mockfile.seek.called());
-            }
-            let block = anyblock;
-            let compare_genesis_block = create_genesis_block();
-            assert_genesis_block(block, compare_genesis_block);
+        });
+        if let Some(ref mockfile) = block_file.file {
+            assert!(mockfile.read.called());
+            assert!(mockfile.seek.called());
         }
+        let block = anyblock;
+        let compare_genesis_block = create_genesis_block();
+        assert_genesis_block(block, compare_genesis_block);
+
     }
 
     #[test]
@@ -690,14 +666,12 @@ mod tests {
             .read
             .return_values(vec![Ok(length_bytes), Ok(genesis_encode)]);
 
-        let genesis = match block_file_iterator.get_genesis_block() {
-            Some(genesis_block) => {
-                assert!(block_file_iterator.file.seek.called_with(original_position));
-                assert!(block_file_iterator.file.read.called());
-                genesis_block
-            }
-            None => panic!("get genesis fail"),
-        };
+        let genesis = block_file_iterator.get_genesis_block().and_then(
+            |block| {
+            assert!(block_file_iterator.file.seek.called_with(original_position));
+            assert!(block_file_iterator.file.read.called());
+            Some(block)
+        }).unwrap_or_else(|| panic!("get next block fail"));
 
         assert_genesis_block(genesis, genesis_block);
 
@@ -730,14 +704,12 @@ mod tests {
             .read
             .return_values(vec![Ok(length_bytes), Ok(block_encode)]);
 
-        let next_block = match block_file_iterator.next() {
-            Some(block) => {
-                assert!(block_file_iterator.file.seek.called_with(original_position));
-                assert!(block_file_iterator.file.read.called());
-                block
-            }
-            None => panic!("get next block fail"),
-        };
+        let next_block = block_file_iterator.next().and_then(|block| {
+            assert!(block_file_iterator.file.seek.called_with(original_position));
+            assert!(block_file_iterator.file.read.called());
+            Some(block)
+        }).unwrap_or_else(|| panic!("get next block fail"));
+
         assert_block(block, next_block);
 
         assert_eq!(
@@ -802,14 +774,11 @@ mod tests {
             .get_file_size
             .return_value(Ok((block_encode_len + ENCODE_PREFIX_SIZE) as u64));
 
-        let next_block = match block_file_iterator.next() {
-            Some(block) => {
-                assert!(block_file_iterator.file.seek.called_with(0 as u64));
-                assert!(block_file_iterator.file.read.called());
-                block
-            }
-            None => panic!("get next block fail"),
-        };
+        let next_block = block_file_iterator.next().and_then(|block| {
+            assert!(block_file_iterator.file.seek.called_with(0 as u64));
+            assert!(block_file_iterator.file.read.called());
+            Some(block)
+        }).unwrap_or_else(|| panic!("get next block fail"));
         assert_block(block, next_block);
 
         assert_eq!(block_file_iterator.file_number, 1);
@@ -835,14 +804,12 @@ mod tests {
             .get_file_size
             .return_value(Ok((block_encode_len + ENCODE_PREFIX_SIZE + 2) as u64));
 
-        let next_block = match block_file_iterator.next() {
-            Some(block) => {
-                assert!(block_file_iterator.file.seek.called_with(0 as u64));
-                assert!(block_file_iterator.file.read.called());
-                block
-            }
-            None => panic!("get next block fail"),
-        };
+        let next_block = block_file_iterator.next().and_then(|block| {
+            assert!(block_file_iterator.file.seek.called_with(0 as u64));
+            assert!(block_file_iterator.file.read.called());
+            Some(block)
+        }).unwrap_or_else(|| panic!("get next block fail"));
+
         assert_block(block, next_block);
 
         assert_eq!(block_file_iterator.file_number, 1);
@@ -942,14 +909,12 @@ mod tests {
         let mut zero_length_bytes = vec![];
         zero_length_bytes.append(&mut zero_encode_prefix);
 
-        let next_block = match block_file_iterator.next() {
-            Some(block) => {
-                assert!(block_file_iterator.file.seek.called_with(0 as u64));
-                assert!(block_file_iterator.file.read.called());
-                block
-            }
-            None => panic!("get next block fail"),
-        };
+        let next_block = block_file_iterator.next().and_then( |block| {
+            assert!(block_file_iterator.file.seek.called_with(0 as u64));
+            assert!(block_file_iterator.file.read.called());
+            Some(block)
+        }).unwrap_or_else(|| { panic!("get next block fail") } );
+
         assert_block(block, next_block);
 
         assert_eq!(block_file_iterator.file_number, 1);
