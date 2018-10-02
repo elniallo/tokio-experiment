@@ -124,15 +124,9 @@ where
             return None;
         }
 
-        let encoded_block = match self.read_encoded_block() {
-            Ok(byte_array) => byte_array,
-            Err(_) => return None,
-        };
+        let encoded_block = self.read_encoded_block().ok()?;
 
-        match GenesisBlock::decode(&encoded_block) {
-            Ok(genesis_block) => Some(genesis_block),
-            Err(_) => None,
-        }
+        GenesisBlock::decode(&encoded_block).ok()
     }
 }
 
@@ -142,14 +136,8 @@ where
 {
     type Item = Block<Header, SignedTx>;
     fn next(&mut self) -> Option<Block<Header, SignedTx>> {
-        let encoded_block = match self.read_encoded_block() {
-            Ok(byte_array) => byte_array,
-            Err(_) => return None,
-        };
-        match Block::<Header, SignedTx>::decode(&encoded_block) {
-            Ok(block) => Some(block),
-            Err(_) => None,
-        }
+        let encoded_block = self.read_encoded_block().ok()?;
+        Block::<Header, SignedTx>::decode(&encoded_block).ok()
     }
 }
 
@@ -223,12 +211,7 @@ where
             file_option = self.file.take();
         }
 
-        let mut file_to_read = match file_option {
-            Some(file) => file,
-            None => {
-                return Err(Box::new(Exception::new("File Not Found")));
-            }
-        };
+        let mut file_to_read = file_option.ok_or(Box::new(Exception::new("File Not Found")))?;
 
         let mut buffer: Vec<u8> = vec![0; length + ENCODE_PREFIX_SIZE];
 
@@ -262,10 +245,7 @@ where
         }
 
         let offset = self.file_position;
-        let mut encoded_block = match any_block.encode() {
-            Ok(data) => data,
-            Err(_) => return Err(Box::new(Exception::new("Encoding Error"))),
-        };
+        let mut encoded_block = any_block.encode()?;
         let length = encoded_block.len();
 
         let mut bytes = usize_to_bytes_array(length);
@@ -324,10 +304,7 @@ where
     }
 
     fn expand(&mut self) -> BlockFileResult<()> {
-        let file_size = match self.file.as_mut() {
-            Some(file_curr) => file_curr.get_file_size()?,
-            None => return Err(Box::new(Exception::new("File object not created"))),
-        };
+        let file_size = self.file.as_mut().ok_or(Box::new(Exception::new("File object not created")))?.get_file_size()?;
 
         if file_size > MAX_FILE_SIZE {
             self.next_file()?;
@@ -335,6 +312,7 @@ where
 
         if let Some(file_now) = self.file.as_mut() {
             let array_to_write = vec![0; UNIT_TO_EXPAND];
+
             file_now.seek(SeekFrom::End(0))?;
             file_now.write(array_to_write.as_slice())?;
             Ok(())
@@ -491,10 +469,7 @@ mod tests {
         assert_eq!(block_file.file_number, 0);
         assert_eq!(block_file.file_position, 0);
         assert_eq!(block_file.path, path);
-        match block_file.file {
-            Some(_) => (),
-            None => panic!("Object has invalid file."),
-        }
+        block_file.file.or_else(|| {panic!("Object has invalid file.")});
     }
 
     #[test]
@@ -580,10 +555,7 @@ mod tests {
     fn it_reads_encoded_block() {
         let mut path=PathBuf::new();
         path.push("./test");
-        let mut block_file = match BlockFile::<MockFile>::new(&path, 0, 0) {
-            Ok(blk_file) => blk_file,
-            Err(e) => panic!(e.to_string()),
-        };
+        let mut block_file = BlockFile::<MockFile>::new(&path, 0, 0).unwrap_or_else(|e| {panic!(e.to_string())});
         let mut encode_data = create_expected_block_encoding();
         let encode_data_len = encode_data.len().clone();
         let mut encode_prefix = usize_to_bytes_array(encode_data_len);
