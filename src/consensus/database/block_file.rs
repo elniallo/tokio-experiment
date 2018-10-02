@@ -245,22 +245,21 @@ where
             self.expand()?;
         }
 
-        if let Some(file_to_write) = self.file.as_mut() {
-            file_to_write.seek(SeekFrom::Start(self.file_position))?;
-            let mut number_of_bytes_written = file_to_write.write(&encoded_data)?;
-            if number_of_bytes_written != encoded_data.len() {
-                return Err(Box::new(Exception::new("write size error")));
-            }
+        let file_to_write=self.file.as_mut().ok_or(Box::new(Exception::new("Error while putting")))?;
 
-            self.file_position += number_of_bytes_written as u64;
-            return Ok(PutResult {
-                file_number: self.file_number,
-                file_position: self.file_position,
-                offset,
-                length: (number_of_bytes_written - ENCODE_PREFIX_SIZE) as u32,
-            });
+        file_to_write.seek(SeekFrom::Start(self.file_position))?;
+        let number_of_bytes_written = file_to_write.write(&encoded_data)?;
+        if number_of_bytes_written != encoded_data.len() {
+            return Err(Box::new(Exception::new("write size error")));
         }
-        Err(Box::new(Exception::new("Error while putting")))
+
+        self.file_position += number_of_bytes_written as u64;
+        return Ok(PutResult {
+            file_number: self.file_number,
+            file_position: self.file_position,
+            offset,
+            length: (number_of_bytes_written - ENCODE_PREFIX_SIZE) as u32,
+        });
     }
 }
 
@@ -291,21 +290,16 @@ where
     }
 
     fn expand(&mut self) -> BlockFileResult<()> {
-        let file_size = self.file.as_mut().ok_or(Box::new(Exception::new("File object not created")))?.get_file_size()?;
+        let file_size = self.file.as_ref().ok_or(Box::new(Exception::new("File object not created")))?.get_file_size()?;
 
         if file_size > MAX_FILE_SIZE {
             self.next_file()?;
         }
-
-        if let Some(file_now) = self.file.as_mut() {
-            let array_to_write = vec![0; UNIT_TO_EXPAND];
-
-            file_now.seek(SeekFrom::End(0))?;
-            file_now.write(array_to_write.as_slice())?;
-            Ok(())
-        } else {
-            Err(Box::new(Exception::new("File object not created")))
-        }
+        let file_now=self.file.as_mut().ok_or(Box::new(Exception::new("File object not created")))?;
+        let array_to_write = vec![0; UNIT_TO_EXPAND];
+        file_now.seek(SeekFrom::End(0))?;
+        file_now.write(array_to_write.as_slice())?;
+        Ok(())
     }
 
     pub fn iterator_for(&mut self) -> BlockFileResult<BlockFileIterator<RawFile>> {
