@@ -93,12 +93,9 @@ where
             self.file = BlockFileIterator::open(&self.dir_path, self.file_number)?;
             self.position = 0;
         }
-        if let Err(_) = self.file.seek(SeekFrom::Start(self.position)) {
-            return Err(Box::new(Exception::new("Error while seeking")));
-        }
-        if let Err(_) = self.file.read(length_array.as_mut_slice()) {
-            return Err(Box::new(Exception::new("Error while read length")));
-        }
+        self.file.seek(SeekFrom::Start(self.position)).or(Err(Box::new(Exception::new("Error while seeking"))))?;
+        self.file.read(length_array.as_mut_slice()).or(Err(Box::new(Exception::new("Error while read length"))))?;
+
         let length = bytes_array_to_usize(length_array);
         if length == 0 {
             self.file_number += 1;
@@ -107,9 +104,7 @@ where
             return self.read_encoded_block();
         }
         let mut encoded_block = vec![0; length];
-        if let Err(_) = self.file.read(encoded_block.as_mut_slice()) {
-            return Err(Box::new(Exception::new("Error while read block content")));
-        }
+        self.file.read(encoded_block.as_mut_slice()).or(Err(Box::new(Exception::new("Error while read block content"))))?;
         self.position += (encoded_block.len() + ENCODE_PREFIX_SIZE) as u64;
         Ok(encoded_block)
     }
@@ -235,15 +230,7 @@ where
     where
         T: Encode + Proto,
     {
-        if let None = self.file {
-            return Err(Box::new(Exception::new("File object not created")));
-        }
-
-        let mut file_size = 0;
-        if let Some(ref file_to_measure) = self.file {
-            file_size = file_to_measure.get_file_size()?;
-        }
-
+        let file_size = self.file.as_ref().ok_or(Box::new(Exception::new("File object not created")))?.get_file_size()?;
         let offset = self.file_position;
         let mut encoded_block = any_block.encode()?;
         let length = encoded_block.len();
