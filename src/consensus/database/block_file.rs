@@ -466,9 +466,7 @@ mod tests {
         let mut write_bytes = vec![];
         write_bytes.append(&mut encode_prefix);
         write_bytes.append(&mut encode_data);
-        if let Some(file_to_write) = block_file.file {
-            assert!(file_to_write.write.called_with(write_bytes.clone()));
-        }
+        assert!(block_file.file.unwrap().write.called_with(write_bytes.clone()));
         assert_eq!(encode_data_len as u32, put_result.length);
     }
 
@@ -485,9 +483,7 @@ mod tests {
         let mut write_bytes = vec![];
         write_bytes.append(&mut encode_prefix);
         write_bytes.append(&mut encode_data);
-        if let Some(file_to_write) = block_file.file {
-            assert!(file_to_write.write.called_with(write_bytes.clone()));
-        }
+        assert!(block_file.file.unwrap().write.called_with(write_bytes.clone()));
         assert_eq!(encode_data_len as u32, put_result.length);
         assert_eq!(
             put_result.offset + ((put_result.length + (ENCODE_PREFIX_SIZE as u32)) as u64),
