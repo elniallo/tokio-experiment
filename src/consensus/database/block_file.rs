@@ -198,15 +198,12 @@ where
     where
         T: Decode,
     {
-        let file_option;
-
+        let mut file_to_read;
         if self.file_number != file_number {
-            file_option = self.open(file_number, false)?;
+            file_to_read = self.open(file_number, false)?.ok_or(Box::new(Exception::new("File Not Found")))?;
         } else {
-            file_option = self.file.take();
+            file_to_read = self.file.take().ok_or(Box::new(Exception::new("File Not Found")))?;
         }
-
-        let mut file_to_read = file_option.ok_or(Box::new(Exception::new("File Not Found")))?;
 
         let mut buffer: Vec<u8> = vec![0; length + ENCODE_PREFIX_SIZE];
 
@@ -221,6 +218,10 @@ where
         }
         let len_of_block: usize = bytes_array_to_usize(buffer.clone());
         assert!(len_of_block == length); // TODO : remove
+
+        if file_number == self.file_number {
+            self.file = Some(file_to_read);
+        }
 
         Ok(T::decode(&buffer[(ENCODE_PREFIX_SIZE)..].to_vec())?)
     }
