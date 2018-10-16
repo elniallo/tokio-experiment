@@ -184,8 +184,8 @@ where
             RawFile::create_directory(&dir_path)?;
         }
         let mut block_file = BlockFile {
-            file_number: file_number,
-            file_position: file_position,
+            file_number,
+            file_position,
             path: PathBuf::from(path),
             file: None,
         };
