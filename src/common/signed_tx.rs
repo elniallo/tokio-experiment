@@ -1,8 +1,9 @@
 use std::ops::Deref;
 use std::error::Error;
+use std::cmp::{Ord, Ordering, PartialOrd};
 
 use common::address::Address;
-use common::transaction::{Transaction, Valid, verify_tx};
+use common::transaction::{verify_tx, Transaction, Valid};
 use common::tx::Tx;
 use common::{Decode, Encode, Exception, Proto};
 
@@ -23,17 +24,39 @@ pub struct SignedTx {
 }
 
 impl Transaction for SignedTx {
-    fn get_from(&self) -> Option<Address> {Some(self.from)}
-    fn get_to(&self) -> Option<Address> {Some(self.to)}
-    fn get_amount(&self) -> u64 {self.amount}
-    fn get_fee(&self) -> Option<u64> {Some(self.fee)}
-    fn get_nonce(&self) -> Option<u32> {Some(self.nonce)}
-    fn get_signature(&self) -> Option<RecoverableSignature> {Some(self.signature)}
-    fn get_recovery(&self) -> Option<RecoveryId> {Some(self.recovery)}
+    fn get_from(&self) -> Option<Address> {
+        Some(self.from)
+    }
+    fn get_to(&self) -> Option<Address> {
+        Some(self.to)
+    }
+    fn get_amount(&self) -> u64 {
+        self.amount
+    }
+    fn get_fee(&self) -> Option<u64> {
+        Some(self.fee)
+    }
+    fn get_nonce(&self) -> Option<u32> {
+        Some(self.nonce)
+    }
+    fn get_signature(&self) -> Option<RecoverableSignature> {
+        Some(self.signature)
+    }
+    fn get_recovery(&self) -> Option<RecoveryId> {
+        Some(self.recovery)
+    }
 }
 
 impl SignedTx {
-    pub fn new(from: Address, to: Address, amount: u64, fee: u64, nonce: u32, signature: RecoverableSignature, recovery: RecoveryId) -> SignedTx {
+    pub fn new(
+        from: Address,
+        to: Address,
+        amount: u64,
+        fee: u64,
+        nonce: u32,
+        signature: RecoverableSignature,
+        recovery: RecoveryId,
+    ) -> SignedTx {
         SignedTx {
             from,
             to,
@@ -53,8 +76,26 @@ impl SignedTx {
             fee: tx.fee,
             nonce: tx.nonce,
             signature,
-            recovery
+            recovery,
         }
+    }
+}
+
+impl Ord for SignedTx {
+    fn cmp(&self, other: &SignedTx) -> Ordering {
+        self.nonce
+            .cmp(&other.nonce)
+            .then((self.fee).cmp(&other.fee).reverse())
+    }
+}
+
+impl PartialOrd for SignedTx {
+    fn partial_cmp(&self, other: &SignedTx) -> Option<Ordering> {
+        Some(
+            Some(self.nonce)
+                .cmp(&Some(other.nonce))
+                .then(Some(self.fee).cmp(&Some(other.fee)).reverse()),
+        )
     }
 }
 
@@ -92,8 +133,17 @@ impl Decode for SignedTx {
         let mut to = [0u8; 20];
         to.clone_from_slice(&proto_signed_tx.to);
         let recovery = RecoveryId::from_i32(proto_signed_tx.recovery as i32)?;
-        let signature = RecoverableSignature::from_compact(&secp, &proto_signed_tx.signature, recovery)?;
-        Ok(SignedTx::new(from, to, proto_signed_tx.amount, proto_signed_tx.fee, proto_signed_tx.nonce, signature, recovery))
+        let signature =
+            RecoverableSignature::from_compact(&secp, &proto_signed_tx.signature, recovery)?;
+        Ok(SignedTx::new(
+            from,
+            to,
+            proto_signed_tx.amount,
+            proto_signed_tx.fee,
+            proto_signed_tx.nonce,
+            signature,
+            recovery,
+        ))
     }
 }
 
@@ -197,5 +247,36 @@ mod tests {
         let mut random_bytes = [0u8; 256];
         thread_rng().fill(&mut random_bytes);
         SignedTx::decode(&random_bytes.to_vec()).unwrap();
+    }
+    #[test]
+    fn it_orders_by_nonce_then_fee() {
+        let from_addr = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
+        let from = Address::from_string(&from_addr).unwrap();
+        let to_addr = "H4JSXdLtkXVs6G7fk2xea1dB4hTgQ3ps6".to_string();
+        let to = Address::from_string(&to_addr).unwrap();
+        let amount = 100;
+        let fee = 1;
+        let nonce = 1;
+        let recovery = RecoveryId::from_i32(0).unwrap();
+
+        let signature_bytes = [
+            208, 50, 197, 4, 84, 254, 196, 173, 123, 37, 234, 93, 48, 249, 247, 56, 156, 54, 7,
+            211, 17, 121, 174, 74, 111, 1, 7, 184, 82, 196, 94, 176, 73, 221, 78, 105, 137, 12,
+            165, 212, 15, 47, 134, 101, 221, 69, 158, 19, 237, 120, 63, 173, 92, 215, 144, 224,
+            100, 78, 84, 128, 237, 25, 234, 206,
+        ];
+        let secp = Secp256k1::without_caps();
+        let signature =
+            RecoverableSignature::from_compact(&secp, &signature_bytes, recovery).unwrap();
+        let nonce2 = 2;
+        let fee2 = 2;
+        let signed_tx = SignedTx::new(from, to, amount, fee, nonce, signature, recovery);
+        let signed_tx2 = SignedTx::new(from, to, amount, fee, nonce2, signature, recovery);
+        let signed_tx3 = SignedTx::new(from, to, amount, fee2, nonce2, signature, recovery);
+        let mut txs: Vec<SignedTx> = vec![signed_tx2, signed_tx, signed_tx3];
+        assert_eq!(txs[0].nonce, 2);
+        txs.sort();
+        assert_eq!(txs[0].nonce, 1);
+        assert_eq!(txs[1].fee, 2);
     }
 }

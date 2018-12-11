@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::cmp::{Ord, Ordering, PartialOrd};
 
 use common::{Decode, Encode, Proto};
 use common::address::Address;
@@ -14,7 +15,7 @@ pub struct Tx {
     pub to: Address,
     pub amount: u64,
     pub fee: u64,
-    pub nonce: u32
+    pub nonce: u32,
 }
 
 impl Tx {
@@ -24,19 +25,33 @@ impl Tx {
             to,
             amount,
             fee,
-            nonce
+            nonce,
         }
     }
 }
 
 impl Transaction for Tx {
-    fn get_from(&self) -> Option<Address> {Some(self.from)}
-    fn get_to(&self) -> Option<Address> {Some(self.to)}
-    fn get_amount(&self) -> u64 {self.amount}
-    fn get_fee(&self) -> Option<u64> {Some(self.fee)}
-    fn get_nonce(&self) -> Option<u32> {Some(self.nonce)}
-    fn get_signature(&self) -> Option<RecoverableSignature> {None}
-    fn get_recovery(&self) -> Option<RecoveryId> {None}
+    fn get_from(&self) -> Option<Address> {
+        Some(self.from)
+    }
+    fn get_to(&self) -> Option<Address> {
+        Some(self.to)
+    }
+    fn get_amount(&self) -> u64 {
+        self.amount
+    }
+    fn get_fee(&self) -> Option<u64> {
+        Some(self.fee)
+    }
+    fn get_nonce(&self) -> Option<u32> {
+        Some(self.nonce)
+    }
+    fn get_signature(&self) -> Option<RecoverableSignature> {
+        None
+    }
+    fn get_recovery(&self) -> Option<RecoveryId> {
+        None
+    }
 }
 
 impl Proto for Tx {
@@ -69,7 +84,31 @@ impl Decode for Tx {
         let mut to = [0u8; 20];
         to.clone_from_slice(&proto_tx.to);
 
-        Ok(Tx::new(from, to, proto_tx.amount, proto_tx.fee, proto_tx.nonce))
+        Ok(Tx::new(
+            from,
+            to,
+            proto_tx.amount,
+            proto_tx.fee,
+            proto_tx.nonce,
+        ))
+    }
+}
+
+impl Ord for Tx {
+    fn cmp(&self, other: &Tx) -> Ordering {
+        Some(self.nonce)
+            .cmp(&Some(other.nonce))
+            .then(Some(self.fee).cmp(&Some(other.fee)).reverse())
+    }
+}
+
+impl PartialOrd for Tx {
+    fn partial_cmp(&self, other: &Tx) -> Option<Ordering> {
+        Some(
+            Some(self.nonce)
+                .cmp(&Some(other.nonce))
+                .then(Some(self.fee).cmp(&Some(other.fee)).reverse()),
+        )
     }
 }
 
@@ -125,17 +164,25 @@ mod tests {
 
     #[test]
     fn it_encodes_like_javascript_for_large_amounts() {
-        let from = [41,251,67,236,239,131,69,76,102,112,26,52,242,162,24,220,242,33,163,105];
-        let to = [231,178,9,132,67,165,167,239,54,145,232,222,104,147,104,123,252,196,68,82];
+        let from = [
+            41, 251, 67, 236, 239, 131, 69, 76, 102, 112, 26, 52, 242, 162, 24, 220, 242, 33, 163,
+            105,
+        ];
+        let to = [
+            231, 178, 9, 132, 67, 165, 167, 239, 54, 145, 232, 222, 104, 147, 104, 123, 252, 196,
+            68, 82,
+        ];
         let amount = 23892147312890090;
         let fee = 7787639375790336;
         let nonce = 364750872;
         let tx = Tx::new(from, to, amount, fee, nonce);
         let encoding = tx.encode().unwrap();
-        let expected_encoding = vec![10,20,41,251,67,236,239,131,69,76,102,112,26,52,242,162,
-                                     24,220,242,33,163,105,18,20,231,178,9,132,67,165,167,239,54,145,232,222,104,147,
-                                     104,123,252,196,68,82,24,234,161,134,204,128,185,184,42,32,128,130,136,181,145,
-                                     218,234,13,40,152,208,246,173,1];
+        let expected_encoding = vec![
+            10, 20, 41, 251, 67, 236, 239, 131, 69, 76, 102, 112, 26, 52, 242, 162, 24, 220, 242,
+            33, 163, 105, 18, 20, 231, 178, 9, 132, 67, 165, 167, 239, 54, 145, 232, 222, 104, 147,
+            104, 123, 252, 196, 68, 82, 24, 234, 161, 134, 204, 128, 185, 184, 42, 32, 128, 130,
+            136, 181, 145, 218, 234, 13, 40, 152, 208, 246, 173, 1,
+        ];
         assert_eq!(encoding, expected_encoding);
     }
 
