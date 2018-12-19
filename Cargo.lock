@@ -543,45 +543,32 @@ dependencies = [
 [[package]]
 name = "protobuf"
 version = "2.0.4"
-source = "git+https://github.com/ChosunOne/rust-protobuf?branch=v2.0#42df0242536427cceac8817ae7911739fdb22ed9"
-
-[[package]]
-name = "protobuf"
-version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "protobuf-codegen"
+name = "protobuf-codegen-no-elision"
 version = "2.0.4"
-source = "git+https://github.com/ChosunOne/rust-protobuf?branch=v2.0#42df0242536427cceac8817ae7911739fdb22ed9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "protobuf 2.0.4 (git+https://github.com/ChosunOne/rust-protobuf?branch=v2.0)",
+ "protobuf 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "protoc"
 version = "2.0.4"
-source = "git+https://github.com/ChosunOne/rust-protobuf?branch=v2.0#42df0242536427cceac8817ae7911739fdb22ed9"
-dependencies = [
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "protoc"
-version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
-name = "protoc-rust"
+name = "protoc-rust-no-elision"
 version = "2.0.4"
-source = "git+https://github.com/ChosunOne/rust-protobuf?branch=v2.0#42df0242536427cceac8817ae7911739fdb22ed9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "protobuf 2.0.4 (git+https://github.com/ChosunOne/rust-protobuf?branch=v2.0)",
- "protobuf-codegen 2.0.4 (git+https://github.com/ChosunOne/rust-protobuf?branch=v2.0)",
- "protoc 2.0.4 (git+https://github.com/ChosunOne/rust-protobuf?branch=v2.0)",
+ "protobuf 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protobuf-codegen-no-elision 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protoc 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -737,10 +724,10 @@ dependencies = [
  "neon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "neon-build 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "openssl 0.10.16 (registry+https://github.com/rust-lang/crates.io-index)",
- "protobuf 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "protobuf-codegen 2.0.4 (git+https://github.com/ChosunOne/rust-protobuf?branch=v2.0)",
- "protoc 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "protoc-rust 2.0.4 (git+https://github.com/ChosunOne/rust-protobuf?branch=v2.0)",
+ "protobuf 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protobuf-codegen-no-elision 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protoc 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protoc-rust-no-elision 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rocksdb 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rust-base58 0.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1059,12 +1046,10 @@ dependencies = [
 "checksum pkg-config 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)" = "676e8eb2b1b4c9043511a9b7bea0915320d7e502b0a079fb03f9635a5252b18c"
 "checksum proc-macro2 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)" = "77997c53ae6edd6d187fec07ec41b207063b5ee6f33680e9fa86d405cdd313d4"
 "checksum proc-macro2 0.4.24 (registry+https://github.com/rust-lang/crates.io-index)" = "77619697826f31a02ae974457af0b29b723e5619e113e9397b8b82c6bd253f09"
-"checksum protobuf 2.0.4 (git+https://github.com/ChosunOne/rust-protobuf?branch=v2.0)" = "<none>"
-"checksum protobuf 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "cbd08d128db199b1c6bb662e343d7d1a8f6d0060b411675766d88e5146a4bb38"
-"checksum protobuf-codegen 2.0.4 (git+https://github.com/ChosunOne/rust-protobuf?branch=v2.0)" = "<none>"
-"checksum protoc 2.0.4 (git+https://github.com/ChosunOne/rust-protobuf?branch=v2.0)" = "<none>"
-"checksum protoc 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5367f59e85854bd8db2b572e72ebaddb31f20ad99bf017f2faa554309c003f5d"
-"checksum protoc-rust 2.0.4 (git+https://github.com/ChosunOne/rust-protobuf?branch=v2.0)" = "<none>"
+"checksum protobuf 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)" = "128a4f37a2df739a567a8685b17f54aa19b9c3c4a6a5b8731e97a419b3db451c"
+"checksum protobuf-codegen-no-elision 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)" = "798bc969927d1a936f12855ffbb1709d8ddc08f22ad3af6891f1abaa2f0c9117"
+"checksum protoc 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)" = "8736a41d7c7e321913dd81067fbedf74d037f69999386eba07cc4dd1de7369f0"
+"checksum protoc-rust-no-elision 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)" = "10bc877e319939ce1f0bb7a1706391d260d55eebd2d3cc1404787c92f47f7fb1"
 "checksum quick-error 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "9274b940887ce9addde99c4eee6b5c44cc494b182b97e73dc8ffdcb3397fd3f0"
 "checksum quote 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)" = "9949cfe66888ffe1d53e6ec9d9f3b70714083854be20fd5e271b232a017401e8"
 "checksum quote 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)" = "53fa22a1994bd0f9372d7a816207d8a2677ad0325b073f5c5332760f0fb62b5c"
