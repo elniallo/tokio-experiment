@@ -1,5 +1,3 @@
-use rocksdb::Error as RocksdbError;
-
 pub mod account;
 pub mod db_state;
 pub mod node_ref;

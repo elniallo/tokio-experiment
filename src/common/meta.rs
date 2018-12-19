@@ -1,9 +1,9 @@
-use common::{Encode, Proto};
+use common::{Encode,Decode, Proto};
 use protobuf::Message as ProtoMessage;
 use serialization::block::BlockDB as ProtoBlockDB;
 use std::error::Error;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Meta {
     pub height: u32,
     pub t_ema: f64,
@@ -59,6 +59,29 @@ impl Encode for Meta {
     fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
         let proto_meta = self.to_proto()?;
         Ok(proto_meta.write_to_bytes()?)
+    }
+}
+
+impl Decode for Meta {
+    type ProtoType = ProtoBlockDB;
+    fn decode(buffer: &Vec<u8>) -> Result<Meta, Box<Error>> {
+        let mut proto_meta = Self::ProtoType::new();
+        
+        match proto_meta.merge_from_bytes(buffer) {
+            Ok(_) => {},
+            Err(e) => return Err(Box::new(e))
+        }
+        let meta_info = Meta {
+            height: proto_meta.height,
+            t_ema: proto_meta.tEMA,
+            p_ema: proto_meta.pEMA,
+            next_difficulty: proto_meta.nextDifficulty,
+            total_work: proto_meta.totalWork,
+            file_number:  Some(proto_meta.fileNumber),
+            offset:  Some(proto_meta.offset),
+            length:  Some( proto_meta.length) 
+        };
+        Ok(meta_info)
     }
 }
 

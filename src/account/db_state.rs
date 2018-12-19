@@ -4,7 +4,6 @@ use account::Account;
 use account::node_ref::NodeRef;
 use account::state_node::StateNode;
 use common::{Decode, Encode, Exception, Proto};
-use common::address::Address;
 use protobuf::Message as ProtoMessage;
 use protobuf::RepeatedField;
 use serialization::state::Account as ProtoAccount;

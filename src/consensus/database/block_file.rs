@@ -14,7 +14,7 @@ const UNIT_TO_EXPAND: usize = 16777216; // 16 MB
 const SIZE_OF_LENGTH: usize = 3;
 const ENCODE_PREFIX_SIZE: usize = SIZE_OF_LENGTH;
 
-type BlockFileResult<T> = Result<T, Box<Error>>;
+pub type BlockFileResult<T> = Result<T, Box<Error>>;
 
 pub trait MiscFileOp: Sized {
     fn create_raw_file(file_path: &PathBuf) -> BlockFileResult<Self>;
@@ -136,6 +136,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub struct BlockFile<RawFile = File> {
     file_number: u32,
     file_position: u64,
@@ -160,7 +161,7 @@ fn bytes_array_to_usize(buffer: Vec<u8>) -> usize {
     len_of_block
 }
 
-trait BlockFileOps: Sized {
+pub trait BlockFileOps: Sized {
     fn new(path: &PathBuf, file_number: u32, file_position: u64) -> BlockFileResult<Self>;
     fn get<T>(&mut self, file_number: u32, offset: u64, length: usize) -> BlockFileResult<T>
     where
@@ -309,7 +310,7 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use common::block::tests::{create_expected_block_encoding, create_test_block_without_meta};
     use common::block::Block;
@@ -874,7 +875,7 @@ mod tests {
         );
     }
 
-    fn assert_block(block: Block<Header, SignedTx>, compare_block: Block<Header, SignedTx>) {
+    pub fn assert_block(block: Block<Header, SignedTx>, compare_block: Block<Header, SignedTx>) {
         assert_eq!(
             block.header.previous_hash,
             compare_block.header.previous_hash
@@ -891,7 +892,7 @@ mod tests {
         };
     }
 
-    fn assert_genesis_block(block: GenesisBlock, compare_block: GenesisBlock) {
+    pub fn assert_genesis_block(block: GenesisBlock, compare_block: GenesisBlock) {
         assert_eq!(block.header.merkle_root, compare_block.header.merkle_root);
         assert_eq!(block.header.state_root, compare_block.header.state_root);
         assert_eq!(block.header.difficulty, compare_block.header.difficulty);

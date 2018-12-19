@@ -14,6 +14,7 @@ use serialization::block::{
 use serialization::tx::SignedTx as ProtoTx;
 use std::result::Result;
 
+#[derive(Clone,Debug)]
 pub struct Block<HeaderType, TxType> {
     pub header: HeaderType,
     pub txs: Option<Vec<TxType>>,
