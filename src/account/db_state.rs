@@ -4,6 +4,7 @@ use account::Account;
 use account::node_ref::NodeRef;
 use account::state_node::StateNode;
 use common::{Decode, Encode, Exception, Proto};
+use common::address::Address;
 use protobuf::Message as ProtoMessage;
 use protobuf::RepeatedField;
 use serialization::state::Account as ProtoAccount;
@@ -51,10 +52,9 @@ impl Decode for DBState {
             DBState_oneof_state::node(data_node) => {
                 let mut refs: Vec<NodeRef> = vec![];
                 for proto_node_ref in data_node.nodeRefs.into_iter() {
-                    let r = NodeRef {
-                        address: proto_node_ref.address,
-                        child: proto_node_ref.child,
-                    };
+                    let mut address = [0;20];
+                    address.clone_from_slice(&proto_node_ref.address);
+                    let r = NodeRef::new(&address, &proto_node_ref.child);     
                     refs.push(r);
                 }
                 db_state.node = Some(StateNode { node_refs: refs });
@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn it_encodes_like_javascript_for_non_zero() {
-        let addr_slice = vec![109];
+        let addr_slice = [109,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
         let child = vec![
             137, 28, 167, 193, 135, 226, 96, 56, 197, 123, 221, 237, 249, 5, 134, 194, 38, 184,
             100, 131, 41, 152, 47, 186, 185, 70, 18, 162, 105, 115, 14, 42,
@@ -134,7 +134,7 @@ mod tests {
         let dbstate: DBState = DBState::new(None, Some(state_node), 1);
         let encoding = dbstate.encode().unwrap();
         let javascript_encoding = vec![
-            24, 1, 18, 39, 10, 37, 10, 1, 109, 18, 32, 137, 28, 167, 193, 135, 226, 96, 56, 197,
+            24, 1, 18, 58, 10, 56, 10, 20, 109,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 18, 32, 137, 28, 167, 193, 135, 226, 96, 56, 197,
             123, 221, 237, 249, 5, 134, 194, 38, 184, 100, 131, 41, 152, 47, 186, 185, 70, 18,
             162, 105, 115, 14, 42
         ];
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn it_encodes_like_javascript_for_zero() {
-        let addr_slice = vec![0];
+        let addr_slice = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
         let child = vec![
             0, 28, 0, 193, 0, 226, 0, 56, 0, 123, 0, 237, 0, 5, 0, 194, 0, 184, 0, 131, 0, 152, 0,
             186, 0, 70, 0, 162, 0, 115, 0, 42,
@@ -156,7 +156,7 @@ mod tests {
         let dbstate: DBState = DBState::new(None, Some(state_node), 0);
         let encoding = dbstate.encode().unwrap();
         let javascript_encoding = vec![
-            24, 0, 18, 39, 10, 37, 10, 1, 0, 18, 32, 0, 28, 0, 193, 0, 226, 0, 56, 0, 123, 0, 237,
+            24, 0, 18, 58, 10, 56, 10, 20, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 18, 32, 0, 28, 0, 193, 0, 226, 0, 56, 0, 123, 0, 237,
             0, 5, 0, 194, 0, 184, 0, 131, 0, 152, 0, 186, 0, 70, 0, 162, 0, 115, 0, 42
         ];
         let decoding = DBState::decode(&encoding).unwrap();

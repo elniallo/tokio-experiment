@@ -16,6 +16,7 @@ pub trait ValidAddress {
     fn to_string(&self) -> String;
     fn from_string(string: &String) -> Result<Address, String>;
     fn from_pubkey(pubkey: PublicKey) -> Address;
+    fn from_bytes(bytes: &[u8;20]) -> Address;
 }
 
 impl ValidAddress for Address {
@@ -74,6 +75,13 @@ impl ValidAddress for Address {
             addr[i - 12] = pub_key_hash[i];
         }
         addr
+    }
+    fn from_bytes(bytes: &[u8;20]) -> Address {
+        let mut addr = [0;20];
+        for i in 0..20 {
+            addr[i] = bytes[i]
+        }
+    addr
     }
 }
 
