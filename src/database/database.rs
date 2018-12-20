@@ -15,7 +15,7 @@ type HashValue = Vec<u8>;
 pub trait IDB {
     type OptionType;
     fn get_default_option() -> Self::OptionType;
-    fn open(db_path: PathBuf, options: Option<RocksDBOptions>) -> DBResult<Self> where Self: Sized;
+    fn open(db_path: PathBuf, options: Option<Self::OptionType>) -> DBResult<Self> where Self: Sized;
     fn destroy(db_path: PathBuf) -> DBResult<()> where Self: Sized;
     fn get(&self, key: &[u8]) -> DBResult<Vec<u8>>;
     fn set(&mut self, key: &[u8], value: &Vec<u8>) -> DBResult<()>;
@@ -24,8 +24,8 @@ pub trait IDB {
 impl IDB for RocksDB {
     type OptionType = RocksDBOptions;
 
-    fn get_default_option() -> RocksDBOptions {
-        let mut opts = RocksDBOptions::default();
+    fn get_default_option() -> Self::OptionType {
+        let mut opts = Self::OptionType::default();
         let mut block_opts = BlockBasedOptions::default();
         block_opts.set_index_type(BlockBasedIndexType::HashSearch);
         opts.set_block_based_table_factory(&block_opts);
@@ -35,11 +35,11 @@ impl IDB for RocksDB {
         opts
     }
 
-    fn open(db_path: PathBuf, options: Option<RocksDBOptions>) -> DBResult<Self> {
+    fn open(db_path: PathBuf, options: Option<Self::OptionType>) -> DBResult<Self> {
         if let Some(opt) = options {
             return Ok(RocksDB::open(&opt, db_path)?);
         } else {
-            let opt: RocksDBOptions = Self::get_default_option();
+            let opt: Self::OptionType = Self::get_default_option();
             return Ok(RocksDB::open(&opt, db_path)?);
         }
     }
@@ -73,9 +73,9 @@ pub struct Database<'a, BlockFileType = BlockFile, DatabaseType = RocksDB>
     db_keys: &'a DBKeys,
 }
 
-impl<'a, BlockFileType, DatabaseType> Database<'a, BlockFileType, DatabaseType>
-    where BlockFileType: BlockFileOps, DatabaseType: IDB {
-    fn new(db_path: PathBuf, file_path: PathBuf, db_keys: &'a DBKeys, options: Option<RocksDBOptions>) -> DBResult<Self> {
+impl<'a, BlockFileType, DatabaseType, OptionType> Database<'a, BlockFileType, DatabaseType>
+    where BlockFileType: BlockFileOps, DatabaseType: IDB<OptionType = OptionType> {
+    fn new(db_path: PathBuf, file_path: PathBuf, db_keys: &'a DBKeys, options: Option<OptionType>) -> DBResult<Self> {
         let mut database = DatabaseType::open(db_path, options)?;
         let file_number = match database.get(&db_keys.file_number) {
             Ok(val) => BigEndian::read_u32(&val),
@@ -243,7 +243,7 @@ mod tests {
         fn get_default_option() -> () {
             ()
         }
-        fn open(_db_path: PathBuf, options: Option<RocksDBOptions>) -> DBResult<Self> {
+        fn open(_db_path: PathBuf, options: Option<Self::OptionType>) -> DBResult<Self> {
             Ok(RocksDBMock::default())
         }
 
