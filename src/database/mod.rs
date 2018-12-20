@@ -1,6 +1,7 @@
 
 pub mod database;
 pub mod block_file;
+pub mod dbkeys;
 use std::io;
 use std::ops::Deref;
 use std::error::Error;

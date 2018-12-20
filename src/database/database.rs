@@ -1,5 +1,6 @@
 use rocksdb::{DB as RocksDB, Options as RocksDBOptions, BlockBasedOptions, BlockBasedIndexType, SliceTransform};
 use database::DBError;
+use database::dbkeys::DBKeys;
 use common::meta::Meta;
 use common::{ Decode, Encode};
 use database::block_file::{BlockFile, BlockFileOps, PutResult as WriteLocation};
@@ -10,41 +11,24 @@ use std::path::PathBuf;
 
 type DBResult<T> = Result<T, DBError>;
 type HashValue = Vec<u8>;
-struct DBKeys{
-    file_number: Vec<u8>,
-    file_position: Vec<u8>,
-    block_tip: Vec<u8>,
-    header_tip: Vec<u8>,
-}
 
-impl DBKeys {
-    fn new(file_number: Vec<u8>, file_position: Vec<u8>, block_tip: Vec<u8>, header_tip: Vec<u8>) -> DBKeys {
-        DBKeys {
-            file_number,
-            file_position,
-            block_tip,
-            header_tip
-        }
-    }
-}
-
-pub trait IDatabase: Sized {
-    fn new(db_path: PathBuf, file_path: PathBuf) -> DBResult<Self>;
+pub trait IDatabase<'a>: Sized {
+    fn new(db_path: PathBuf, file_path: PathBuf, db_keys: &'a DBKeys) -> DBResult<Self>;
     fn get_header_tip_hash(&self) -> DBResult<HashValue>;
     fn set_header_tip_hash(&mut self, hash: &HashValue) -> DBResult<()> ;
     fn get_block_tip_hash(&self) -> DBResult<HashValue>;
     fn set_block_tip_hash(&mut self, hash: &HashValue )-> DBResult<()> ;
-    fn set_hash_using_height(&mut self, height: u32, hash: &Vec<u8>)-> DBResult<()>;
+    fn set_hash_using_height(&mut self, height: u32, hash: &HashValue)-> DBResult<()>;
     fn get_hash_by_height(&self, height: u32) -> DBResult<HashValue>;
-    fn set_meta(&mut self, hash: &Vec<u8>, meta_info: &Meta ) -> DBResult<()>;
-    fn get_meta(&self, hash: &Vec<u8> ) -> DBResult<Meta>;
+    fn set_meta(&mut self, hash: &HashValue, meta_info: &Meta ) -> DBResult<()>;
+    fn get_meta(&self, hash: &HashValue ) -> DBResult<Meta>;
     fn set_block<T>(&mut self, block: &mut T) -> DBResult<WriteLocation> where T: Encode + Proto;
     fn get_blocks<T>(&mut self, from_height: u32, count: u32) -> DBResult<Vec<T>> where T: Decode + Clone;
-    fn get_block<T>(&mut self, hash: &(Vec<u8>)) -> DBResult<T> where T: Decode + Clone;
+    fn get_block<T>(&mut self, hash: &HashValue) -> DBResult<T> where T: Decode + Clone;
     fn get_block_by_height<T>(&mut self, height: u32) -> DBResult<T> where T: Decode+ Clone;
     fn get_block_by_meta_info<T>(&mut self, meta_info: Meta) -> DBResult<T> where T: Decode+ Clone;
-    fn set_block_status(&mut self, hash: &Vec<u8>, status: BlockStatus ) -> DBResult<()>;
-    fn get_block_status(&self, hash: &Vec<u8> ) -> DBResult<BlockStatus>;
+    fn set_block_status(&mut self, hash: &HashValue, status: BlockStatus ) -> DBResult<()>;
+    fn get_block_status(&self, hash: &HashValue ) -> DBResult<BlockStatus>;
     fn get(&self, key: &Vec<u8>)-> DBResult<Vec<u8>> ;
     fn set(&mut self, key : &Vec<u8>, value : &Vec<u8>)-> DBResult<()> ;
 }
@@ -98,20 +82,19 @@ impl IDB for RocksDB {
 }
 
 
-pub struct Database<BlockFileType = BlockFile, DatabaseType=RocksDB> 
+pub struct Database<'a, BlockFileType = BlockFile, DatabaseType=RocksDB> 
 where BlockFileType: BlockFileOps, DatabaseType: IDB {
     database: DatabaseType,
     block_file: BlockFileType,
     file_number: u32,
-    db_keys: DBKeys
+    db_keys: &'a DBKeys
 }
 
-impl<BlockFileType, DatabaseType> IDatabase for Database<BlockFileType, DatabaseType> 
+impl<'a, BlockFileType, DatabaseType> IDatabase<'a> for Database<'a, BlockFileType, DatabaseType> 
 where BlockFileType: BlockFileOps, DatabaseType: IDB {
 
-    fn new(db_path: PathBuf, file_path: PathBuf) -> DBResult<Self> {
+    fn new(db_path: PathBuf, file_path: PathBuf, db_keys: &'a DBKeys) -> DBResult<Self> {
         let mut database = DatabaseType::open(db_path)?;
-        let db_keys = DBKeys::new(b"file_number".to_vec(), b"file_position".to_vec(), b"__blockTip".to_vec(), b"__headerTip".to_vec());
         let file_number = match database.get(&db_keys.file_number){
             Ok(val) => BigEndian::read_u32(&val),
             Err(DBError::NotFoundError) => {
@@ -136,41 +119,41 @@ where BlockFileType: BlockFileOps, DatabaseType: IDB {
         })
     }    
 
-    fn get_header_tip_hash(&self) -> DBResult<Vec<u8>>{
+    fn get_header_tip_hash(&self) -> DBResult<HashValue>{
         self.get(&self.db_keys.header_tip)
     }
 
-    fn set_header_tip_hash(&mut self, hash: &Vec<u8>) -> DBResult<()> {
-        self.set(&b"__headerTip".to_vec(), hash)
+    fn set_header_tip_hash(&mut self, hash: &HashValue) -> DBResult<()> {
+        self.set(&self.db_keys.header_tip, hash)
     }
 
-    fn get_block_tip_hash(&self) -> DBResult<Vec<u8>>{
+    fn get_block_tip_hash(&self) -> DBResult<HashValue>{
         self.get(&self.db_keys.block_tip)
     }
-    fn set_block_tip_hash(&mut self, hash: &Vec<u8> )-> DBResult<()> {
-        self.set(&b"__blockTip".to_vec(), hash)
+    fn set_block_tip_hash(&mut self, hash: &HashValue )-> DBResult<()> {
+        self.set(&self.db_keys.block_tip, hash)
     }
 
-    fn set_hash_using_height(&mut self, height: u32, hash: &Vec<u8>)-> DBResult<()> {
+    fn set_hash_using_height(&mut self, height: u32, hash: &HashValue)-> DBResult<()> {
         let mut height_buf = vec![0;4];
         BigEndian::write_u32(&mut height_buf, height);
         self.set(&height_buf, &hash)
     }
 
-    fn get_hash_by_height(&self, height: u32) -> DBResult<Vec<u8>>{
+    fn get_hash_by_height(&self, height: u32) -> DBResult<HashValue>{
         let mut height_buf = vec![0;4];
         BigEndian::write_u32(&mut height_buf, height);
         self.get(&height_buf)
     }
 
-    fn set_meta(&mut self, hash: &Vec<u8>, meta_info: &Meta ) -> DBResult<()>{
+    fn set_meta(&mut self, hash: &HashValue, meta_info: &Meta ) -> DBResult<()>{
         let mut hash_cpy = hash.clone();
         hash_cpy.insert(0, 'b' as u8);
         let encoded = meta_info.encode()?;
         self.set(&hash_cpy, &encoded)
     }
 
-    fn get_meta(&self, hash: &Vec<u8> ) -> DBResult<Meta>{
+    fn get_meta(&self, hash: &HashValue ) -> DBResult<Meta>{
         let mut hash_cpy = hash.clone();
         hash_cpy.insert(0, 'b' as u8);
         match self.get(&hash_cpy) {
@@ -205,7 +188,7 @@ where BlockFileType: BlockFileOps, DatabaseType: IDB {
         Ok(blocks)
     }
 
-    fn get_block<T>(&mut self, hash: &(Vec<u8>)) -> DBResult<T> where T: Decode + Clone{
+    fn get_block<T>(&mut self, hash: &HashValue) -> DBResult<T> where T: Decode + Clone{
         let meta_info = self.get_meta(hash)?;
         self.get_block_by_meta_info::<T>(meta_info)
     }
@@ -357,7 +340,8 @@ mod tests {
 
     #[test]
     fn it_set_block_status_and_get_from_db() {
-        let mut db =  create_database();
+        let db_keys = DBKeys::new(b"a".to_vec(),b"b".to_vec(),b"c".to_vec(),b"d".to_vec());
+        let mut db =  create_database(&db_keys);
         let mut hash = vec![167];
         let block_status = BlockStatus::Block;
          
@@ -380,10 +364,10 @@ mod tests {
 
     #[test]
     fn it_set_hash_using_height_and_get_from_db() {
-        let mut db = create_database();
+        let db_keys = DBKeys::new(b"a".to_vec(),b"b".to_vec(),b"c".to_vec(),b"d".to_vec());
+        let mut db =  create_database(&db_keys);
         let hash = vec![167,1,2,3,4,5,6,7,8,9,10];
         let height = 0xFFFFFFFE;
-                                               
         match db.set_hash_using_height(height, &hash) {
             Ok(())=> (),
             Err(err) => panic!( format!("set_hash error {:?}",err)),
@@ -403,7 +387,8 @@ mod tests {
 
     #[test]
     fn it_set_header_tip_hash_and_get_from_db() {
-        let mut db = create_database();
+        let db_keys = DBKeys::new(b"a".to_vec(),b"b".to_vec(),b"c".to_vec(),b"d".to_vec());
+        let mut db = create_database(&db_keys);        
         let hash = vec![13,04,05,09];
         
         match db.set_header_tip_hash(&hash){
@@ -419,7 +404,8 @@ mod tests {
 
     #[test]
     fn it_check_file_numbers_and_positions_when_it_set_and_get_many_blocks(){
-        let mut db = create_database();
+        let db_keys = DBKeys::new(b"a".to_vec(),b"b".to_vec(),b"c".to_vec(),b"d".to_vec());
+        let mut db = create_database(&db_keys);        
         let mut hash  = b"hash_for_test_meta".to_vec();
         let mut blocks = vec![];
         
@@ -454,7 +440,8 @@ mod tests {
 
     #[test]
     fn it_set_block_tip_hash_and_get_from_db(){
-        let mut db =create_database();
+        let db_keys = DBKeys::new(b"a".to_vec(),b"b".to_vec(),b"c".to_vec(),b"d".to_vec());
+        let mut db = create_database(&db_keys);        
         let mut hash = vec![04,05,09,13];
         for i in 0..255 {
             if hash.len() >50 {
@@ -475,7 +462,8 @@ mod tests {
 
       #[test]
       fn it_set_meta_info_to_db_and_get() {
-        let mut db = create_database();
+        let db_keys = DBKeys::new(b"a".to_vec(),b"b".to_vec(),b"c".to_vec(),b"d".to_vec());
+        let mut db = create_database(&db_keys);        
         let meta_info = create_meta();
 
         let mut hash = vec![218,175,98,56,136,59,157,43,178,250,66,194,50,129,87,37,
@@ -511,7 +499,8 @@ mod tests {
 
     #[test]
     fn it_set_meta_info_without_file_info_to_db_and_get() {
-        let mut db = create_database();
+        let db_keys = DBKeys::new(b"a".to_vec(),b"b".to_vec(),b"c".to_vec(),b"d".to_vec());
+        let mut db = create_database(&db_keys);        
         let meta_info = create_meta_without_file_info();
        
         let mut hash = vec![218,1,2,3,4,5,175,98,56,136,59,157,43,178,250,66,194,50,129];
@@ -547,12 +536,12 @@ mod tests {
         }
     }
 
-    fn create_database() -> Database<BlockFileMock, RocksDBMock> {
+    fn create_database<'a>(db_keys: &'a DBKeys) -> Database<'a, BlockFileMock, RocksDBMock> {
         let mut path = PathBuf::new();
         let mut file_path = PathBuf::new();
         path.push("./test");
         file_path.push("./testFile");
-        Database::<BlockFileMock, RocksDBMock>::new(path, file_path).unwrap()
+        Database::<'a, BlockFileMock, RocksDBMock>::new(path, file_path, db_keys).unwrap()
     }
 
     fn create_meta_without_file_info() -> Meta {
