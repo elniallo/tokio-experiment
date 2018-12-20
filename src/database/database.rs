@@ -17,13 +17,13 @@ struct DBKeys{
     header_tip: Vec<u8>,
 }
 
-impl Default for DBKeys {
-    fn default() -> DBKeys{
-        DBKeys{
-            file_number: b"file_number".to_vec(),
-            file_position: b"file_position".to_vec(),
-            block_tip: b"__blockTip".to_vec(),
-            header_tip: b"__headerTip".to_vec()
+impl DBKeys {
+    fn new(file_number: Vec<u8>, file_position: Vec<u8>, block_tip: Vec<u8>, header_tip: Vec<u8>) -> DBKeys {
+        DBKeys {
+            file_number,
+            file_position,
+            block_tip,
+            header_tip
         }
     }
 }
@@ -111,7 +111,7 @@ where BlockFileType: BlockFileOps, DatabaseType: IDB {
 
     fn new(db_path: PathBuf, file_path: PathBuf) -> DBResult<Self> {
         let mut database = DatabaseType::open(db_path)?;
-        let db_keys =DBKeys::default(); 
+        let db_keys = DBKeys::new(b"file_number".to_vec(), b"file_position".to_vec(), b"__blockTip".to_vec(), b"__headerTip".to_vec());
         let file_number = match database.get(&db_keys.file_number){
             Ok(val) => BigEndian::read_u32(&val),
             Err(DBError::NotFoundError) => {
