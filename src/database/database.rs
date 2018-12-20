@@ -2,7 +2,7 @@ use rocksdb::{DB as RocksDB, Options as RocksDBOptions, BlockBasedOptions, Block
 use database::DBError;
 use common::meta::Meta;
 use common::{ Decode, Encode};
-use consensus::database::block_file::{BlockFile, BlockFileOps, PutResult as WriteLocation};
+use database::block_file::{BlockFile, BlockFileOps, PutResult as WriteLocation};
 use common::block_status::{BlockStatus, EnumConverter};
 use byteorder::{ByteOrder, BigEndian};
 use common::Proto;
@@ -265,7 +265,7 @@ mod tests {
     use common::common_tests::common_tests::{assert_block};
     use common::block::tests::{create_test_block_without_meta};
     use std::collections::HashMap;
-    use consensus::database::block_file::{BlockFileResult};
+    use database::block_file::{BlockFileResult};
 
 
 
