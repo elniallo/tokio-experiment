@@ -67,20 +67,15 @@ impl Decode for Meta {
     fn decode(buffer: &Vec<u8>) -> Result<Meta, Box<Error>> {
         let mut proto_meta = Self::ProtoType::new();
         
-        match proto_meta.merge_from_bytes(buffer) {
-            Ok(_) => {},
-            Err(e) => return Err(Box::new(e))
-        }
-        let meta_info = Meta {
-            height: proto_meta.height,
-            t_ema: proto_meta.tEMA,
-            p_ema: proto_meta.pEMA,
-            next_difficulty: proto_meta.nextDifficulty,
-            total_work: proto_meta.totalWork,
-            file_number:  Some(proto_meta.fileNumber),
-            offset:  Some(proto_meta.offset),
-            length:  Some( proto_meta.length) 
-        };
+        proto_meta.merge_from_bytes(buffer)?;
+        let meta_info = Meta::new(proto_meta.height,
+            proto_meta.tEMA,
+            proto_meta.pEMA,
+            proto_meta.nextDifficulty,
+            proto_meta.totalWork,
+            Some(proto_meta.fileNumber),
+            Some(proto_meta.offset),
+            Some( proto_meta.length));
         Ok(meta_info)
     }
 }
