@@ -9,7 +9,7 @@ use common::Proto;
 use std::path::PathBuf;
 
 type DBResult<T> = Result<T, DBError>;
-
+type HashValue = Vec<u8>;
 struct DBKeys{
     file_number: Vec<u8>,
     file_position: Vec<u8>,
@@ -30,12 +30,12 @@ impl DBKeys {
 
 pub trait IDatabase: Sized {
     fn new(db_path: PathBuf, file_path: PathBuf) -> DBResult<Self>;
-    fn get_header_tip(&self) -> DBResult<Vec<u8>>;
-    fn set_header_tip(&mut self, hash: &Vec<u8>) -> DBResult<()> ;
-    fn get_block_tip(&self) -> DBResult<Vec<u8>>;
-    fn set_block_tip(&mut self, hash: &Vec<u8> )-> DBResult<()> ;
+    fn get_header_tip_hash(&self) -> DBResult<HashValue>;
+    fn set_header_tip_hash(&mut self, hash: &HashValue) -> DBResult<()> ;
+    fn get_block_tip_hash(&self) -> DBResult<HashValue>;
+    fn set_block_tip_hash(&mut self, hash: &HashValue )-> DBResult<()> ;
     fn set_hash_using_height(&mut self, height: u32, hash: &Vec<u8>)-> DBResult<()>;
-    fn get_hash_by_height(&self, height: u32) -> DBResult<Vec<u8>>;
+    fn get_hash_by_height(&self, height: u32) -> DBResult<HashValue>;
     fn set_meta(&mut self, hash: &Vec<u8>, meta_info: &Meta ) -> DBResult<()>;
     fn get_meta(&self, hash: &Vec<u8> ) -> DBResult<Meta>;
     fn set_block<T>(&mut self, block: &mut T) -> DBResult<WriteLocation> where T: Encode + Proto;
@@ -136,18 +136,18 @@ where BlockFileType: BlockFileOps, DatabaseType: IDB {
         })
     }    
 
-    fn get_header_tip(&self) -> DBResult<Vec<u8>>{
+    fn get_header_tip_hash(&self) -> DBResult<Vec<u8>>{
         self.get(&self.db_keys.header_tip)
     }
 
-    fn set_header_tip(&mut self, hash: &Vec<u8>) -> DBResult<()> {
+    fn set_header_tip_hash(&mut self, hash: &Vec<u8>) -> DBResult<()> {
         self.set(&b"__headerTip".to_vec(), hash)
     }
 
-    fn get_block_tip(&self) -> DBResult<Vec<u8>>{
+    fn get_block_tip_hash(&self) -> DBResult<Vec<u8>>{
         self.get(&self.db_keys.block_tip)
     }
-    fn set_block_tip(&mut self, hash: &Vec<u8> )-> DBResult<()> {
+    fn set_block_tip_hash(&mut self, hash: &Vec<u8> )-> DBResult<()> {
         self.set(&b"__blockTip".to_vec(), hash)
     }
 
@@ -402,18 +402,18 @@ mod tests {
     }
 
     #[test]
-    fn it_set_header_tip_and_get_from_db() {
+    fn it_set_header_tip_hash_and_get_from_db() {
         let mut db = create_database();
         let hash = vec![13,04,05,09];
         
-        match db.set_header_tip(&hash){
+        match db.set_header_tip_hash(&hash){
             Ok(())=> (),
-            Err(err) => panic!( format!("set_header_tip with {:?} failed {:?}",hash, err)),
+            Err(err) => panic!( format!("set_header_tip_hash with {:?} failed {:?}",hash, err)),
         }
 
-        match db.get_header_tip() {
+        match db.get_header_tip_hash() {
             Ok(val) =>  assert_eq!(val, hash) , 
-            Err(err) => panic!( format!("get_header_tip failed {:?}", err)),
+            Err(err) => panic!( format!("get_header_tip_hash failed {:?}", err)),
         }
     }
 
@@ -453,7 +453,7 @@ mod tests {
     }
 
     #[test]
-    fn it_set_block_tip_and_get_from_db(){
+    fn it_set_block_tip_hash_and_get_from_db(){
         let mut db =create_database();
         let mut hash = vec![04,05,09,13];
         for i in 0..255 {
@@ -461,14 +461,14 @@ mod tests {
                 hash.pop();
             }
             hash.push(i%255 as u8);
-            match db.set_block_tip(&hash){
+            match db.set_block_tip_hash(&hash){
                 Ok(())=> (),
-                Err(err) => panic!( format!("set_block_tip with {:?} failed {:?}",hash, err)),
+                Err(err) => panic!( format!("set_block_tip_hash with {:?} failed {:?}",hash, err)),
             }
 
-            match db.get_block_tip() {
+            match db.get_block_tip_hash() {
                 Ok(val) =>  assert_eq!(val, hash) , 
-                Err(err) => panic!( format!("set_block_tip failed {:?}", err)),
+                Err(err) => panic!( format!("set_block_tip_hash failed {:?}", err)),
             }
         }
     }
