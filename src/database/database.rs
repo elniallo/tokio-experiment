@@ -3,8 +3,7 @@ use database::DBError;
 use common::meta::Meta;
 use common::{ Decode, Encode};
 use consensus::database::block_file::{BlockFile, BlockFileOps, PutResult as WriteLocation};
-use common::block_status::BlockStatus;
-use num_traits::{FromPrimitive, ToPrimitive};
+use common::block_status::{BlockStatus, EnumConverter};
 use byteorder::{ByteOrder, BigEndian};
 use common::Proto;
 use std::path::PathBuf;
@@ -231,10 +230,7 @@ where BlockFileType: BlockFileOps, DatabaseType: IDB {
         let mut hash_cpy = hash.clone();
         hash_cpy.insert(0, 's' as u8);
         
-        let status_byte = match status.to_u8(){
-            Some(val) => val,
-            None => return Err(From::from("Status is not correct".to_string()))
-        };
+        let status_byte = status.to_u8();
 
         self.set(&hash_cpy, &vec![status_byte])
     }

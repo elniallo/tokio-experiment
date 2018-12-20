@@ -5,10 +5,6 @@ extern crate double;
 extern crate hex;
 extern crate openssl;
 extern crate protobuf;
-
-#[macro_use] extern crate enum_primitive_derive;
-extern crate num_traits;
-
 extern crate rocksdb;
 extern crate rust_base58;
 extern crate secp256k1;
