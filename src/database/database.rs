@@ -12,25 +12,6 @@ use std::path::PathBuf;
 type DBResult<T> = Result<T, DBError>;
 type HashValue = Vec<u8>;
 
-pub trait IDatabase<'a>: Sized {
-    fn new(db_path: PathBuf, file_path: PathBuf, db_keys: &'a DBKeys, options: Option<RocksDBOptions>) -> DBResult<Self>;
-    fn get_header_tip_hash(&self) -> DBResult<HashValue>;
-    fn set_header_tip_hash(&mut self, hash: &HashValue) -> DBResult<()>;
-    fn get_block_tip_hash(&self) -> DBResult<HashValue>;
-    fn set_block_tip_hash(&mut self, hash: &HashValue) -> DBResult<()>;
-    fn set_hash_using_height(&mut self, height: u32, hash: &HashValue) -> DBResult<()>;
-    fn get_hash_by_height(&self, height: u32) -> DBResult<HashValue>;
-    fn set_meta(&mut self, hash: &HashValue, meta_info: &Meta) -> DBResult<()>;
-    fn get_meta(&self, hash: &HashValue) -> DBResult<Meta>;
-    fn set_block<T>(&mut self, block: &mut T) -> DBResult<WriteLocation> where T: Encode + Proto;
-    fn get_blocks<T>(&mut self, from_height: u32, count: u32) -> DBResult<Vec<T>> where T: Decode + Clone;
-    fn get_block<T>(&mut self, hash: &HashValue) -> DBResult<T> where T: Decode + Clone;
-    fn get_block_by_height<T>(&mut self, height: u32) -> DBResult<T> where T: Decode + Clone;
-    fn get_block_by_meta_info<T>(&mut self, meta_info: Meta) -> DBResult<T> where T: Decode + Clone;
-    fn set_block_status(&mut self, hash: &HashValue, status: BlockStatus) -> DBResult<()>;
-    fn get_block_status(&self, hash: &HashValue) -> DBResult<BlockStatus>;
-}
-
 pub trait IDB {
     type OptionType;
     fn get_default_option() -> Self::OptionType;
@@ -92,7 +73,7 @@ pub struct Database<'a, BlockFileType = BlockFile, DatabaseType = RocksDB>
     db_keys: &'a DBKeys,
 }
 
-impl<'a, BlockFileType, DatabaseType> IDatabase<'a> for Database<'a, BlockFileType, DatabaseType>
+impl<'a, BlockFileType, DatabaseType> Database<'a, BlockFileType, DatabaseType>
     where BlockFileType: BlockFileOps, DatabaseType: IDB {
     fn new(db_path: PathBuf, file_path: PathBuf, db_keys: &'a DBKeys, options: Option<RocksDBOptions>) -> DBResult<Self> {
         let mut database = DatabaseType::open(db_path, options)?;
