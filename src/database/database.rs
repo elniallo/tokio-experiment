@@ -321,19 +321,13 @@ mod tests {
         let mut hash = vec![167];
         let block_status = BlockStatus::Block;
 
-        match db.set_block_status(&hash, block_status) {
-            Ok(()) => (),
-            Err(err) => panic!(format!("BlockStatus::Block is not set {:?}", err)),
-        }
+        db.set_block_status(&hash, block_status).unwrap();
+        let status = db.get_block_status(&hash).unwrap();
 
-        match db.get_block_status(&hash) {
-            Ok(val) => assert_eq!(val, BlockStatus::Block),
-            Err(err) => panic!(format!("It should have same BlockStatus::Block {:?}", err)),
-        }
         hash.push(123);
         match db.get_block_status(&hash) {
             Err(DBError::NotFoundError) => {}
-            _ => panic!("It should not exist {:?}"),
+            _ => panic!("It should not exist {:?}", hash),
         }
     }
 
@@ -344,15 +338,9 @@ mod tests {
         let mut db = create_database(&db_keys);
         let hash = vec![167, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         let height = 0xFFFFFFFE;
-        match db.set_hash_using_height(height, &hash) {
-            Ok(()) => (),
-            Err(err) => panic!(format!("set_hash error {:?}", err)),
-        }
-
-        match db.get_hash_by_height(height) {
-            Ok(val) => assert_eq!(val, hash),
-            Err(err) => panic!(format!("get_hash failed {:?}", err)),
-        }
+        db.set_hash_using_height(height, &hash).unwrap();
+        let db_hash = db.get_hash_by_height(height).unwrap();
+        assert_eq!(db_hash, hash);
 
         match db.get_hash_by_height(height + 1) {
             Ok(_val) => panic!("wrong key must give error"),
@@ -367,15 +355,10 @@ mod tests {
         let mut db = create_database(&db_keys);
         let hash = vec![13, 04, 05, 09];
 
-        match db.set_header_tip_hash(&hash) {
-            Ok(()) => (),
-            Err(err) => panic!(format!("set_header_tip_hash with {:?} failed {:?}", hash, err)),
-        }
+        db.set_header_tip_hash(&hash).unwrap();
 
-        match db.get_header_tip_hash() {
-            Ok(val) => assert_eq!(val, hash),
-            Err(err) => panic!(format!("get_header_tip_hash failed {:?}", err)),
-        }
+        let db_hash = db.get_header_tip_hash().unwrap();
+        assert_eq!(db_hash, hash);
     }
 
     #[test]
@@ -424,15 +407,9 @@ mod tests {
                 hash.pop();
             }
             hash.push(i % 255 as u8);
-            match db.set_block_tip_hash(&hash) {
-                Ok(()) => (),
-                Err(err) => panic!(format!("set_block_tip_hash with {:?} failed {:?}", hash, err)),
-            }
-
-            match db.get_block_tip_hash() {
-                Ok(val) => assert_eq!(val, hash),
-                Err(err) => panic!(format!("set_block_tip_hash failed {:?}", err)),
-            }
+            db.set_block_tip_hash(&hash).unwrap();
+            let db_hash = db.get_block_tip_hash().unwrap();
+            assert_eq!(db_hash, hash);
         }
     }
 
@@ -446,10 +423,7 @@ mod tests {
                             147, 54, 157, 79, 238, 83, 118, 209, 92, 202, 25, 32, 246, 230, 153, 39];
 
 
-        match db.set_meta(&hash, &meta_info) {
-            Ok(()) => {}
-            Err(err) => panic!(format!("meta data should be set into db {:?}", err))
-        }
+        db.set_meta(&hash, &meta_info).unwrap();
 
         match db.get_meta(&hash) {
             Ok(meta) => {
@@ -484,10 +458,7 @@ mod tests {
         assert_eq!(meta_info.file_number, None);
         assert_eq!(meta_info.offset, None);
         assert_eq!(meta_info.length, None);
-        match db.set_meta(&hash, &meta_info) {
-            Ok(()) => {}
-            Err(err) => panic!(format!("meta data should be set into db {:?}", err))
-        }
+        db.set_meta(&hash, &meta_info).unwrap();
 
         match db.get_meta(&hash) {
             Ok(meta) => {
