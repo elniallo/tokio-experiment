@@ -229,10 +229,10 @@ mod tests {
         db: HashMap<Vec<u8>, Vec<u8>>,
     }
 
-    impl Default for RocksDBMock {
-        fn default() -> Self {
+    impl RocksDBMock {
+        pub fn new(db: HashMap<Vec<u8>, Vec<u8>>) -> RocksDBMock {
             RocksDBMock {
-                db: HashMap::new()
+                db
             }
         }
     }
@@ -243,8 +243,8 @@ mod tests {
         fn get_default_option() -> () {
             ()
         }
-        fn open(_db_path: PathBuf, options: Option<Self::OptionType>) -> DBResult<Self> {
-            Ok(RocksDBMock::default())
+        fn open(_db_path: PathBuf, _options: Option<Self::OptionType>) -> DBResult<Self> {
+            Ok(RocksDBMock::new(HashMap::new()))
         }
 
         fn destroy(_db_path: PathBuf) -> DBResult<()> {
@@ -269,16 +269,11 @@ mod tests {
         encoded_block: Vec<u8>,
     }
 
-    impl Default for BlockFileMock {
-        fn default() -> Self {
+    impl BlockFileMock {
+        pub fn new(write_location: WriteLocation, encoded_block: Vec<u8>) -> BlockFileMock {
             BlockFileMock {
-                write_location: WriteLocation {
-                    file_number: 0,
-                    file_position: 0,
-                    offset: 0,
-                    length: 0,
-                },
-                encoded_block: vec![],
+                write_location,
+                encoded_block
             }
         }
     }
@@ -287,7 +282,13 @@ mod tests {
 
     impl BlockFileOps for BlockFileMock {
         fn new(_path: &PathBuf, _file_number: u32, _file_position: u64) -> BlockFileResult<Self> {
-            Ok(BlockFileMock::default())
+            let write_location = WriteLocation {
+                file_number: 0,
+                file_position: 0,
+                offset: 0,
+                length: 0
+            };
+            Ok(BlockFileMock::new(write_location, vec![]))
         }
         fn get<T>(&mut self, _file_number: u32, _offset: u64, _length: usize) -> BlockFileResult<T>
             where T: Decode {
