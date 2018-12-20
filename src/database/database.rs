@@ -13,7 +13,7 @@ type DBResult<T> = Result<T, DBError>;
 type HashValue = Vec<u8>;
 
 pub trait IDatabase<'a>: Sized {
-    fn new(db_path: PathBuf, file_path: PathBuf, db_keys: &'a DBKeys) -> DBResult<Self>;
+    fn new(db_path: PathBuf, file_path: PathBuf, db_keys: &'a DBKeys, options: Option<RocksDBOptions>) -> DBResult<Self>;
     fn get_header_tip_hash(&self) -> DBResult<HashValue>;
     fn set_header_tip_hash(&mut self, hash: &HashValue) -> DBResult<()> ;
     fn get_block_tip_hash(&self) -> DBResult<HashValue>;
@@ -36,7 +36,7 @@ pub trait IDatabase<'a>: Sized {
 pub trait IDB{
     type OptionType;
     fn get_default_option() -> Self::OptionType;
-    fn open(db_path: PathBuf) -> DBResult<Self> where Self: Sized;
+    fn open(db_path: PathBuf, options: Option<RocksDBOptions>) -> DBResult<Self> where Self: Sized;
     fn destroy(db_path: PathBuf) -> DBResult<()> where Self: Sized;
     fn get(&self, key: &Vec<u8>) -> DBResult<Vec<u8>>;
     fn set(&mut self, key : &Vec<u8>, value : &Vec<u8>)-> DBResult<()>;
@@ -56,9 +56,14 @@ impl IDB for RocksDB {
         opts
     }
 
-    fn open(db_path: PathBuf) -> DBResult<Self>{
-        let opt: RocksDBOptions = Self::get_default_option();
-        Ok(RocksDB::open(&opt, db_path)?)
+    fn open(db_path: PathBuf, options: Option<RocksDBOptions>) -> DBResult<Self>{
+        if let Some(opt) = options {
+            return Ok(RocksDB::open(&opt, db_path)?)
+        } else {
+            let opt: RocksDBOptions = Self::get_default_option();
+            return Ok(RocksDB::open(&opt, db_path)?)
+        }
+
     }
     
     fn destroy(db_path: PathBuf) -> DBResult<()>{
@@ -93,8 +98,8 @@ where BlockFileType: BlockFileOps, DatabaseType: IDB {
 impl<'a, BlockFileType, DatabaseType> IDatabase<'a> for Database<'a, BlockFileType, DatabaseType> 
 where BlockFileType: BlockFileOps, DatabaseType: IDB {
 
-    fn new(db_path: PathBuf, file_path: PathBuf, db_keys: &'a DBKeys) -> DBResult<Self> {
-        let mut database = DatabaseType::open(db_path)?;
+    fn new(db_path: PathBuf, file_path: PathBuf, db_keys: &'a DBKeys, options: Option<RocksDBOptions>) -> DBResult<Self> {
+        let mut database = DatabaseType::open(db_path, options)?;
         let file_number = match database.get(&db_keys.file_number){
             Ok(val) => BigEndian::read_u32(&val),
             Err(DBError::NotFoundError) => {
@@ -269,7 +274,7 @@ mod tests {
         fn get_default_option() -> () {
             ()
         }
-        fn open(_db_path: PathBuf) -> DBResult<Self>{
+        fn open(_db_path: PathBuf, options: Option<RocksDBOptions>) -> DBResult<Self>{
             Ok(RocksDBMock::default())
         }
         
@@ -541,7 +546,7 @@ mod tests {
         let mut file_path = PathBuf::new();
         path.push("./test");
         file_path.push("./testFile");
-        Database::<'a, BlockFileMock, RocksDBMock>::new(path, file_path, db_keys).unwrap()
+        Database::<'a, BlockFileMock, RocksDBMock>::new(path, file_path, db_keys, None).unwrap()
     }
 
     fn create_meta_without_file_info() -> Meta {
