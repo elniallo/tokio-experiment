@@ -257,19 +257,16 @@ where BlockFileType: BlockFileOps, DatabaseType: IDB {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use database::database::{IDB};
-    use common::block_status::BlockStatus;
     use common::block::Block;
     use common::header::Header;
     use common::signed_tx::SignedTx;
-    use common::meta::Meta;
-    use common::{ Decode, Encode, Proto};
+    use common::common_tests::common_tests::{assert_block};
     use common::block::tests::{create_test_block_without_meta};
-    use database::database::{Database, IDatabase, DBResult, DBError};
     use std::collections::HashMap;
-    use std::path::PathBuf;
-    use consensus::database::block_file::{BlockFileOps, BlockFileResult, PutResult as WriteLocation};
-    use consensus::database::block_file::tests::assert_block;
+    use consensus::database::block_file::{BlockFileResult};
+
 
 
     struct RocksDBMock{

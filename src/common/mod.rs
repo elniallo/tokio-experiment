@@ -19,7 +19,7 @@ pub mod transaction;
 pub mod tx;
 pub mod tx_pool;
 pub mod wallet;
-
+#[cfg(test)] pub mod common_tests;
 pub trait Encode {
     fn encode(&self) -> Result<Vec<u8>, Box<Error>>;
 }
