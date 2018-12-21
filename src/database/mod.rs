@@ -8,61 +8,65 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use rocksdb::{Error as RocksdbError};
 
-
-#[derive(Debug)]
-pub enum DBError {
+#[derive(Debug, PartialEq)]
+pub enum DBErrorType {
     RocksDBError(RocksdbError),
     NotFoundError,
     UnexpectedError(String),
 }
 
+#[derive(Debug)]
+pub struct DBError {
+    error_type: DBErrorType
+}
 
-impl Deref for DBError {
-    type Target = DBError;
-    fn deref(&self) -> &Self::Target {
-        self
+impl DBError {
+    pub fn new(error_type: DBErrorType) -> DBError {
+        DBError {
+            error_type
+        }
     }
 }
 
-impl Display for DBError{
+impl Display for DBError {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match *self {
-            DBError::RocksDBError(ref err) => err.fmt(f),
-            DBError::NotFoundError => write!(f, "Not Found"),
-            DBError::UnexpectedError(ref err) => write!(f, "Unexpected Error Occurs {}", err)
+        match self.error_type {
+            DBErrorType::RocksDBError(ref err) => err.fmt(f),
+            DBErrorType::NotFoundError => write!(f, "Not Found"),
+            DBErrorType::UnexpectedError(ref err) => write!(f, "Unexpected Error Occurs {}", err)
         }
     }
 }
 impl Error for DBError  {
     fn description(&self) -> &str {
-        match *self {
-            DBError::RocksDBError(ref err) => err.description(),
-            DBError::NotFoundError => From::from("Not found error"),
-            DBError::UnexpectedError(ref err) => &err,
+        match self.error_type {
+            DBErrorType::RocksDBError(ref err) => err.description(),
+            DBErrorType::NotFoundError => From::from("Not found error"),
+            DBErrorType::UnexpectedError(ref err) => &err,
         }
     }
 }
 
 impl From<RocksdbError> for DBError {
     fn from(err: RocksdbError) -> Self {
-        DBError::RocksDBError(err)
+        DBError::new(DBErrorType::RocksDBError(err))
     }    
 }
 
 impl From<String> for DBError {
     fn from(err_msg: String) -> Self {
-        DBError::UnexpectedError(err_msg)
+        DBError::new(DBErrorType::UnexpectedError(err_msg))
     }    
 }
 
 impl From< Box<Error> > for DBError {
     fn from(err: Box<Error>) -> Self{
-        DBError::UnexpectedError(format!("UNEXPECTED DB ERROR : {:?} ", err))
+        DBError::new(DBErrorType::UnexpectedError(format!("UNEXPECTED DB ERROR : {:?} ", err)))
     }
 }
 
 impl From< io::Error> for DBError{
     fn from(err: io::Error) ->Self{
-        DBError::UnexpectedError(format!("UNEXPECTED DB ERROR : {:?} ", err))
+        DBError::new(DBErrorType::UnexpectedError(format!("UNEXPECTED DB ERROR : {:?} ", err)))
     }
 }

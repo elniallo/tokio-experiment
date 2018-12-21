@@ -58,7 +58,6 @@ where
 }
 
 impl Decode for Block<Header, SignedTx> {
-    type ProtoType = ProtoBlock;
     fn decode(bytes: &Vec<u8>) -> Result<Block<Header, SignedTx>, Box<Error>> {
         let mut serialised = ProtoBlock::new();
         if let Err(_) = serialised.merge_from(&mut CodedInputStream::from_bytes(bytes.as_slice())) {
@@ -93,7 +92,6 @@ impl Decode for Block<Header, SignedTx> {
 }
 
 impl Decode for Block<GenesisHeader, SignedGenesisTx> {
-    type ProtoType = ProtoBlock;
     fn decode(bytes: &Vec<u8>) -> Result<Block<GenesisHeader, SignedGenesisTx>, Box<Error>> {
         let mut serialised = ProtoGenesisBlock::new();
         if let Err(_) = serialised.merge_from(&mut CodedInputStream::from_bytes(bytes.as_slice())) {

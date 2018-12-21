@@ -50,7 +50,6 @@ impl Encode for GenesisTx {
 }
 
 impl Decode for GenesisTx {
-    type ProtoType = ProtoGenesisTx;
     fn decode(buffer: &Vec<u8>) -> Result<GenesisTx, Box<Error>> {
         let mut proto_genesis_tx = ProtoGenesisTx::new();
         proto_genesis_tx.merge_from_bytes(&buffer)?;

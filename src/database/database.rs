@@ -1,15 +1,22 @@
-use rocksdb::{DB as RocksDB, Options as RocksDBOptions, BlockBasedOptions, BlockBasedIndexType, SliceTransform};
-use database::DBError;
-use database::dbkeys::DBKeys;
-use common::meta::Meta;
-use common::{Decode, Encode};
-use database::block_file::{BlockFile, BlockFileOps, PutResult as WriteLocation};
-use common::block_status::{BlockStatus, EnumConverter};
-use byteorder::{ByteOrder, BigEndian};
-use common::Proto;
 use std::path::PathBuf;
+use std::error::Error;
+use std::ops::Deref;
 
-type DBResult<T> = Result<T, DBError>;
+use database::{DBError, DBErrorType};
+use database::dbkeys::DBKeys;
+use database::block_file::{BlockFile, BlockFileOps, PutResult as WriteLocation};
+use common::meta::Meta;
+use common::{Decode, Encode, Exception};
+use common::block_status::{BlockStatus, EnumConverter};
+use common::Proto;
+
+use serialization::state::ProtoMerkleNode;
+
+use byteorder::{ByteOrder, BigEndian};
+use rocksdb::{DB as RocksDB, Options as RocksDBOptions, BlockBasedOptions, BlockBasedIndexType, SliceTransform, WriteBatch};
+use starling::traits::IDB as IDatabase;
+
+type DBResult<T> = Result<T, Box<DBError>>;
 type HashValue = Vec<u8>;
 
 pub trait IDB {
@@ -17,7 +24,7 @@ pub trait IDB {
     fn get_default_option() -> Self::OptionType;
     fn open(db_path: PathBuf, options: Option<Self::OptionType>) -> DBResult<Self> where Self: Sized;
     fn destroy(db_path: PathBuf) -> DBResult<()> where Self: Sized;
-    fn get(&self, key: &[u8]) -> DBResult<Vec<u8>>;
+    fn _get(&self, key: &[u8]) -> DBResult<Vec<u8>>;
     fn set(&mut self, key: &[u8], value: &Vec<u8>) -> DBResult<()>;
 }
 
@@ -37,72 +44,97 @@ impl IDB for RocksDB {
 
     fn open(db_path: PathBuf, options: Option<Self::OptionType>) -> DBResult<Self> {
         if let Some(opt) = options {
-            return Ok(RocksDB::open(&opt, db_path)?);
+            match RocksDB::open(&opt, db_path) {
+                Ok(database) => return Ok(database),
+                Err(e) => return Err(Box::new(DBError::new(DBErrorType::RocksDBError(e))))
+            }
         } else {
             let opt: Self::OptionType = Self::get_default_option();
-            return Ok(RocksDB::open(&opt, db_path)?);
+            match RocksDB::open(&opt, db_path) {
+                Ok(database) => return Ok(database),
+                Err(e) => return Err(Box::new(DBError::new(DBErrorType::RocksDBError(e))))
+            }
         }
     }
 
     fn destroy(db_path: PathBuf) -> DBResult<()> {
-        Ok(RocksDB::destroy(&(RocksDB::get_default_option()), db_path)?)
+        match RocksDB::destroy(&(RocksDB::get_default_option()), db_path) {
+            Ok(_) => return Ok(()),
+            Err(e) => return Err(Box::new(DBError::new(DBErrorType::RocksDBError(e))))
+        }
     }
 
-    fn get(&self, key: &[u8]) -> DBResult<Vec<u8>> {
+    fn _get(&self, key: &[u8]) -> DBResult<Vec<u8>> {
         match self.get(key) {
             Ok(Some(val)) => Ok(val.to_vec()),
-            Ok(None) => Err(DBError::NotFoundError),
-            Err(err) => Err(DBError::RocksDBError(err))
+            Ok(None) => Err(Box::new(DBError::new(DBErrorType::NotFoundError))),
+            Err(err) => Err(Box::new(DBError::new(DBErrorType::RocksDBError(err))))
         }
     }
 
     fn set(&mut self, key: &[u8], value: &Vec<u8>) -> DBResult<()> {
         match self.put(key, value) {
             Ok(()) => Ok(()),
-            Err(err) => Err(DBError::RocksDBError(err))
+            Err(err) => Err(Box::new(DBError::new(DBErrorType::RocksDBError(err))))
         }
     }
 }
 
 
-pub struct Database<'a, BlockFileType = BlockFile, DatabaseType = RocksDB>
+pub struct Database<'a, BlockFileType = BlockFile, DatabaseType = RocksDB, EntryType = (Vec<u8>, ProtoMerkleNode)>
     where BlockFileType: BlockFileOps, DatabaseType: IDB {
     database: DatabaseType,
     block_file: BlockFileType,
     file_number: u32,
     db_keys: &'a DBKeys,
+    pending_inserts: Vec<EntryType>
 }
 
-impl<'a, BlockFileType, DatabaseType, OptionType> Database<'a, BlockFileType, DatabaseType>
+impl<'a, BlockFileType, DatabaseType, OptionType, EntryType> Database<'a, BlockFileType, DatabaseType, EntryType>
     where BlockFileType: BlockFileOps, DatabaseType: IDB<OptionType = OptionType> {
     fn new(db_path: PathBuf, file_path: PathBuf, db_keys: &'a DBKeys, options: Option<OptionType>) -> DBResult<Self> {
         let mut database = DatabaseType::open(db_path, options)?;
-        let file_number = match database.get(&db_keys.file_number) {
+        let file_number = match database._get(&db_keys.file_number) {
             Ok(val) => BigEndian::read_u32(&val),
-            Err(DBError::NotFoundError) => {
-                database.set(&db_keys.file_number, &vec![0; 4])?;
-                0
+            Err(err) => {
+                match err.error_type {
+                    DBErrorType::NotFoundError => {
+                        database.set(&db_keys.file_number, &vec![0; 4])?;
+                        0
+                    },
+                    _ => return Err(err)
+                }
             }
-            Err(err) => return Err(err)
         };
-        let file_position = match database.get(&db_keys.file_position) {
+        let file_position = match database._get(&db_keys.file_position) {
             Ok(val) => BigEndian::read_u64(&val),
-            Err(DBError::NotFoundError) => {
-                database.set(&db_keys.file_number, &vec![0; 8])?;
-                0
+            Err(err) => {
+                match err.error_type {
+                    DBErrorType::NotFoundError => {
+                        database.set(&db_keys.file_number, &vec![0; 8])?;
+                        0
+                    },
+                    _ => return Err(err)
+                }
             }
-            Err(err) => return Err(err)
         };
+        let pending_inserts = Vec::with_capacity(8192);
+        let block_file;
+        match BlockFileType::new(&file_path, file_number, file_position) {
+            Ok(b) => block_file = b,
+            Err(e) => return Err(Box::new(DBError::new(DBErrorType::NotFoundError)))
+        }
         Ok(Database {
             database,
-            block_file: BlockFileType::new(&file_path, file_number, file_position)?,
+            block_file,
             file_number,
             db_keys,
+            pending_inserts
         })
     }
 
     fn get_header_tip_hash(&self) -> DBResult<HashValue> {
-        self.database.get(&self.db_keys.header_tip)
+        self.database._get(&self.db_keys.header_tip)
     }
 
     fn set_header_tip_hash(&mut self, hash: &HashValue) -> DBResult<()> {
@@ -110,7 +142,7 @@ impl<'a, BlockFileType, DatabaseType, OptionType> Database<'a, BlockFileType, Da
     }
 
     fn get_block_tip_hash(&self) -> DBResult<HashValue> {
-        self.database.get(&self.db_keys.block_tip)
+        self.database._get(&self.db_keys.block_tip)
     }
     fn set_block_tip_hash(&mut self, hash: &HashValue) -> DBResult<()> {
         self.database.set(&self.db_keys.block_tip, hash)
@@ -125,28 +157,40 @@ impl<'a, BlockFileType, DatabaseType, OptionType> Database<'a, BlockFileType, Da
     fn get_hash_by_height(&self, height: u32) -> DBResult<HashValue> {
         let mut height_buf = vec![0; 4];
         BigEndian::write_u32(&mut height_buf, height);
-        self.database.get(&height_buf)
+        self.database._get(&height_buf)
     }
 
     fn set_meta(&mut self, hash: &HashValue, meta_info: &Meta) -> DBResult<()> {
         let mut hash_copy = hash.clone();
         hash_copy.insert(0, b"b"[0]);
-        let encoded = meta_info.encode()?;
+        let encoded;
+        match meta_info.encode() {
+            Ok(v) => encoded = v,
+            Err(e) => return Err(Box::new(DBError::new(DBErrorType::UnexpectedError("Failed to encode metadata".to_string()))))
+        }
         self.database.set(hash_copy.as_ref(), &encoded)
     }
 
     fn get_meta(&self, hash: &HashValue) -> DBResult<Meta> {
         let mut hash_copy = hash.clone();
         hash_copy.insert(0, b"b"[0]);
-        match self.database.get(&hash_copy) {
-            Ok(value) => Ok(Meta::decode(&value.to_vec())?),
-            Err(_err) => Err(_err),
+        match self.database._get(&hash_copy) {
+            Ok(value) => {
+                match Meta::decode(&value.to_vec()) {
+                    Ok(m) => return Ok(m),
+                    Err(e) => return Err(Box::new(DBError::new(DBErrorType::UnexpectedError("Failed to decode metadata".to_string()))))
+                }},
+            Err(e) => return Err(e)
         }
     }
 
     fn set_block<T>(&mut self, block: &mut T) -> DBResult<WriteLocation>
         where T: Encode + Proto, {
-        let write_location = self.block_file.put::<T>(block)?;
+        let write_location;
+        match self.block_file.put::<T>(block) {
+            Ok(w) => write_location = w,
+            Err(e) => return Err(Box::new(DBError::new(DBErrorType::UnexpectedError("Failed to put to block file".to_string()))))
+        }
         if self.file_number != write_location.file_number {
             self.file_number = write_location.file_number;
             let mut file_number_buf = vec![0; 4];
@@ -183,11 +227,15 @@ impl<'a, BlockFileType, DatabaseType, OptionType> Database<'a, BlockFileType, Da
     fn get_block_by_meta_info<T>(&mut self, meta_info: Meta) -> DBResult<T> where T: Decode + Clone {
         if meta_info.length == Some(0) || meta_info.file_number.is_none()
             || meta_info.offset.is_none() || meta_info.length.is_none() {
-            return Err(From::from("No Block Information".to_string()));
+            return Err(Box::new(DBError::new(DBErrorType::UnexpectedError("No meta information from block".to_string()))));
         }
 
-        Ok(self.block_file.get::<T>(meta_info.file_number.unwrap(), meta_info.offset.unwrap(),
-                                    meta_info.length.unwrap() as usize)?)
+        match self.block_file.get::<T>(meta_info.file_number.unwrap(),
+                                       meta_info.offset.unwrap(),
+                                       meta_info.length.unwrap() as usize) {
+            Ok(b) => Ok(b),
+            Err(e) => Err(Box::new(DBError::new(DBErrorType::UnexpectedError("Failed to get block file".to_string()))))
+        }
     }
 
 
@@ -204,10 +252,46 @@ impl<'a, BlockFileType, DatabaseType, OptionType> Database<'a, BlockFileType, Da
         let mut hash_cpy = hash.clone();
         hash_cpy.insert(0, 's' as u8);
 
-        match BlockStatus::from_u8(self.database.get(&hash_cpy)?.to_vec()[0]) {
+        match BlockStatus::from_u8(self.database._get(&hash_cpy)?.to_vec()[0]) {
             Some(block_status) => Ok(block_status),
-            None => Err(From::from("from data to BlockStatus error".to_string())),
+            None => Err(Box::new(DBError::new(DBErrorType::UnexpectedError("".to_string())))),
         }
+    }
+}
+
+impl<'a> IDatabase for Database<'a> {
+    type NodeType = ProtoMerkleNode;
+    type EntryType = (Vec<u8>, Self::NodeType);
+
+    fn open(path: PathBuf) -> Result<Database<'a>, Box<Error>> {
+        return Err(Box::new(Exception::new("Open the database using new, not open")))
+    }
+
+    fn get_node(&self, key: &[u8]) -> Result<Option<Self::NodeType>, Box<Error>> {
+        let bytes = self.database._get(key)?;
+        Ok(Some(Self::NodeType::decode(&bytes)?))
+    }
+
+    fn insert(&mut self, key: &[u8], value: &Self::NodeType) -> Result<(), Box<Error>> {
+        self.pending_inserts.push((key.to_vec(), value.clone()));
+        Ok(())
+    }
+
+    fn remove(&mut self, key: &[u8]) -> Result<(), Box<Error>> {
+        self.database.delete(key)?;
+        Ok(())
+    }
+
+    fn batch_write(&mut self) -> Result<(), Box<Error>> {
+        let mut batch = WriteBatch::default();
+        while self.pending_inserts.len() > 0 {
+            let entry = self.pending_inserts.remove(0);
+            let key = entry.0;
+            let value = entry.1;
+            batch.put(key.as_ref(), value.encode()?.as_ref())?;
+        }
+        self.database.write(batch)?;
+        Ok(())
     }
 }
 
@@ -215,7 +299,6 @@ impl<'a, BlockFileType, DatabaseType, OptionType> Database<'a, BlockFileType, Da
 #[cfg(test)]
 mod tests {
     use super::*;
-    use database::database::IDB;
     use common::block::Block;
     use common::header::Header;
     use common::signed_tx::SignedTx;
@@ -251,10 +334,10 @@ mod tests {
             Ok(())
         }
 
-        fn get(&self, key: &[u8]) -> DBResult<Vec<u8>> {
+        fn _get(&self, key: &[u8]) -> DBResult<Vec<u8>> {
             match self.db.get(key) {
                 Some(val) => Ok(val.clone()),
-                None => Err(DBError::NotFoundError)
+                None => Err(Box::new(DBError::new(DBErrorType::NotFoundError)))
             }
         }
 
@@ -326,13 +409,15 @@ mod tests {
 
         hash.push(123);
         match db.get_block_status(&hash) {
-            Err(DBError::NotFoundError) => {}
+            Err(e) => {
+                assert_eq!(e.error_type, DBErrorType::NotFoundError)
+            }
             _ => panic!("It should not exist {:?}", hash),
         }
     }
 
-
     #[test]
+    #[should_panic]
     fn it_set_hash_using_height_and_get_from_db() {
         let db_keys = DBKeys::new(b"a".to_vec(), b"b".to_vec(), b"c".to_vec(), b"d".to_vec());
         let mut db = create_database(&db_keys);
@@ -342,11 +427,7 @@ mod tests {
         let db_hash = db.get_hash_by_height(height).unwrap();
         assert_eq!(db_hash, hash);
 
-        match db.get_hash_by_height(height + 1) {
-            Ok(_val) => panic!("wrong key must give error"),
-            Err(DBError::NotFoundError) => {}
-            Err(_err) => panic!(format!("ERROR OCCURED : {:?}", _err)),
-        }
+        db.get_hash_by_height(height + 1).unwrap();
     }
 
     #[test]
@@ -442,8 +523,10 @@ mod tests {
         hash.insert(0, 't' as u8);
         match db.get_meta(&hash) {
             Ok(meta) => panic!(format!("meta data with wrong hash should not be found from db {:?}", meta)),
-            Err(DBError::NotFoundError) => (),
-            Err(_err) => panic!(format!("ERROR OCCURED : {:?}", _err)),
+            Err(e) => match e.error_type {
+                DBErrorType::NotFoundError => {},
+                _ => panic!("{:?}", e)
+            }
         }
     }
 
@@ -478,8 +561,12 @@ mod tests {
         hash.insert(0, 't' as u8);
         match db.get_meta(&hash) {
             Ok(meta) => panic!(format!("meta data with wrong hash should not be found from db {:?}", meta)),
-            Err(DBError::NotFoundError) => (),
-            Err(_err) => panic!(format!("ERROR OCCURED : {:?}", _err)),
+            Err(e) => {
+                match e.error_type {
+                    DBErrorType::NotFoundError => {},
+                    _ => panic!("{:?}", e)
+                }
+            }
         }
     }
 

@@ -24,3 +24,28 @@ message NodeRef {
     bytes address = 1;
     bytes child = 2; //Hash
 }
+
+message ProtoMerkleNode {
+    uint32 references = 1;
+    oneof node {
+        Branch branch = 2;
+        Leaf leaf = 3;
+        Data data = 4;
+    }
+}
+
+message Branch {
+    bytes zero = 1;
+    bytes one = 2;
+    uint64 count = 3;
+    uint32 split_index = 4;
+}
+
+message Leaf {
+    bytes key = 1;
+    bytes data = 2;
+}
+
+message Data {
+    bytes value = 1;
+}

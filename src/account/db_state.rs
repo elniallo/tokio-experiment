@@ -29,9 +29,8 @@ impl DBState {
 }
 
 impl Decode for DBState {
-    type ProtoType = ProtoDBState;
     fn decode(buffer: &Vec<u8>) -> Result<DBState, Box<Error>> {
-        let mut proto_db_state = Self::ProtoType::new();
+        let mut proto_db_state = ProtoDBState::new();
         proto_db_state.merge_from_bytes(buffer)?;
         let mut db_state = DBState::new(None, None, 0);
         let state = match proto_db_state.state {

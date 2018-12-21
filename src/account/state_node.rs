@@ -19,7 +19,6 @@ impl StateNode {
 }
 
 impl Decode for StateNode {
-    type ProtoType = ProtoStateNode;
     fn decode(buffer: &Vec<u8>) -> Result<StateNode, Box<Error>> {
         let mut data_node = ProtoStateNode::new();
         data_node.merge_from_bytes(buffer)?;

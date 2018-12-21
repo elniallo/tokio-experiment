@@ -75,7 +75,6 @@ impl Encode for Tx {
 }
 
 impl Decode for Tx {
-    type ProtoType = ProtoTx;
     fn decode(buffer: &Vec<u8>) -> Result<Tx, Box<Error>> {
         let mut proto_tx = ProtoTx::new();
         proto_tx.merge_from_bytes(&buffer)?;
