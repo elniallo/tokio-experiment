@@ -2,8 +2,8 @@
 pub mod database;
 pub mod block_file;
 pub mod dbkeys;
+
 use std::io;
-use std::ops::Deref;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use rocksdb::{Error as RocksdbError};

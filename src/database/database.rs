@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 use std::error::Error;
-use std::ops::Deref;
 
 use database::{DBError, DBErrorType};
 use database::dbkeys::DBKeys;
@@ -122,7 +121,7 @@ impl<'a, BlockFileType, DatabaseType, OptionType, EntryType> Database<'a, BlockF
         let block_file;
         match BlockFileType::new(&file_path, file_number, file_position) {
             Ok(b) => block_file = b,
-            Err(e) => return Err(Box::new(DBError::new(DBErrorType::NotFoundError)))
+            Err(_) => return Err(Box::new(DBError::new(DBErrorType::NotFoundError)))
         }
         Ok(Database {
             database,
@@ -166,7 +165,7 @@ impl<'a, BlockFileType, DatabaseType, OptionType, EntryType> Database<'a, BlockF
         let encoded;
         match meta_info.encode() {
             Ok(v) => encoded = v,
-            Err(e) => return Err(Box::new(DBError::new(DBErrorType::UnexpectedError("Failed to encode metadata".to_string()))))
+            Err(_) => return Err(Box::new(DBError::new(DBErrorType::UnexpectedError("Failed to encode metadata".to_string()))))
         }
         self.database.set(hash_copy.as_ref(), &encoded)
     }
@@ -178,7 +177,7 @@ impl<'a, BlockFileType, DatabaseType, OptionType, EntryType> Database<'a, BlockF
             Ok(value) => {
                 match Meta::decode(&value.to_vec()) {
                     Ok(m) => return Ok(m),
-                    Err(e) => return Err(Box::new(DBError::new(DBErrorType::UnexpectedError("Failed to decode metadata".to_string()))))
+                    Err(_) => return Err(Box::new(DBError::new(DBErrorType::UnexpectedError("Failed to decode metadata".to_string()))))
                 }},
             Err(e) => return Err(e)
         }
@@ -189,7 +188,7 @@ impl<'a, BlockFileType, DatabaseType, OptionType, EntryType> Database<'a, BlockF
         let write_location;
         match self.block_file.put::<T>(block) {
             Ok(w) => write_location = w,
-            Err(e) => return Err(Box::new(DBError::new(DBErrorType::UnexpectedError("Failed to put to block file".to_string()))))
+            Err(_) => return Err(Box::new(DBError::new(DBErrorType::UnexpectedError("Failed to put to block file".to_string()))))
         }
         if self.file_number != write_location.file_number {
             self.file_number = write_location.file_number;
@@ -234,7 +233,7 @@ impl<'a, BlockFileType, DatabaseType, OptionType, EntryType> Database<'a, BlockF
                                        meta_info.offset.unwrap(),
                                        meta_info.length.unwrap() as usize) {
             Ok(b) => Ok(b),
-            Err(e) => Err(Box::new(DBError::new(DBErrorType::UnexpectedError("Failed to get block file".to_string()))))
+            Err(_) => Err(Box::new(DBError::new(DBErrorType::UnexpectedError("Failed to get block file".to_string()))))
         }
     }
 
@@ -263,7 +262,7 @@ impl<'a> IDatabase for Database<'a> {
     type NodeType = ProtoMerkleNode;
     type EntryType = (Vec<u8>, Self::NodeType);
 
-    fn open(path: PathBuf) -> Result<Database<'a>, Box<Error>> {
+    fn open(_path: PathBuf) -> Result<Database<'a>, Box<Error>> {
         return Err(Box::new(Exception::new("Open the database using new, not open")))
     }
 

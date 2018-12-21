@@ -32,5 +32,5 @@ lazy_static = "1.1.0"
 double = "0.2.2"
 byteorder = "1.2.6"
 rocksdb= "0.10.1"
-starling = "1.0.4"
+starling = "1.0.5"
 uuid = {version = "0.6.5", features= ["v4"]}
