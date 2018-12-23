@@ -22,7 +22,7 @@ impl NodeRef {
 }
 
 impl Decode for NodeRef {
-    fn decode(buffer: &Vec<u8>) -> Result<NodeRef, Box<Error>> {
+    fn decode(buffer: &[u8]) -> Result<NodeRef, Box<Error>> {
         let mut proto_node_ref = ProtoNodeRef::new();
         proto_node_ref.merge_from_bytes(buffer)?;
         let mut address = [0;20];

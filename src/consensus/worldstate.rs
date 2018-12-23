@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 
 use common::{Decode, Encode, Exception};
 use database::database::Database;
-use serialization::state::{ProtoMerkleNode, Branch as ProtoBranch, Leaf as ProtoLeaf, Data as ProtoData, Account as ProtoAccount};
+use serialization::state::{ProtoMerkleNode, Branch as ProtoBranch, Leaf as ProtoLeaf, Data as ProtoData, Account as ProtoAccount, ProtoMerkleNode_oneof_node as ProtoVariant};
 
 use blake2_rfc::blake2b::{Blake2b, Blake2bResult};
 use protobuf::Message as ProtoMessage;
@@ -32,19 +32,19 @@ impl Branch for ProtoBranch {
     }
 
     fn set_count(&mut self, count: u64) {
-        ProtoBranch::set_count(&mut self, count)
+        ProtoBranch::set_count(self, count)
     }
 
     fn set_zero(&mut self, zero: &[u8]) {
-        ProtoBranch::set_zero(&mut self, zero.to_vec())
+        ProtoBranch::set_zero(self, zero.to_vec())
     }
 
     fn set_one(&mut self, one: &[u8]) {
-        ProtoBranch::set_one(&mut self, one.to_vec())
+        ProtoBranch::set_one(self, one.to_vec())
     }
 
     fn set_split_index(&mut self, split_index: u32) {
-        ProtoBranch::set_split_index(&mut self, split_index)
+        ProtoBranch::set_split_index(self, split_index)
     }
 }
 
@@ -62,11 +62,11 @@ impl Leaf for ProtoLeaf {
     }
 
     fn set_key(&mut self, key: &[u8]) {
-        ProtoLeaf::set_key(&mut self, key.to_vec())
+        ProtoLeaf::set_key(self, key.to_vec())
     }
 
     fn set_data(&mut self, data: &[u8]) {
-        ProtoLeaf::set_data(&mut self, data.to_vec())
+        ProtoLeaf::set_data(self, data.to_vec())
     }
 }
 
@@ -80,7 +80,7 @@ impl Data for ProtoData {
     }
 
     fn set_value(&mut self, value: &[u8]) {
-        ProtoData::set_value(&mut self, value.to_vec())
+        ProtoData::set_value(self, value.to_vec())
     }
 }
 
@@ -90,18 +90,36 @@ impl Node<ProtoBranch, ProtoLeaf, ProtoData, ProtoAccount> for ProtoMerkleNode {
     }
 
     fn get_references(&self) -> u64 {
-        ProtoMerkleNode::get_references(&self)
+        ProtoMerkleNode::get_references(&self) as u64
     }
 
     fn get_variant(&self) -> BinaryMerkleTreeResult<NodeVariant<ProtoBranch, ProtoLeaf, ProtoData>> {
-        if let Some(n) = &self.node {
+        if let Some(ref n) = self.node {
             match n {
-                NodeVariant::Branch(n) => return NodeVariant::Branch(n),
-                _ => {}
+                ProtoVariant::branch(b) => return Ok(NodeVariant::Branch(b.clone())),
+                ProtoVariant::leaf(l) => return Ok(NodeVariant::Leaf(l.clone())),
+                ProtoVariant::data(d) => return Ok(NodeVariant::Data(d.clone()))
             }
         } else {
             return Err(Box::new(Exception::new("Unable to get node variant")))
         }
+    }
+
+    fn set_references(&mut self, references: u64) {
+        // Caution, values greater than u32::MAX may have unintended behavior
+        ProtoMerkleNode::set_references(self, references as u32);
+    }
+
+    fn set_branch(&mut self, branch: ProtoBranch) {
+        ProtoMerkleNode::set_branch(self, branch);
+    }
+
+    fn set_leaf(&mut self, leaf: ProtoLeaf) {
+        ProtoMerkleNode::set_leaf(self, leaf);
+    }
+
+    fn set_data(&mut self, data: ProtoData) {
+        ProtoMerkleNode::set_data(self, data);
     }
 }
 
@@ -118,7 +136,7 @@ impl TreeEncode for ProtoMerkleNode {
 }
 
 impl Decode for ProtoMerkleNode {
-    fn decode(buffer: &Vec<u8>) -> Result<ProtoMerkleNode, Box<Error>> {
+    fn decode(buffer: &[u8]) -> Result<ProtoMerkleNode, Box<Error>> {
         let mut proto_merkle_node = ProtoMerkleNode::new();
         proto_merkle_node.merge_from_bytes(buffer)?;
         Ok(proto_merkle_node)
@@ -126,7 +144,7 @@ impl Decode for ProtoMerkleNode {
 }
 
 impl TreeDecode for ProtoMerkleNode {
-    fn decode(buffer: &Vec<u8>) -> Result<ProtoMerkleNode, Box<Error>> {
+    fn decode(buffer: &[u8]) -> Result<ProtoMerkleNode, Box<Error>> {
         let mut proto_merkle_node = ProtoMerkleNode::new();
         proto_merkle_node.merge_from_bytes(buffer)?;
         Ok(proto_merkle_node)
@@ -146,7 +164,7 @@ impl TreeEncode for ProtoAccount {
 }
 
 impl Decode for ProtoAccount {
-    fn decode(buffer: &Vec<u8>) -> Result<ProtoAccount, Box<Error>> {
+    fn decode(buffer: &[u8]) -> Result<ProtoAccount, Box<Error>> {
         let mut proto_account = ProtoAccount::new();
         proto_account.merge_from_bytes(buffer)?;
         Ok(proto_account)
@@ -154,7 +172,7 @@ impl Decode for ProtoAccount {
 }
 
 impl TreeDecode for ProtoAccount {
-    fn decode(buffer: &Vec<u8>) -> Result<ProtoAccount, Box<Error>> {
+    fn decode(buffer: &[u8]) -> Result<ProtoAccount, Box<Error>> {
         let mut proto_account = ProtoAccount::new();
         proto_account.merge_from_bytes(buffer)?;
         Ok(proto_account)
@@ -165,9 +183,23 @@ pub struct Blake2bHasher {
     hasher: Blake2b
 }
 
-#[derive(PartialEq, PartialOrd, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Blake2bHashResult {
     hash: Blake2bResult
+}
+
+impl PartialOrd for Blake2bHashResult {
+    fn partial_cmp(&self, other: &Blake2bHashResult) -> Option<Ordering> {
+        Some(self.as_ref().cmp(other.as_ref()))
+    }
+}
+
+impl Blake2bHashResult {
+    pub fn new(hash: Blake2bResult) -> Blake2bHashResult {
+        Blake2bHashResult {
+            hash
+        }
+    }
 }
 
 impl AsRef<[u8]> for Blake2bHashResult {
@@ -179,7 +211,7 @@ impl AsRef<[u8]> for Blake2bHashResult {
 impl Blake2bHasher {
     pub fn new() -> Blake2bHasher {
         Blake2bHasher {
-            hasher: Blake2b::new()
+            hasher: Blake2b::new(32)
         }
     }
 

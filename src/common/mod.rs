@@ -25,7 +25,7 @@ pub trait Encode {
 }
 
 pub trait Decode {
-    fn decode(buffer: &Vec<u8>) -> Result<Self, Box<Error>>
+    fn decode(buffer: &[u8]) -> Result<Self, Box<Error>>
     where
         Self: Sized;
 }

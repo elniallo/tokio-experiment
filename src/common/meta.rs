@@ -63,7 +63,7 @@ impl Encode for Meta {
 }
 
 impl Decode for Meta {
-    fn decode(buffer: &Vec<u8>) -> Result<Meta, Box<Error>> {
+    fn decode(buffer: &[u8]) -> Result<Meta, Box<Error>> {
         let mut proto_meta = ProtoBlockDB::new();
         
         proto_meta.merge_from_bytes(buffer)?;

@@ -50,7 +50,7 @@ impl Encode for GenesisTx {
 }
 
 impl Decode for GenesisTx {
-    fn decode(buffer: &Vec<u8>) -> Result<GenesisTx, Box<Error>> {
+    fn decode(buffer: &[u8]) -> Result<GenesisTx, Box<Error>> {
         let mut proto_genesis_tx = ProtoGenesisTx::new();
         proto_genesis_tx.merge_from_bytes(&buffer)?;
         let mut to: Address = [0; 20];

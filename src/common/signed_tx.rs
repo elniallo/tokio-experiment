@@ -122,7 +122,7 @@ impl Encode for SignedTx {
 }
 
 impl Decode for SignedTx {
-    fn decode(buffer: &Vec<u8>) -> Result<SignedTx, Box<Error>> {
+    fn decode(buffer: &[u8]) -> Result<SignedTx, Box<Error>> {
         let secp = Secp256k1::without_caps();
         let mut proto_signed_tx = ProtoSignedTx::new();
         proto_signed_tx.merge_from_bytes(&buffer)?;

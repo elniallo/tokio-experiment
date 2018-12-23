@@ -17,7 +17,7 @@ impl Account {
 }
 
 impl Decode for Account {
-    fn decode(buffer: &Vec<u8>) -> Result<Account, Box<Error>> {
+    fn decode(buffer: &[u8]) -> Result<Account, Box<Error>> {
         let mut proto_account = ProtoAccount::new();
         proto_account.merge_from_bytes(buffer)?;
         Ok(Account::new(proto_account.balance, proto_account.nonce))

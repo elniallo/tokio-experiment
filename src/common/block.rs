@@ -58,9 +58,9 @@ where
 }
 
 impl Decode for Block<Header, SignedTx> {
-    fn decode(bytes: &Vec<u8>) -> Result<Block<Header, SignedTx>, Box<Error>> {
+    fn decode(bytes: &[u8]) -> Result<Block<Header, SignedTx>, Box<Error>> {
         let mut serialised = ProtoBlock::new();
-        if let Err(_) = serialised.merge_from(&mut CodedInputStream::from_bytes(bytes.as_slice())) {
+        if let Err(_) = serialised.merge_from(&mut CodedInputStream::from_bytes(bytes)) {
             return Err(Box::new(Exception::new("Decoding fail")));
         }
         let serial_header = serialised.get_header();
@@ -92,9 +92,9 @@ impl Decode for Block<Header, SignedTx> {
 }
 
 impl Decode for Block<GenesisHeader, SignedGenesisTx> {
-    fn decode(bytes: &Vec<u8>) -> Result<Block<GenesisHeader, SignedGenesisTx>, Box<Error>> {
+    fn decode(bytes: &[u8]) -> Result<Block<GenesisHeader, SignedGenesisTx>, Box<Error>> {
         let mut serialised = ProtoGenesisBlock::new();
-        if let Err(_) = serialised.merge_from(&mut CodedInputStream::from_bytes(bytes.as_slice())) {
+        if let Err(_) = serialised.merge_from(&mut CodedInputStream::from_bytes(bytes)) {
             return Err(Box::new(Exception::new("Decoding fail")));
         }
 
