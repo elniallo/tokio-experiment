@@ -2,7 +2,7 @@ use std::error::Error;
 use std::cmp::Ordering;
 
 use common::{Decode, Encode, Exception};
-use database::database::Database;
+use database::state_db::StateDB;
 use serialization::state::{ProtoMerkleNode, Branch as ProtoBranch, Leaf as ProtoLeaf, Data as ProtoData, Account as ProtoAccount, ProtoMerkleNode_oneof_node as ProtoVariant};
 
 use blake2_rfc::blake2b::{Blake2b, Blake2bResult};
@@ -239,6 +239,27 @@ impl Hasher for Blake2bHasher {
     }
 }
 
-struct WorldState<'a> {
-    tree: MerkleBIT<Database<'a>, ProtoBranch, ProtoLeaf, ProtoData, ProtoMerkleNode, Blake2bHasher, Blake2bHashResult, ProtoAccount>
+pub struct WorldState {
+    tree: MerkleBIT<StateDB, ProtoBranch, ProtoLeaf, ProtoData, ProtoMerkleNode, Blake2bHasher, Blake2bHashResult, ProtoAccount>
+}
+
+impl WorldState {
+    fn new(db: StateDB, max_depth: usize) -> Result<WorldState, Box<Error>> {
+        let tree = MerkleBIT::from_db(db, max_depth)?;
+        Ok(WorldState {
+            tree
+        })
+    }
+
+    fn get(&self, root: &Blake2bHashResult, keys: Vec<&[u8]>) -> Result<Vec<Option<ProtoAccount>>, Box<Error>> {
+        Ok(self.tree.get(root, keys)?)
+    }
+
+    fn insert(&mut self, previous_root: Option<&Blake2bHashResult>, keys: Vec<&[u8]>, values: &[&ProtoAccount]) -> Result<Vec<u8>, Box<Error>> {
+        Ok(self.tree.insert(previous_root, keys, values)?)
+    }
+
+    fn remove(&mut self, root: &[u8]) -> Result<(), Box<Error>> {
+        Ok(self.tree.remove(root)?)
+    }
 }

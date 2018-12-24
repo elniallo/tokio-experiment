@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::error::Error;
 
-use database::{DBError, DBErrorType};
+use database::{DBError, DBErrorType, DBResult, HashValue, IDB};
 use database::dbkeys::DBKeys;
 use database::block_file::{BlockFile, BlockFileOps, PutResult as WriteLocation};
 use common::meta::Meta;
@@ -9,87 +9,18 @@ use common::{Decode, Encode, Exception};
 use common::block_status::{BlockStatus, EnumConverter};
 use common::Proto;
 
-use serialization::state::ProtoMerkleNode;
-
 use byteorder::{ByteOrder, BigEndian};
-use rocksdb::{DB as RocksDB, Options as RocksDBOptions, BlockBasedOptions, BlockBasedIndexType, SliceTransform, WriteBatch};
-use starling::traits::IDB as IDatabase;
+use rocksdb::{DB as RocksDB};
 
-type DBResult<T> = Result<T, Box<DBError>>;
-type HashValue = Vec<u8>;
-
-pub trait IDB {
-    type OptionType;
-    fn get_default_option() -> Self::OptionType;
-    fn open(db_path: PathBuf, options: Option<Self::OptionType>) -> DBResult<Self> where Self: Sized;
-    fn destroy(db_path: PathBuf) -> DBResult<()> where Self: Sized;
-    fn _get(&self, key: &[u8]) -> DBResult<Vec<u8>>;
-    fn set(&mut self, key: &[u8], value: &Vec<u8>) -> DBResult<()>;
-}
-
-impl IDB for RocksDB {
-    type OptionType = RocksDBOptions;
-
-    fn get_default_option() -> Self::OptionType {
-        let mut opts = Self::OptionType::default();
-        let mut block_opts = BlockBasedOptions::default();
-        block_opts.set_index_type(BlockBasedIndexType::HashSearch);
-        opts.set_block_based_table_factory(&block_opts);
-        let prefix_extractor = SliceTransform::create_fixed_prefix(32);
-        opts.set_prefix_extractor(prefix_extractor);
-        opts.create_if_missing(true);
-        opts
-    }
-
-    fn open(db_path: PathBuf, options: Option<Self::OptionType>) -> DBResult<Self> {
-        if let Some(opt) = options {
-            match RocksDB::open(&opt, db_path) {
-                Ok(database) => return Ok(database),
-                Err(e) => return Err(Box::new(DBError::new(DBErrorType::RocksDBError(e))))
-            }
-        } else {
-            let opt: Self::OptionType = Self::get_default_option();
-            match RocksDB::open(&opt, db_path) {
-                Ok(database) => return Ok(database),
-                Err(e) => return Err(Box::new(DBError::new(DBErrorType::RocksDBError(e))))
-            }
-        }
-    }
-
-    fn destroy(db_path: PathBuf) -> DBResult<()> {
-        match RocksDB::destroy(&(RocksDB::get_default_option()), db_path) {
-            Ok(_) => return Ok(()),
-            Err(e) => return Err(Box::new(DBError::new(DBErrorType::RocksDBError(e))))
-        }
-    }
-
-    fn _get(&self, key: &[u8]) -> DBResult<Vec<u8>> {
-        match self.get(key) {
-            Ok(Some(val)) => Ok(val.to_vec()),
-            Ok(None) => Err(Box::new(DBError::new(DBErrorType::NotFoundError))),
-            Err(err) => Err(Box::new(DBError::new(DBErrorType::RocksDBError(err))))
-        }
-    }
-
-    fn set(&mut self, key: &[u8], value: &Vec<u8>) -> DBResult<()> {
-        match self.put(key, value) {
-            Ok(()) => Ok(()),
-            Err(err) => Err(Box::new(DBError::new(DBErrorType::RocksDBError(err))))
-        }
-    }
-}
-
-
-pub struct Database<'a, BlockFileType = BlockFile, DatabaseType = RocksDB, EntryType = (Vec<u8>, ProtoMerkleNode)>
+pub struct BlockDB<'a, BlockFileType = BlockFile, DatabaseType = RocksDB>
     where BlockFileType: BlockFileOps, DatabaseType: IDB {
     database: DatabaseType,
     block_file: BlockFileType,
     file_number: u32,
     db_keys: &'a DBKeys,
-    pending_inserts: Vec<EntryType>
 }
 
-impl<'a, BlockFileType, DatabaseType, OptionType, EntryType> Database<'a, BlockFileType, DatabaseType, EntryType>
+impl<'a, BlockFileType, DatabaseType, OptionType> BlockDB<'a, BlockFileType, DatabaseType>
     where BlockFileType: BlockFileOps, DatabaseType: IDB<OptionType = OptionType> {
     fn new(db_path: PathBuf, file_path: PathBuf, db_keys: &'a DBKeys, options: Option<OptionType>) -> DBResult<Self> {
         let mut database = DatabaseType::open(db_path, options)?;
@@ -117,18 +48,16 @@ impl<'a, BlockFileType, DatabaseType, OptionType, EntryType> Database<'a, BlockF
                 }
             }
         };
-        let pending_inserts = Vec::with_capacity(8192);
         let block_file;
         match BlockFileType::new(&file_path, file_number, file_position) {
             Ok(b) => block_file = b,
             Err(_) => return Err(Box::new(DBError::new(DBErrorType::NotFoundError)))
         }
-        Ok(Database {
+        Ok(BlockDB {
             database,
             block_file,
             file_number,
-            db_keys,
-            pending_inserts
+            db_keys
         })
     }
 
@@ -258,42 +187,6 @@ impl<'a, BlockFileType, DatabaseType, OptionType, EntryType> Database<'a, BlockF
     }
 }
 
-impl<'a> IDatabase for Database<'a> {
-    type NodeType = ProtoMerkleNode;
-    type EntryType = (Vec<u8>, Self::NodeType);
-
-    fn open(_path: PathBuf) -> Result<Database<'a>, Box<Error>> {
-        return Err(Box::new(Exception::new("Open the database using new, not open")))
-    }
-
-    fn get_node(&self, key: &[u8]) -> Result<Option<Self::NodeType>, Box<Error>> {
-        let bytes = self.database._get(key)?;
-        Ok(Some(Self::NodeType::decode(&bytes)?))
-    }
-
-    fn insert(&mut self, key: &[u8], value: &Self::NodeType) -> Result<(), Box<Error>> {
-        self.pending_inserts.push((key.to_vec(), value.clone()));
-        Ok(())
-    }
-
-    fn remove(&mut self, key: &[u8]) -> Result<(), Box<Error>> {
-        self.database.delete(key)?;
-        Ok(())
-    }
-
-    fn batch_write(&mut self) -> Result<(), Box<Error>> {
-        let mut batch = WriteBatch::default();
-        while self.pending_inserts.len() > 0 {
-            let entry = self.pending_inserts.remove(0);
-            let key = entry.0;
-            let value = entry.1;
-            batch.put(key.as_ref(), value.encode()?.as_ref())?;
-        }
-        self.database.write(batch)?;
-        Ok(())
-    }
-}
-
 
 #[cfg(test)]
 mod tests {
@@ -305,46 +198,7 @@ mod tests {
     use common::block::tests::create_test_block_without_meta;
     use std::collections::HashMap;
     use database::block_file::BlockFileResult;
-
-
-    struct RocksDBMock {
-        db: HashMap<Vec<u8>, Vec<u8>>,
-    }
-
-    impl RocksDBMock {
-        pub fn new(db: HashMap<Vec<u8>, Vec<u8>>) -> RocksDBMock {
-            RocksDBMock {
-                db
-            }
-        }
-    }
-
-    impl IDB for RocksDBMock {
-        type OptionType = ();
-
-        fn get_default_option() -> () {
-            ()
-        }
-        fn open(_db_path: PathBuf, _options: Option<Self::OptionType>) -> DBResult<Self> {
-            Ok(RocksDBMock::new(HashMap::new()))
-        }
-
-        fn destroy(_db_path: PathBuf) -> DBResult<()> {
-            Ok(())
-        }
-
-        fn _get(&self, key: &[u8]) -> DBResult<Vec<u8>> {
-            match self.db.get(key) {
-                Some(val) => Ok(val.clone()),
-                None => Err(Box::new(DBError::new(DBErrorType::NotFoundError)))
-            }
-        }
-
-        fn set(&mut self, key: &[u8], value: &Vec<u8>) -> DBResult<()> {
-            self.db.insert(key.to_vec(), value.clone());
-            Ok(())
-        }
-    }
+    use database::mock::RocksDBMock;
 
     struct BlockFileMock {
         write_location: WriteLocation,
@@ -569,12 +423,12 @@ mod tests {
         }
     }
 
-    fn create_database<'a>(db_keys: &'a DBKeys) -> Database<'a, BlockFileMock, RocksDBMock> {
+    fn create_database<'a>(db_keys: &'a DBKeys) -> BlockDB<'a, BlockFileMock, RocksDBMock> {
         let mut path = PathBuf::new();
         let mut file_path = PathBuf::new();
         path.push("./test");
         file_path.push("./testFile");
-        Database::<'a, BlockFileMock, RocksDBMock>::new(path, file_path, db_keys, None).unwrap()
+        BlockDB::<'a, BlockFileMock, RocksDBMock>::new(path, file_path, db_keys, None).unwrap()
     }
 
     fn create_meta_without_file_info() -> Meta {
