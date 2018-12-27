@@ -1,0 +1,4 @@
+syntax = "proto3";
+message Protocol {
+    string msg = 1;
+}

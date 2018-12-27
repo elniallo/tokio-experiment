@@ -3,5 +3,17 @@ name = "tokio-experiment"
 version = "0.1.0"
 authors = ["niall"]
 edition = "2018"
+build = "build.rs"
+
+[build-dependencies]
+protoc = "2.0.4"
+protoc-rust-no-elision = "2.0.4"
+protobuf-codegen-no-elision = "2.0.4"
 
 [dependencies]
+bytes = "0.4"
+protobuf = "2.0.4"
+tokio-core = "0.1"
+tokio-proto="0.1"
+tokio-io="0.1"
+
