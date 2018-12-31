@@ -244,22 +244,22 @@ pub struct WorldState {
 }
 
 impl WorldState {
-    fn new(db: StateDB, max_depth: usize) -> Result<WorldState, Box<Error>> {
+    pub fn new(db: StateDB, max_depth: usize) -> Result<WorldState, Box<Error>> {
         let tree = MerkleBIT::from_db(db, max_depth)?;
         Ok(WorldState {
             tree
         })
     }
 
-    fn get(&self, root: &Blake2bHashResult, keys: Vec<&[u8]>) -> Result<Vec<Option<ProtoAccount>>, Box<Error>> {
+    pub fn get(&self, root: &Blake2bHashResult, keys: Vec<&[u8]>) -> Result<Vec<Option<ProtoAccount>>, Box<Error>> {
         Ok(self.tree.get(root, keys)?)
     }
 
-    fn insert(&mut self, previous_root: Option<&Blake2bHashResult>, keys: Vec<&[u8]>, values: &[&ProtoAccount]) -> Result<Vec<u8>, Box<Error>> {
+    pub fn insert(&mut self, previous_root: Option<&Blake2bHashResult>, keys: Vec<&[u8]>, values: &[&ProtoAccount]) -> Result<Vec<u8>, Box<Error>> {
         Ok(self.tree.insert(previous_root, keys, values)?)
     }
 
-    fn remove(&mut self, root: &[u8]) -> Result<(), Box<Error>> {
+    pub fn remove(&mut self, root: &[u8]) -> Result<(), Box<Error>> {
         Ok(self.tree.remove(root)?)
     }
 }

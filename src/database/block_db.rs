@@ -61,7 +61,7 @@ impl<'a, BlockFileType, DatabaseType, OptionType> BlockDB<'a, BlockFileType, Dat
         })
     }
 
-    fn get_header_tip_hash(&self) -> DBResult<HashValue> {
+    pub fn get_header_tip_hash(&self) -> DBResult<HashValue> {
         self.database._get(&self.db_keys.header_tip)
     }
 
@@ -69,7 +69,7 @@ impl<'a, BlockFileType, DatabaseType, OptionType> BlockDB<'a, BlockFileType, Dat
         self.database.set(&self.db_keys.header_tip, hash)
     }
 
-    fn get_block_tip_hash(&self) -> DBResult<HashValue> {
+    pub fn get_block_tip_hash(&self) -> DBResult<HashValue> {
         self.database._get(&self.db_keys.block_tip)
     }
     fn set_block_tip_hash(&mut self, hash: &HashValue) -> DBResult<()> {
@@ -142,7 +142,7 @@ impl<'a, BlockFileType, DatabaseType, OptionType> BlockDB<'a, BlockFileType, Dat
         Ok(blocks)
     }
 
-    fn get_block<T>(&mut self, hash: &HashValue) -> DBResult<T> where T: Decode + Clone {
+    pub fn get_block<T>(&mut self, hash: &HashValue) -> DBResult<T> where T: Decode + Clone {
         let meta_info = self.get_meta(hash)?;
         self.get_block_by_meta_info::<T>(meta_info)
     }
