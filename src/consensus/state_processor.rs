@@ -4,11 +4,12 @@ use std::error::Error;
 use common::Exception;
 use common::address::Address;
 use common::block::Block;
-use common::header::Header;
+use common::header::{BlockHeader, Header};
 use common::signed_tx::SignedTx;
 use common::transaction::Transaction;
 use consensus::worldstate::{Blake2bHashResult, WorldState};
 use database::block_db::BlockDB;
+use util::strict_math::{StrictU64};
 
 use serialization::state::Account as ProtoAccount;
 
@@ -96,17 +97,15 @@ impl<'a> StateProcessor<'a> {
         }
 
         // Insert existing balances into a map
-        let accounts;
-        let mut address_map = HashMap::new();
+        let mut account_map = HashMap::new();
+
         if self.state_cache.len() > 0 {
-            accounts = self.worldstate.get(&self.state_cache[self.state_cache.len() - 1], address_keys)?;
-            for i in 0..accounts.len() {
-                if let Some(ref a) = accounts[i] {
-                    address_map.insert(address_list[i], a);
+            let mut accounts = self.worldstate.get(&self.state_cache[self.state_cache.len() - 1], address_keys)?;
+            for i in (0..accounts.len()).rev() {
+                if let Some(account) = accounts.remove(i) {
+                    account_map.insert(address_list[i], account);
                 }
             }
-        } else {
-            accounts = vec![];
         }
 
         // Process blocks in memory
@@ -115,101 +114,144 @@ impl<'a> StateProcessor<'a> {
             let mut processed_txs: usize = 0;
 
             if let Some(ref txs) = block.txs {
+                let miner = block.header.get_miner();
+                let genesis;
+                if let Some(m) = miner {
+                    genesis = false;
+                } else {
+                    genesis = true;
+                }
                 for tx in txs {
-                    let mut account;
-                    if let Some(ref from) = tx.get_from() {
-                        if let Some(a) = address_map.get_mut(from) {
-                            account = *a;
-                        } else {
-                            // Account has no balance, therefore it cannot make a transaction
-                            revert = true;
-                            break;
-                        }
-                    } else {
-                        // TODO: Generalize this function to handle the genesis block
+                    if let Err(e) = StateProcessor::generate_tx_transition(tx, &mut account_map, miner, genesis) {
                         revert = true;
                         break;
                     }
-
-                    // Check tx nonce
-                    if let Some(nonce) = tx.get_nonce() {
-                        if nonce != account.get_nonce() {
-                            revert = true;
-                            break;
-                        }
-                    } else {
-                        revert = true;
-                        break;
-                    }
-
-                    // Check tx amount vs account balance
-                    let amount = tx.get_amount();
-                    if amount >= account.get_balance() {
-                        revert = true;
-                        break;
-                    }
-
-                    // Check tx fee vs account balance
-                    if let Some(fee) = tx.get_fee() {
-                        if fee >= account.get_balance() {
-                            revert = true;
-                            break;
-                        }
-                    } else {
-                        revert = true;
-                        break;
-                    }
+                    processed_txs += 1;
                 }
             }
 
             if revert {
                 // TODO: Revert the changes in this block and then stop
+                break;
             }
         }
 
         return Err(Box::new(Exception::new("Not Implemented")))
     }
 
-    fn generate_tx_transition<TxType>(tx: &TxType, account_map: &mut HashMap<Address, &ProtoAccount>, miner: Address, genesis: bool) -> StateProcessorResult<()>
+    fn generate_tx_transition<TxType>(tx: &TxType, account_map: &mut HashMap<Address, ProtoAccount>, miner: Option<&Address>, genesis: bool) -> StateProcessorResult<()>
         where TxType: Transaction {
 
-        if let Some(from) = tx.get_from() {
-            if let Some(account) = account_map.get_mut(&from) {
-                if let Some(fee) = tx.get_fee() {
-                    if let Some(nonce) = tx.get_nonce() {
-
-                        if nonce != account.get_nonce() {
-                            return Err(Box::new(Exception::new("Invalid Tx: Tx has an invalid 'nonce'")))
-                        }
-
-                        let amount = tx.get_amount();
-                        // TODO: Safely subtract balance + fee from the from account
-                        // TODO: Safely add fee to the miner account
-                        if let Some(to) = tx.get_to() {
-                            // Tx is a normal transaction
-                            // TODO: Safely add amount to the to account
-                        } else {
-                            // Tx is a burn transaction, do nothing more
-                        }
-                        
-                        // TODO: Increment sending account nonce
-                    } else {
-                        return Err(Box::new(Exception::new("Invalid Tx: Tx is missing the 'nonce' field")))
-                    }
+        // Handle a genesis transaction
+        if genesis {
+            if let Some(to) = tx.get_to() {
+                let nonce;
+                if let Some(n) = tx.get_nonce() {
+                    nonce = n
                 } else {
-                    return Err(Box::new(Exception::new("Invalid Tx: Tx is missing the 'fee' field")))
+                    nonce = 0;
+                }
+
+                if let Some(to_account) = account_map.get_mut(&to) {
+                    // Begin committing updates to account map if the previous line succeeded
+                    to_account.set_balance(tx.get_amount());
+                    to_account.set_nonce(nonce);
+                } else {
+                    return Err(Box::new(Exception::new("Invalid Tx: Tx to account does not exist")))
                 }
             } else {
-                return Err(Box::new(Exception::new("Invalid Tx: Tx account does not exist")))
+                return Err(Box::new(Exception::new("Invalid Tx: Tx is missing to field")))
             }
-
-        } else if genesis {
-            // Tx may be a genesis transaction
-        } else {
-            return Err(Box::new(Exception::new("Invalid Tx: Tx is missing the 'from' field")))
+            return Ok(())
         }
 
-        return Err(Box::new(Exception::new("Not Implemented")))
+        let miner_address;
+        if let Some(addr) = miner {
+            miner_address = addr;
+        } else {
+            return Err(Box::new(Exception::new("No miner address was supplied")))
+        }
+
+        let prev_miner_balance;
+        let prev_from_balance;
+        let prev_from_nonce;
+        let fee;
+        let nonce;
+
+        if let Some(a) = account_map.get(miner_address) {
+            prev_miner_balance = StrictU64::new(a.get_balance());
+        } else {
+            return Err(Box::new(Exception::new("Block miner not found in account map")));
+        }
+
+        let from;
+        if let Some(f) = tx.get_from() {
+            from = f;
+            if let Some(a) = account_map.get(&from) {
+                prev_from_balance = StrictU64::new(a.get_balance());
+                prev_from_nonce = a.get_nonce();
+            } else {
+                return Err(Box::new(Exception::new("Invalid Tx: Tx is missing from account")))
+            }
+        } else {
+            return Err(Box::new(Exception::new("Invalid Tx: Tx is missing from")))
+        }
+
+        if let Some(f) = tx.get_fee() {
+            fee = StrictU64::new(f);
+        } else {
+            return Err(Box::new(Exception::new("Invalid Tx: Tx is missing fee")))
+        }
+
+        if let Some(n) = tx.get_nonce() {
+            nonce = n;
+        } else {
+            return Err(Box::new(Exception::new("Invalid Tx: Tx is missing nonce")))
+        }
+
+        if nonce != prev_from_nonce {
+            return Err(Box::new(Exception::new(&format!("Invalid Tx:\n Expected nonce: {}\n Supplied nonce: {}", prev_from_nonce, nonce))))
+        }
+
+        let amount = StrictU64::new(tx.get_amount());
+        let total = (amount + fee)?;
+
+        // Handle the from account and miner account
+        let new_from_balance = (prev_from_balance - total)?;
+        let new_miner_balance = (prev_miner_balance + fee)?;
+
+        let new_from_nonce = prev_from_nonce + 1;
+
+        // Handle the to account if one is supplied
+        if let Some(to) = tx.get_to() {
+            if let Some(to_account) = account_map.get_mut(&to) {
+                let prev_to_balance = StrictU64::new(to_account.get_balance());
+
+                let new_to_balance = (prev_to_balance + amount)?;
+
+                // Begin committing updates to account map if the previous line succeeded
+                to_account.set_balance(u64::from(new_to_balance));
+            } else {
+                return Err(Box::new(Exception::new("Invalid Tx: Tx to account does not exist")))
+            }
+        }
+
+        // Commit updates for the from address to the account map
+        if let Some(from_account) = account_map.get_mut(&from) {
+            from_account.set_balance(u64::from(new_from_balance));
+            from_account.set_nonce(new_from_nonce);
+        } else {
+            return Err(Box::new(Exception::new("Corrupt account map")))
+        }
+
+        // Commit updates for the miner address to the account map
+        if let Some(miner_account) = account_map.get_mut(miner_address) {
+            miner_account.set_balance(u64::from(fee));
+        } else {
+            return Err(Box::new(Exception::new("Corrupt account map")))
+        }
+
+        return Ok(())
     }
 
     fn apply_transition(transition: HashMap<Address, ProtoAccount>, root: &[u8]) -> Result<Vec<u8>, Box<Error>> {
