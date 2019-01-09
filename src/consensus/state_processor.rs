@@ -9,7 +9,7 @@ use common::signed_tx::SignedTx;
 use common::transaction::Transaction;
 use consensus::worldstate::{Blake2bHashResult, WorldState};
 use database::block_db::BlockDB;
-use util::strict_math::{StrictU64};
+use util::strict_math::StrictU64;
 
 use serialization::state::Account as ProtoAccount;
 
@@ -46,7 +46,7 @@ impl<'a> StateProcessor<'a> {
         Ok(())
     }
 
-    fn regenerate(&mut self, height: u32) -> Result<(), Box<Error>> {
+    fn regenerate(&mut self, height: u32) -> StateProcessorResult<()> {
         let block_tip = self.block_db.get_block_tip_hash()?;
         let block = self.block_db.get_block::<Block<Header, SignedTx>>(&block_tip)?;
         let tip_height;
@@ -63,7 +63,7 @@ impl<'a> StateProcessor<'a> {
         return Err(Box::new(Exception::new("Not Implemented")))
     }
 
-    fn generate_transition(&self, blocks: Vec<&Block<Header, SignedTx>>) -> Result<HashMap<Address, ProtoAccount>, Box<Error>> {
+    fn generate_transition(&self, blocks: Vec<&Block<Header, SignedTx>>) -> StateProcessorResult<HashMap<Address, ProtoAccount>> {
         let mut address_list: Vec<Address> = Vec::with_capacity(8192);
         let mut address_set = HashSet::new();
 
@@ -131,7 +131,7 @@ impl<'a> StateProcessor<'a> {
             }
 
             if revert {
-                // TODO: Revert the changes in this block and then stop
+                // TODO: Revert the updates in this block and then stop
                 break;
             }
         }
@@ -147,13 +147,13 @@ impl<'a> StateProcessor<'a> {
             if let Some(to) = tx.get_to() {
                 let nonce;
                 if let Some(n) = tx.get_nonce() {
-                    nonce = n
+                    nonce = n;
                 } else {
                     nonce = 0;
                 }
 
                 if let Some(to_account) = account_map.get_mut(&to) {
-                    // Begin committing updates to account map if the previous line succeeded
+                    // Begin committing updates to account map
                     to_account.set_balance(tx.get_amount());
                     to_account.set_nonce(nonce);
                 } else {
@@ -246,7 +246,7 @@ impl<'a> StateProcessor<'a> {
 
         // Commit updates for the miner address to the account map
         if let Some(miner_account) = account_map.get_mut(miner_address) {
-            miner_account.set_balance(u64::from(fee));
+            miner_account.set_balance(u64::from(new_miner_balance));
         } else {
             return Err(Box::new(Exception::new("Corrupt account map")))
         }
@@ -254,7 +254,99 @@ impl<'a> StateProcessor<'a> {
         return Ok(())
     }
 
-    fn apply_transition(transition: HashMap<Address, ProtoAccount>, root: &[u8]) -> Result<Vec<u8>, Box<Error>> {
+    fn revert_tx_transition<TxType>(tx: &TxType, account_map: &mut HashMap<Address, ProtoAccount>, miner: Option<&Address>) -> StateProcessorResult<()>
+        where TxType: Transaction {
+
+        let miner_address;
+        if let Some(addr) = miner {
+            miner_address = addr;
+        } else {
+            return Err(Box::new(Exception::new("No miner address was supplied")))
+        }
+
+        let prev_miner_balance;
+        let prev_from_balance;
+        let prev_from_nonce;
+        let fee;
+
+        if let Some(a) = account_map.get(miner_address) {
+            prev_miner_balance = StrictU64::new(a.get_balance());
+        } else {
+            return Err(Box::new(Exception::new("Block miner not found in account map")));
+        }
+
+        let from;
+        if let Some(f) = tx.get_from() {
+            from = f;
+            if let Some(a) = account_map.get(&from) {
+                prev_from_balance = StrictU64::new(a.get_balance());
+                prev_from_nonce = a.get_nonce();
+            } else {
+                return Err(Box::new(Exception::new("Invalid Tx: Tx is missing from account")))
+            }
+        } else {
+            return Err(Box::new(Exception::new("Invalid Tx: Tx is missing from")))
+        }
+
+        if let Some(f) = tx.get_fee() {
+            fee = StrictU64::new(f);
+        } else {
+            return Err(Box::new(Exception::new("Invalid Tx: Tx is missing fee")))
+        }
+
+        let amount = StrictU64::new(tx.get_amount());
+        let total = (amount + fee)?;
+
+        // Handle the from account and miner account
+        let new_from_balance = (prev_from_balance + total)?;
+        let new_miner_balance = (prev_miner_balance - fee)?;
+
+        let new_from_nonce = prev_from_nonce - 1;
+
+        // Handle the to account if one is supplied
+        if let Some(to) = tx.get_to() {
+            if let Some(to_account) = account_map.get_mut(&to) {
+                let prev_to_balance = StrictU64::new(to_account.get_balance());
+
+                let new_to_balance = (prev_to_balance - amount)?;
+
+                // Begin committing updates to account map if the previous line succeeded
+                to_account.set_balance(u64::from(new_to_balance));
+            } else {
+                return Err(Box::new(Exception::new("Invalid Tx: Tx to account does not exist")))
+            }
+        }
+
+        // Commit updates for the from address to the account map
+        if let Some(from_account) = account_map.get_mut(&from) {
+            from_account.set_balance(u64::from(new_from_balance));
+            from_account.set_nonce(new_from_nonce);
+        } else {
+            return Err(Box::new(Exception::new("Corrupt account map")))
+        }
+
+        // Commit updates for the miner address to the account map
+        if let Some(miner_account) = account_map.get_mut(miner_address) {
+            miner_account.set_balance(u64::from(new_miner_balance));
+        } else {
+            return Err(Box::new(Exception::new("Corrupt account map")))
+        }
+
+        return Ok(())
+    }
+
+    fn apply_transition(transition: HashMap<Address, ProtoAccount>, root: &[u8]) -> StateProcessorResult<Vec<u8>> {
         return Err(Box::new(Exception::new("Not Implemented")))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::tx::Tx;
+
+    fn it_applies_a_tx_transition() {
+        let from_addr = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
+//        let tx = Tx::new();
     }
 }

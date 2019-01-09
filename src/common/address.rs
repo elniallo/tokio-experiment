@@ -1,8 +1,13 @@
+use std::result::Result;
+use std::error::Error;
+
+use common::Exception;
+
 use rust_base58::{FromBase58, ToBase58};
 use secp256k1::PublicKey;
 use util::hash::hash;
 
-use std::result::Result;
+
 
 fn check_sum(arr: &[u8; 20]) -> String {
     let arr_hash = hash(arr, 32);
@@ -10,13 +15,15 @@ fn check_sum(arr: &[u8; 20]) -> String {
     format!("{}", &string[0..4])
 }
 
+pub type AddressResult<T> = Result<T, Box<Error>>;
+
 pub type Address = [u8; 20];
 
 pub trait ValidAddress {
     fn to_string(&self) -> String;
-    fn from_string(string: &String) -> Result<Address, String>;
+    fn from_string(string: &String) -> AddressResult<Address>;
     fn from_pubkey(pubkey: PublicKey) -> Address;
-    fn from_bytes(bytes: &[u8;20]) -> Address;
+    fn from_bytes(bytes: &[u8; 20]) -> Address;
 }
 
 impl ValidAddress for Address {
@@ -25,16 +32,16 @@ impl ValidAddress for Address {
         "H".to_string() + &base58_address + &check_sum(&self)
     }
 
-    fn from_string(string: &String) -> Result<Address, String> {
+    fn from_string(string: &String) -> AddressResult<Address> {
         let mut string_iter = string.chars();
         let first_char = string_iter.next();
         match first_char {
             Some(letter) => {
                 if letter.to_string() != "H" {
-                    return Err("Address must begin with an H".to_string());
+                    return Err(Box::new(Exception::new("Address must begin with an H")));
                 }
             }
-            None => return Err("No data was supplied".to_string()),
+            None => return Err(Box::new(Exception::new("No data was supplied"))),
         }
 
         let address_and_checksum = &string[1..string.len()];
@@ -42,29 +49,28 @@ impl ValidAddress for Address {
         let checksum =
             &address_and_checksum[address_and_checksum.len() - 4..address_and_checksum.len()];
 
-        let decoded = address.from_base58();
-        let mut decoded_bytes: [u8; 20] = [0; 20];
-        match decoded {
-            Ok(s) => {
-                if s.len() != 20 {
-                    return Err(format!("{} is {} bytes long", address, decoded_bytes.len()));
-                }
-                decoded_bytes.clone_from_slice(&s[..]);
-            }
-            Err(e) => return Err(format!("{}", e)),
+        let decoded_bytes;
+        if let Ok(b) = address.from_base58() {
+            decoded_bytes = b;
+        } else {
+            return Err(Box::new(Exception::new("Failed to decode address string")));
         }
-
-        let checksum_bytes = check_sum(&decoded_bytes);
-        if checksum_bytes.to_string() != checksum {
-            return Err(format!(
-                "{} did not match {}",
-                checksum,
-                checksum_bytes.to_string()
-            ));
+        if decoded_bytes.len() != 20 {
+            return Err(Box::new(Exception::new((&format!("{} is {} bytes long", address, decoded_bytes.len())))));
         }
 
         let mut address_bytes: [u8; 20] = [0; 20];
         address_bytes.clone_from_slice(&decoded_bytes[0..20]);
+
+        let checksum_bytes = check_sum(&address_bytes);
+        if checksum_bytes.to_string() != checksum {
+            return Err(Box::new(Exception::new(&format!(
+                "{} did not match {}",
+                checksum,
+                checksum_bytes.to_string()
+            ))));
+        }
+
         Ok(address_bytes)
     }
 

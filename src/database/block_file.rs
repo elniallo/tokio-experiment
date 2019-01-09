@@ -317,7 +317,7 @@ mod tests {
     use double::Mock;
     use std::fmt::{self, Display, Formatter};
     use std::io;
-    use common::common_tests::common_tests::{assert_block, assert_genesis_block};
+    use common::test_functions::common_tests::{assert_block, assert_genesis_block};
 
     macro_rules! impl_read {
         ($class_name:ident) => {

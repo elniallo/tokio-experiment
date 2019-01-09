@@ -115,7 +115,7 @@ impl PartialOrd for Tx {
 mod tests {
     use super::*;
     use common::address::ValidAddress;
-    use rand::{thread_rng, Rng};
+    use rand::{Rng, SeedableRng, StdRng};
 
     #[test]
     fn it_makes_a_transaction() {
@@ -229,8 +229,10 @@ mod tests {
     #[test]
     #[should_panic]
     fn it_fails_to_decode_random_bad_bytes() {
+        let seed = [0x1Eu8; 32];
+        let mut rng: StdRng = SeedableRng::from_seed(seed);
         let mut random_bytes = [0u8; 256];
-        thread_rng().fill(&mut random_bytes);
+        rng.fill(&mut random_bytes);
         Tx::decode(&random_bytes.to_vec()).unwrap();
     }
 }

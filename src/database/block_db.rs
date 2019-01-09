@@ -194,7 +194,7 @@ mod tests {
     use common::block::Block;
     use common::header::Header;
     use common::signed_tx::SignedTx;
-    use common::common_tests::common_tests::assert_block;
+    use common::test_functions::common_tests::assert_block;
     use common::block::tests::create_test_block_without_meta;
     use std::collections::HashMap;
     use database::block_file::BlockFileResult;

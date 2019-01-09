@@ -3,6 +3,8 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::marker::Sized;
 use std::result::Result;
 
+use rust_base58::base58::FromBase58Error;
+
 pub mod block_status;
 pub mod address;
 pub mod block;
@@ -19,7 +21,8 @@ pub mod transaction;
 pub mod tx;
 pub mod tx_pool;
 pub mod wallet;
-#[cfg(test)] pub mod common_tests;
+#[cfg(test)] pub mod test_functions;
+
 pub trait Encode {
     fn encode(&self) -> Result<Vec<u8>, Box<Error>>;
 }
