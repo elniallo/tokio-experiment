@@ -7,11 +7,11 @@ use tokio_io::codec::{Decoder, Encoder};
 use tokio_proto::TcpServer;
 
 pub struct Protocol {
-    msg: String,
+    pub msg: String,
 }
 
 impl Protocol {
-    fn new() -> Protocol {
+    pub fn new() -> Protocol {
         Protocol { msg: String::new() }
     }
 }

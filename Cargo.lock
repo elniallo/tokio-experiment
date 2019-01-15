@@ -531,6 +531,7 @@ name = "tokio-experiment"
 version = "0.1.0"
 dependencies = [
  "bytes 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "protobuf 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "protobuf-codegen-no-elision 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "protoc 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
