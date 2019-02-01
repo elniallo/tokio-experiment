@@ -15,7 +15,7 @@ use tokio_io::AsyncRead;
 
 use tokio_io::codec::Decoder;
 
-use crate::protocol::protocol::Protocol;
+use crate::server::network_manager::NetworkManager;
 
 pub fn main() {
     let args: Vec<String> = ::std::env::args().collect();
@@ -34,7 +34,6 @@ pub fn main() {
     let srv = socket.incoming().for_each(move |(stream, addr)| {
         println!("New Connection: {}", addr);
         let (reader, writer) = stream.split();
-
         let (tx, rx) = futures::sync::mpsc::unbounded();
         connections.borrow_mut().insert(addr, tx);
 
@@ -51,16 +50,10 @@ pub fn main() {
                     Ok((reader, vec))
                 }
             });
-            let mut bytes = BytesMut::new();
             line.map(move |(reader, vec)| {
+                let mut bytes = BytesMut::new();
                 bytes.extend_from_slice(&vec);
-                let mut proto = Protocol::new();
-                let decoded = proto.decode(&mut bytes).unwrap();
-                match decoded {
-                    Some(msg) => proto = msg,
-                    None => (),
-                }
-                println!("Message: {}", &proto.msg);
+                let decoded = NetworkManager::decode(&bytes).unwrap();
                 reader
             })
         });
