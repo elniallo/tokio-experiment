@@ -17,16 +17,16 @@ use tokio_io::codec::Decoder;
 
 use crate::server::network_manager::NetworkManager;
 
-pub fn main() {
+pub fn main() -> Result<(), Box<std::io::Error>> {
     let args: Vec<String> = ::std::env::args().collect();
     let addr = args[2]
         .to_socket_addrs()
         .unwrap()
         .next()
         .expect("could not parse address");
-    let mut core = Core::new().unwrap();
+    let mut core = Core::new()?;
     let handle = core.handle();
-    let socket = TcpListener::bind(&addr, &handle).unwrap();
+    let socket = TcpListener::bind(&addr, &handle)?;
     println!("Server listening on: {}", addr);
 
     let connections = Rc::new(RefCell::new(HashMap::new()));
@@ -65,5 +65,5 @@ pub fn main() {
         });
         Ok(())
     });
-    core.run(srv).unwrap();
+    Ok(core.run(srv).unwrap())
 }
