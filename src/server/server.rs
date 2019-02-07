@@ -8,6 +8,7 @@ use std::io::{BufReader, Error, ErrorKind};
 use std::iter;
 use std::net::ToSocketAddrs;
 use std::rc::Rc;
+use std::time::Duration;
 use tokio_core::net::TcpListener;
 use tokio_core::reactor::Core;
 use tokio_io::io;
@@ -17,8 +18,9 @@ use tokio_io::codec::Decoder;
 
 use crate::server::network_manager::NetworkManager;
 
-pub fn main() -> Result<(), Box<std::io::Error>> {
-    let args: Vec<String> = ::std::env::args().collect();
+pub fn main(args: Vec<String>) -> Result<(), Box<std::io::Error>> {
+    // let args: Vec<String> = ::std::env::args().collect();
+    println!("Args: {:?}", args);
     let addr = args[2]
         .to_socket_addrs()
         .unwrap()
@@ -32,6 +34,7 @@ pub fn main() -> Result<(), Box<std::io::Error>> {
     let connections = Rc::new(RefCell::new(HashMap::new()));
 
     let srv = socket.incoming().for_each(move |(stream, addr)| {
+        stream.set_nodelay(true)?;
         println!("New Connection: {}", addr);
         let (reader, writer) = stream.split();
         let (tx, rx) = futures::sync::mpsc::unbounded();
@@ -63,6 +66,15 @@ pub fn main() -> Result<(), Box<std::io::Error>> {
             let amt = amt.map(|(writer, _)| writer);
             amt.map_err(|_| ())
         });
+
+        let connections = connections.clone();
+        let socket_reader = socket_reader.map_err(|_| ());
+        let connection = socket_reader.map(|_| ()).select(socket_writer.map(|_| ()));
+        handle.spawn(connection.then(move |_| {
+            // connections.borrow_mut().remove(&addr);
+            // println!("Connection {} closed.", addr);
+            Ok(())
+        }));
         Ok(())
     });
     Ok(core.run(srv).unwrap())

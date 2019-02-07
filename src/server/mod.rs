@@ -1,5 +1,6 @@
 pub mod network_manager;
 pub mod server;
+pub mod socket_parser;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 

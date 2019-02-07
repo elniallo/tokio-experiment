@@ -1,3 +1,4 @@
+extern crate byteorder;
 extern crate bytes;
 extern crate futures;
 extern crate tokio_core;
@@ -9,9 +10,10 @@ pub mod server;
 
 fn main() {
     let args: Vec<String> = ::std::env::args().collect();
+    println!("Args: {}", args.len());
     if args.len() >= 2 {
         match &args[1][..] {
-            "server" => return server::server::main().unwrap(),
+            "server" => return server::server::main(args).unwrap(),
             _ => (),
         }
     }

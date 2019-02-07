@@ -17,4 +17,5 @@ protobuf = "2.0.4"
 tokio-core = "0.1"
 tokio-proto="0.1"
 tokio-io="0.1"
+byteorder="*"
 
