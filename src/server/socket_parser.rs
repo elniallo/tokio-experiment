@@ -9,6 +9,7 @@ use std::error::Error;
 const HEADER_ROUTE_LENGTH: usize = 4;
 const HEADER_POSTFIX_LENGTH: usize = 4;
 const HEADER_PREFIX: [u8; 4] = [172, 215, 103, 237];
+const MAX_PACKET_SIZE: usize = 1024 * 1024;
 
 #[derive(PartialEq, PartialOrd, Debug)]
 enum ParseState {
@@ -25,6 +26,8 @@ where
     buffer: Vec<u8>,
     state: ParseState,
     parse_index: usize,
+    scrap_buffer: Vec<u8>,
+    route: u32,
 }
 
 impl<T> SocketParser<T>
@@ -37,6 +40,8 @@ where
             buffer: Vec::new(),
             state: ParseState::HeaderPrefix,
             parse_index: 0,
+            scrap_buffer: Vec::with_capacity(4),
+            route: 0,
         }
     }
 
@@ -73,7 +78,10 @@ where
                 *new_data_index += 1;
             }
         }
-        self.state = ParseState::HeaderRoute;
+        if self.parse_index == HEADER_PREFIX.len() {
+            self.state = ParseState::HeaderRoute;
+            self.parse_index = 0;
+        }
         Ok(())
     }
 
@@ -82,8 +90,11 @@ where
         new_data: &Vec<u8>,
         new_data_index: &mut usize,
     ) -> Result<(), Box<Error>> {
-        *new_data_index += 4;
-        self.state = ParseState::HeaderBodyLength;
+        if let Some(route) = self.parse_uint_32_le(new_data_index, new_data) {
+            self.state = ParseState::HeaderBodyLength;
+            self.route = route;
+            self.parse_index = 0;
+        }
         Ok(())
     }
 
@@ -92,8 +103,14 @@ where
         new_data: &Vec<u8>,
         new_data_index: &mut usize,
     ) -> Result<(), Box<Error>> {
-        *new_data_index += 4;
-        self.state = ParseState::Body;
+        if let Some(length) = self.parse_uint_32_le(new_data_index, new_data) {
+            if length as usize > MAX_PACKET_SIZE {
+                return Err(Box::new(Exception::new("Packet size exceeded")));
+            }
+            self.state = ParseState::Body;
+            self.buffer = Vec::with_capacity(length as usize);
+            self.parse_index = 0;
+        }
         Ok(())
     }
 
@@ -112,12 +129,28 @@ where
     fn parse_uint_32_le(&mut self, next_index: &mut usize, new_data: &Vec<u8>) -> Option<u32> {
         let new_bytes_available = new_data.len() - *next_index;
         if self.parse_index == 0 && new_bytes_available >= 4 {
+            let num = LittleEndian::read_u32(&new_data[*next_index..*next_index + 4]);
             *next_index += 4;
-            return Some(LittleEndian::read_u32(&new_data[0..4]));
+            return Some(num);
         } else {
             let source_end = *next_index + min(new_bytes_available, 4 - self.parse_index);
+            let bytes_copied = self.copy_bytes(&new_data[*next_index..source_end]);
+            *next_index += bytes_copied;
+            self.parse_index += bytes_copied;
+            if self.parse_index == 4 {
+                return Some(LittleEndian::read_u32(&self.scrap_buffer[0..4]));
+            }
         }
         None
+    }
+
+    fn copy_bytes(&mut self, bytes_to_copy: &[u8]) -> usize {
+        let mut bytes_copied = 0;
+        for i in 0..bytes_to_copy.len() {
+            self.scrap_buffer[self.parse_index] = bytes_to_copy[i];
+            bytes_copied = i;
+        }
+        bytes_copied
     }
 }
 
