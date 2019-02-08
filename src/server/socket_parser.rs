@@ -18,23 +18,18 @@ enum ParseState {
     HeaderBodyLength,
     Body,
 }
-pub struct SocketParser<T>
-where
-    T: Send + Sync + Clone,
-{
-    transmitter: T,
+pub struct SocketParser {
+    transmitter: futures::sync::mpsc::UnboundedSender<bytes::BytesMut>,
     buffer: Vec<u8>,
     state: ParseState,
     parse_index: usize,
     scrap_buffer: Vec<u8>,
     route: u32,
+    body_length: u32,
 }
 
-impl<T> SocketParser<T>
-where
-    T: Send + Sync + Clone,
-{
-    pub fn new(tx: T) -> Self {
+impl SocketParser {
+    pub fn new(tx: futures::sync::mpsc::UnboundedSender<bytes::BytesMut>) -> Self {
         Self {
             transmitter: tx,
             buffer: Vec::new(),
@@ -42,28 +37,47 @@ where
             parse_index: 0,
             scrap_buffer: Vec::with_capacity(4),
             route: 0,
+            body_length: 0,
         }
     }
 
-    pub fn parse(&mut self, bytes: &Vec<u8>) -> Result<(), Box<Error>> {
+    fn reset_parser(&mut self) {
+        self.buffer.clear();
+        self.state = ParseState::HeaderPrefix;
+        self.parse_index = 0;
+        self.scrap_buffer.clear();
+        self.route = 0;
+        self.body_length = 0;
+    }
+
+    pub fn parse(&mut self, bytes: &Vec<u8>) -> Result<Option<Vec<u8>>, Box<Error>> {
         let mut new_data_index = 0;
         while new_data_index < bytes.len() {
             match self.state {
                 ParseState::HeaderPrefix => {
+                    println!("First");
                     self.parse_header_prefix(bytes, &mut new_data_index)?;
                 }
                 ParseState::HeaderRoute => {
+                    println!("Second");
                     self.parse_header_route(bytes, &mut new_data_index)?;
                 }
                 ParseState::HeaderBodyLength => {
+                    println!("Third");
                     self.parse_body_length(bytes, &mut new_data_index)?;
                 }
                 ParseState::Body => {
+                    println!("Fourth");
                     self.parse_body(bytes, &mut new_data_index);
                 }
             }
         }
-        Ok(())
+        let mut opt = None;
+        if self.buffer.len() == self.body_length as usize && self.state == ParseState::Body {
+            opt = (Some(self.buffer.clone()));
+            self.reset_parser();
+        }
+        Ok(opt)
     }
     fn parse_header_prefix(
         &mut self,
@@ -122,6 +136,9 @@ where
         while new_data_index < &mut new_data.len() {
             self.buffer.push(new_data[*new_data_index]);
             *new_data_index += 1;
+            if self.buffer.len() == self.body_length as usize {
+                break;
+            }
         }
         Ok(())
     }
@@ -160,15 +177,6 @@ pub mod tests {
     use bytes::{BufMut, BytesMut};
     use futures::stream::{self, Stream};
     use futures::Future;
-    #[derive(Clone)]
-    struct Transmitter {}
-    impl Transmitter {
-        fn new() -> Self {
-            Self {}
-        }
-    }
-    unsafe impl Send for Transmitter {}
-    unsafe impl Sync for Transmitter {}
     #[test]
     fn it_should_initialise_with_a_trasnsmitter_with_correct_traits() {
         let (tx, _rx): (
@@ -189,13 +197,18 @@ pub mod tests {
         ];
         parser.parse(&bytes1);
         assert_eq!(parser.state, ParseState::Body);
+        println!("This one fired");
         parser.parse(&bytes2);
         assert_eq!(parser.buffer, expected_out);
     }
-    #[test]
 
+    #[test]
     fn it_should_return_an_error_from_a_mismatched_header_prefix() {
-        let mut parser = SocketParser::new(Transmitter::new());
+        let (tx, _rx): (
+            futures::sync::mpsc::UnboundedSender<bytes::BytesMut>,
+            futures::sync::mpsc::UnboundedReceiver<bytes::BytesMut>,
+        ) = futures::sync::mpsc::unbounded();
+        let mut parser = SocketParser::new(tx);
         let bytes1 = vec![172, 216, 103, 237, 0, 0, 0, 64, 60, 0, 0, 0, 10];
         let res = parser.parse(&bytes1);
         match res {
