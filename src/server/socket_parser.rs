@@ -11,13 +11,14 @@ const HEADER_POSTFIX_LENGTH: usize = 4;
 const HEADER_PREFIX: [u8; 4] = [172, 215, 103, 237];
 const MAX_PACKET_SIZE: usize = 1024 * 1024;
 
-#[derive(PartialEq, PartialOrd, Debug)]
+#[derive(PartialEq, PartialOrd, Debug, Clone)]
 enum ParseState {
     HeaderPrefix,
     HeaderRoute,
     HeaderBodyLength,
     Body,
 }
+#[derive(Clone)]
 pub struct SocketParser {
     transmitter: futures::sync::mpsc::UnboundedSender<bytes::BytesMut>,
     buffer: Vec<u8>,
@@ -73,7 +74,10 @@ impl SocketParser {
             }
         }
         let mut opt = None;
+        println!("Buf Len: {}", self.buffer.len());
+        println!("Buf Expected: {},", self.body_length);
         if self.buffer.len() == self.body_length as usize && self.state == ParseState::Body {
+            println!("returning");
             opt = (Some(self.buffer.clone()));
             self.reset_parser();
         }
@@ -123,6 +127,7 @@ impl SocketParser {
             }
             self.state = ParseState::Body;
             self.buffer = Vec::with_capacity(length as usize);
+            self.body_length = length;
             self.parse_index = 0;
         }
         Ok(())

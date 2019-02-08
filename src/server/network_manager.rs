@@ -8,7 +8,6 @@ pub struct NetworkMessage {}
 impl Decode for NetworkMessage {
     type ProtoType = ProtoNetwork;
     fn decode(buffer: &Vec<u8>) -> Result<Self, Box<Error>> {
-        println!("Bytes: {:?}", &buffer);
         let mut message: ProtoNetwork = ProtoNetwork::new();
         if let Err(_) = message.merge_from(&mut CodedInputStream::from_bytes(buffer.as_slice())) {
             // return Err(Box::new(Exception::new("Decoding fail")));
@@ -28,8 +27,7 @@ impl Decode for NetworkMessage {
 pub struct NetworkManager {}
 
 impl NetworkManager {
-    pub fn decode(bytes: &BytesMut) -> Result<NetworkMessage, Box<Error>> {
-        println!("Bytes input: {:?}", bytes.clone().to_vec());
-        NetworkMessage::decode(&bytes.to_vec())
+    pub fn decode(bytes: &Vec<u8>) -> Result<NetworkMessage, Box<Error>> {
+        NetworkMessage::decode(bytes)
     }
 }

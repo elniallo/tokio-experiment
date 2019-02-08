@@ -1,3 +1,4 @@
+use crate::server::socket_parser::SocketParser;
 use bytes::{BufMut, BytesMut};
 use futures::stream::{self, Stream};
 use futures::Future;
@@ -8,13 +9,13 @@ use std::io::{BufReader, Error, ErrorKind};
 use std::iter;
 use std::net::ToSocketAddrs;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio_core::net::TcpListener;
 use tokio_core::reactor::Core;
+use tokio_io::codec::Decoder;
 use tokio_io::io;
 use tokio_io::AsyncRead;
-
-use tokio_io::codec::Decoder;
 
 use crate::server::network_manager::NetworkManager;
 
@@ -38,13 +39,16 @@ pub fn main(args: Vec<String>) -> Result<(), Box<std::io::Error>> {
         println!("New Connection: {}", addr);
         let (reader, writer) = stream.split();
         let (tx, rx) = futures::sync::mpsc::unbounded();
-        connections.borrow_mut().insert(addr, tx);
-
+        let tx1 = tx.clone();
+        let parser = Arc::new(Mutex::new(SocketParser::new(tx)));
+        let parser_clone = parser.clone();
+        connections.borrow_mut().insert(addr, parser);
         let connections_inner = connections.clone();
         let reader = BufReader::new(reader);
-
         let iter = stream::iter_ok::<_, Error>(iter::repeat(()));
         let socket_reader = iter.fold(reader, move |reader, _| {
+            let tx_inner = tx1.clone();
+            let p = parser_clone.clone();
             let line = io::read_until(reader, b'\n', Vec::new());
             let line = line.and_then(|(reader, vec)| {
                 if vec.len() == 0 {
@@ -56,7 +60,19 @@ pub fn main(args: Vec<String>) -> Result<(), Box<std::io::Error>> {
             line.map(move |(reader, vec)| {
                 let mut bytes = BytesMut::new();
                 bytes.extend_from_slice(&vec);
-                let decoded = NetworkManager::decode(&bytes).unwrap();
+                let mut guard = p.lock();
+                let socket_parser = guard.as_mut().unwrap();
+                match socket_parser.parse(&bytes.to_vec()) {
+                    Ok(parse_result) => {
+                        if let Some(parsed) = parse_result {
+                            println!("Parsed: {:?}", parsed);
+                            let decoded = NetworkManager::decode(&parsed).unwrap();
+                            println!("Decoded and returned");
+                        }
+                    }
+                    Err(e) => println!("Error: {}", e),
+                }
+                drop(guard);
                 reader
             })
         });
