@@ -1,14 +1,17 @@
 use crate::server::Exception;
 use byteorder::LittleEndian;
-use bytes;
 use bytes::ByteOrder;
+use bytes::{self, BytesMut};
 use futures;
 use std::cmp::min;
 use std::error::Error;
 
 const HEADER_ROUTE_LENGTH: usize = 4;
 const HEADER_POSTFIX_LENGTH: usize = 4;
-const HEADER_PREFIX: [u8; 4] = [172, 215, 103, 237];
+// Main Net
+// const HEADER_PREFIX: [u8; 4] = [172, 215, 103, 237];
+//Test Net
+const HEADER_PREFIX: [u8; 4] = [137, 136, 143, 254];
 const MAX_PACKET_SIZE: usize = 1024 * 1024;
 
 #[derive(PartialEq, PartialOrd, Debug, Clone)]
@@ -20,25 +23,27 @@ enum ParseState {
 }
 #[derive(Clone)]
 pub struct SocketParser {
-    transmitter: futures::sync::mpsc::UnboundedSender<bytes::BytesMut>,
     buffer: Vec<u8>,
     state: ParseState,
     parse_index: usize,
     scrap_buffer: Vec<u8>,
     route: u32,
     body_length: u32,
+    route_buffer: Vec<u8>,
+    length_buffer: Vec<u8>,
 }
 
 impl SocketParser {
-    pub fn new(tx: futures::sync::mpsc::UnboundedSender<bytes::BytesMut>) -> Self {
+    pub fn new() -> Self {
         Self {
-            transmitter: tx,
             buffer: Vec::new(),
             state: ParseState::HeaderPrefix,
             parse_index: 0,
             scrap_buffer: Vec::with_capacity(4),
             route: 0,
             body_length: 0,
+            route_buffer: vec![0, 0, 0, 0],
+            length_buffer: vec![0, 0, 0, 0],
         }
     }
 
@@ -56,28 +61,21 @@ impl SocketParser {
         while new_data_index < bytes.len() {
             match self.state {
                 ParseState::HeaderPrefix => {
-                    println!("First");
                     self.parse_header_prefix(bytes, &mut new_data_index)?;
                 }
                 ParseState::HeaderRoute => {
-                    println!("Second");
                     self.parse_header_route(bytes, &mut new_data_index)?;
                 }
                 ParseState::HeaderBodyLength => {
-                    println!("Third");
                     self.parse_body_length(bytes, &mut new_data_index)?;
                 }
                 ParseState::Body => {
-                    println!("Fourth");
                     self.parse_body(bytes, &mut new_data_index);
                 }
             }
         }
         let mut opt = None;
-        println!("Buf Len: {}", self.buffer.len());
-        println!("Buf Expected: {},", self.body_length);
         if self.buffer.len() == self.body_length as usize && self.state == ParseState::Body {
-            println!("returning");
             opt = (Some(self.buffer.clone()));
             self.reset_parser();
         }
@@ -174,6 +172,20 @@ impl SocketParser {
         }
         bytes_copied
     }
+
+    pub fn prepare_packet(&mut self, route: u32, buf: &[u8]) -> Result<Vec<u8>, Box<Error>> {
+        if buf.len() > MAX_PACKET_SIZE {
+            return Err(Box::new(Exception::new("Max packet size exceeded")));
+        }
+        LittleEndian::write_u32(&mut self.route_buffer, self.route);
+        LittleEndian::write_u32(&mut self.length_buffer, buf.len() as u32);
+        let mut bytes = Vec::with_capacity(buf.len() + 12);
+        bytes.extend_from_slice(&HEADER_PREFIX);
+        bytes.extend_from_slice(&self.route_buffer);
+        bytes.extend_from_slice(&self.length_buffer);
+        bytes.extend_from_slice(buf);
+        Ok(bytes)
+    }
 }
 
 #[cfg(test)]
@@ -184,11 +196,7 @@ pub mod tests {
     use futures::Future;
     #[test]
     fn it_should_initialise_with_a_trasnsmitter_with_correct_traits() {
-        let (tx, _rx): (
-            futures::sync::mpsc::UnboundedSender<bytes::BytesMut>,
-            futures::sync::mpsc::UnboundedReceiver<bytes::BytesMut>,
-        ) = futures::sync::mpsc::unbounded();
-        let mut parser = SocketParser::new(tx);
+        let mut parser = SocketParser::new();
         let bytes1 = vec![172, 215, 103, 237, 0, 0, 0, 64, 60, 0, 0, 0, 10];
         let bytes2 = vec![
             58, 8, 13, 18, 5, 104, 121, 99, 111, 110, 40, 212, 63, 50, 44, 74, 65, 119, 115, 117,
@@ -209,11 +217,7 @@ pub mod tests {
 
     #[test]
     fn it_should_return_an_error_from_a_mismatched_header_prefix() {
-        let (tx, _rx): (
-            futures::sync::mpsc::UnboundedSender<bytes::BytesMut>,
-            futures::sync::mpsc::UnboundedReceiver<bytes::BytesMut>,
-        ) = futures::sync::mpsc::unbounded();
-        let mut parser = SocketParser::new(tx);
+        let mut parser = SocketParser::new();
         let bytes1 = vec![172, 216, 103, 237, 0, 0, 0, 64, 60, 0, 0, 0, 10];
         let res = parser.parse(&bytes1);
         match res {
