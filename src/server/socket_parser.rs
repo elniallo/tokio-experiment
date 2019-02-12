@@ -42,8 +42,8 @@ impl SocketParser {
             scrap_buffer: Vec::with_capacity(4),
             route: 0,
             body_length: 0,
-            route_buffer: vec![0, 0, 0, 0],
-            length_buffer: vec![0, 0, 0, 0],
+            route_buffer: vec![0;HEADER_ROUTE_LENGTH],
+            length_buffer: vec![0;HEADER_POSTFIX_LENGTH],
         }
     }
 
@@ -70,13 +70,13 @@ impl SocketParser {
                     self.parse_body_length(bytes, &mut new_data_index)?;
                 }
                 ParseState::Body => {
-                    self.parse_body(bytes, &mut new_data_index);
+                    self.parse_body(bytes, &mut new_data_index)?;
                 }
             }
         }
         let mut opt = None;
         if self.buffer.len() == self.body_length as usize && self.state == ParseState::Body {
-            opt = (Some((self.buffer.clone(),self.route)));
+            opt = Some((self.buffer.clone(),self.route));
             self.reset_parser();
         }
         Ok(opt)

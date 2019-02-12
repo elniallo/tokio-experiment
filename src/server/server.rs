@@ -2,19 +2,15 @@ use crate::server::socket_parser::SocketParser;
 use crate::server::Encode;
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::future::{self, Either};
-use futures::stream::{self, Stream};
+use futures::stream::Stream;
 use futures::sync::mpsc;
 use std::collections::HashMap;
-use std::io::{BufReader, Error, ErrorKind};
-use std::iter;
+use std::io::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
 use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
-use tokio_core::reactor::Core;
-use tokio_io::codec::Decoder;
-use tokio_io::AsyncRead;
 
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
 
@@ -76,8 +72,8 @@ impl Future for Peer {
         let _ = self.socket.poll_flush()?;
         while let Async::Ready(data) = self.socket.poll()? {
             if let Some((bytes,_route)) = data {
-                if let Some((message,route)) = self.socket.parser.parse(&bytes.to_vec()).unwrap() {
-                    let mut msg = BytesMut::from(message);
+                if let Some((message,_route)) = self.socket.parser.parse(&bytes.to_vec()).unwrap() {
+                    let msg = BytesMut::from(message);
                     println!("Message: {:?}", msg);
                     let msg = msg.freeze();
                     for (addr, tx) in &self.srv.lock().unwrap().peers {
