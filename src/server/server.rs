@@ -75,8 +75,8 @@ impl Future for Peer {
         }
         let _ = self.socket.poll_flush()?;
         while let Async::Ready(data) = self.socket.poll()? {
-            if let Some(bytes) = data {
-                if let Some(message) = self.socket.parser.parse(&bytes.to_vec()).unwrap() {
+            if let Some((bytes,_route)) = data {
+                if let Some((message,route)) = self.socket.parser.parse(&bytes.to_vec()).unwrap() {
                     let mut msg = BytesMut::from(message);
                     println!("Message: {:?}", msg);
                     let msg = msg.freeze();
@@ -103,7 +103,7 @@ impl Server {
     fn new() -> Self {
         Self {
             peers: HashMap::new(),
-            guid: String::from("MyGuidIsGuid"),
+            guid: String::from("MyRustyGuid"),
             version: 14,
         }
     }
@@ -150,15 +150,15 @@ impl BaseSocket {
 }
 
 impl Stream for BaseSocket {
-    type Item = BytesMut;
+    type Item = (BytesMut,u32);
     type Error = std::io::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         let sock_closed = self.fill_read_buf()?.is_ready();
-        if let Some(buf) = self.parser.parse(&mut self.rd.to_vec()).unwrap() {
+        if let Some((buf,route)) = self.parser.parse(&mut self.rd.to_vec()).unwrap() {
             println!("Buffer: {:?}", buf);
             self.rd.clear();
-            return Ok(Async::Ready(Some(BytesMut::from(buf))));
+            return Ok(Async::Ready(Some((BytesMut::from(buf),route))));
         }
         // let pos = self
         //     .rd
@@ -187,7 +187,7 @@ fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
         .into_future()
         .map_err(|(e, _)| e)
         .and_then(move |(message, base)| {
-            if let Some(msg) = message {
+            if let Some((msg,route)) = message {
                 let parsed = NetworkManager::decode(&msg.to_vec()).unwrap();
                 match &parsed.message_type {
                     crate::serialization::network::Network_oneof_request::status(v) => {
@@ -203,7 +203,7 @@ fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
                         let bytes = peer
                             .socket
                             .parser
-                            .prepare_packet(0, &net_msg.encode().unwrap());
+                            .prepare_packet(route, &net_msg.encode().unwrap());
                         match bytes {
                             Ok(msg) => {
                                 println!("Message: {:?}", &msg);
@@ -268,7 +268,7 @@ pub fn main(args: Vec<String>) -> Result<(), Box<std::io::Error>> {
                 let socket_parser = guard.as_mut().unwrap();
                 match socket_parser.parse(&bytes.to_vec()) {
                     Ok(parse_result) => {
-                        if let Some(parsed) = parse_result {
+                        if let Some((parsed,route)) = parse_result {
                             let message = NetworkManager::decode(&parsed).unwrap();
                             let decoded = message.encode().unwrap();
                             tx_inner.unbounded_send(BytesMut::from(decoded));

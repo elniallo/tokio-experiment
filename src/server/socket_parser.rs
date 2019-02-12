@@ -56,7 +56,7 @@ impl SocketParser {
         self.body_length = 0;
     }
 
-    pub fn parse(&mut self, bytes: &Vec<u8>) -> Result<Option<Vec<u8>>, Box<Error>> {
+    pub fn parse(&mut self, bytes: &Vec<u8>) -> Result<Option<(Vec<u8>,u32)>, Box<Error>> {
         let mut new_data_index = 0;
         while new_data_index < bytes.len() {
             match self.state {
@@ -76,7 +76,7 @@ impl SocketParser {
         }
         let mut opt = None;
         if self.buffer.len() == self.body_length as usize && self.state == ParseState::Body {
-            opt = (Some(self.buffer.clone()));
+            opt = (Some((self.buffer.clone(),self.route)));
             self.reset_parser();
         }
         Ok(opt)
@@ -109,6 +109,7 @@ impl SocketParser {
         if let Some(route) = self.parse_uint_32_le(new_data_index, new_data) {
             self.state = ParseState::HeaderBodyLength;
             self.route = route;
+            println!("route set to {}",self.route);
             self.parse_index = 0;
         }
         Ok(())
@@ -177,7 +178,7 @@ impl SocketParser {
         if buf.len() > MAX_PACKET_SIZE {
             return Err(Box::new(Exception::new("Max packet size exceeded")));
         }
-        LittleEndian::write_u32(&mut self.route_buffer, self.route);
+        LittleEndian::write_u32(&mut self.route_buffer, route);
         LittleEndian::write_u32(&mut self.length_buffer, buf.len() as u32);
         let mut bytes = Vec::with_capacity(buf.len() + 12);
         bytes.extend_from_slice(&HEADER_PREFIX);
