@@ -160,19 +160,6 @@ impl Stream for BaseSocket {
             self.rd.clear();
             return Ok(Async::Ready(Some((BytesMut::from(buf),route))));
         }
-        // let pos = self
-        //     .rd
-        //     .windows(2)
-        //     .enumerate()
-        //     .find(|&(_, bytes)| bytes == b"\n")
-        //     .map(|(i, _)| i);
-        // println!("Pos: {:?}", pos);
-        // if let Some(pos) = pos {
-        //     let mut line = self.rd.split_to(pos + 2);
-        //     line.split_off(pos);
-        //     return Ok(Async::Ready(Some(line)));
-        // }
-
         if sock_closed {
             Ok(Async::Ready(None))
         } else {
@@ -224,82 +211,6 @@ fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
             println!("Connection Error {:?}", e);
         });
     tokio::spawn(connection);
-}
-pub fn main(args: Vec<String>) -> Result<(), Box<std::io::Error>> {
-    // let args: Vec<String> = ::std::env::args().collect();
-    println!("Args: {:?}", args);
-    let addr = args[2]
-        .to_socket_addrs()
-        .unwrap()
-        .next()
-        .expect("could not parse address");
-    let mut core = Core::new()?;
-    let handle = core.handle();
-    let socket = TcpListener::bind(&addr)?;
-    println!("Server listening on: {}", addr);
-
-    let server = Arc::new(Mutex::new(Server::new()));
-
-    let srv = socket.incoming().for_each(move |stream| {
-        stream.set_nodelay(true)?;
-        let (reader, writer) = stream.split();
-        let (tx, rx) = mpsc::unbounded();
-        let tx1 = tx.clone();
-        let parser = Arc::new(Mutex::new(SocketParser::new()));
-        let parser_clone = parser.clone();
-        let reader = BufReader::new(reader);
-        let iter = stream::iter_ok::<_, Error>(iter::repeat(()));
-        let socket_reader = iter.fold(reader, move |reader, _| {
-            let tx_inner = tx1.clone();
-            let p = parser_clone.clone();
-            let line = io::read_to_end(reader, Vec::new());
-            let line = line.and_then(|(reader, vec)| {
-                if vec.len() == 0 {
-                    Err(Error::new(ErrorKind::BrokenPipe, "Broken Pipe"))
-                } else {
-                    Ok((reader, vec))
-                }
-            });
-            line.map(move |(reader, vec)| {
-                let mut bytes = BytesMut::new();
-                bytes.extend_from_slice(&vec);
-                println!("Received: {:?}", &bytes.to_vec());
-                let mut guard = p.lock();
-                let socket_parser = guard.as_mut().unwrap();
-                match socket_parser.parse(&bytes.to_vec()) {
-                    Ok(parse_result) => {
-                        if let Some((parsed,route)) = parse_result {
-                            let message = NetworkManager::decode(&parsed).unwrap();
-                            let decoded = message.encode().unwrap();
-                            tx_inner.unbounded_send(BytesMut::from(decoded));
-                        }
-                    }
-                    Err(e) => println!("Error: {}", e),
-                }
-                drop(guard);
-                reader
-            })
-        });
-        // let client = rx.and_then(|msg: BytesMut|{
-        //     let amt = io::write_all(writer, msg);
-        //     let amt = amt.map(|(writer, _)| writer);
-        //     amt.map_err(|_| ())
-        // });
-        let socket_writer = rx.fold(writer, |writer, msg: BytesMut| {
-            let amt = io::write_all(writer, msg);
-            let amt = amt.map(|(writer, _)| writer);
-            amt.map_err(|_| ())
-        });
-        let socket_reader = socket_reader.map_err(|_| ());
-        let connection = socket_reader.map(|_| ()).select(socket_writer.map(|_| ()));
-        handle.spawn(connection.then(move |_| {
-            // connections.borrow_mut().remove(&addr);
-            // println!("Connection {} closed.", addr);
-            Ok(())
-        }));
-        Ok(())
-    });
-    Ok(core.run(srv).unwrap())
 }
 
 pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
