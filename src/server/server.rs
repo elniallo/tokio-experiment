@@ -55,7 +55,7 @@ impl Peer {
         status.set_version(self.srv.lock().unwrap().version.clone());
         status.set_port(3553);
         status.set_publicPort(3553);
-        status.set_networkid("ouroboros".to_string());
+        status.set_networkid("hycon".to_string());
         status
     }
 }
@@ -206,6 +206,12 @@ impl Future for Peer {
             }
         }
         Ok(Async::NotReady)
+    }
+}
+
+impl Drop for Peer {
+    fn drop(&mut self) {
+        self.srv.lock().unwrap().peers.remove(&self.addr);
     }
 }
 struct Server {

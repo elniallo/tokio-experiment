@@ -9,9 +9,9 @@ use std::error::Error;
 const HEADER_ROUTE_LENGTH: usize = 4;
 const HEADER_POSTFIX_LENGTH: usize = 4;
 // Main Net
-// const HEADER_PREFIX: [u8; 4] = [172, 215, 103, 237];
+const HEADER_PREFIX: [u8; 4] = [172, 215, 103, 237];
 //Test Net
-const HEADER_PREFIX: [u8; 4] = [137, 136, 143, 254];
+// const HEADER_PREFIX: [u8; 4] = [137, 136, 143, 254];
 const MAX_PACKET_SIZE: usize = 1024 * 1024;
 
 #[derive(PartialEq, PartialOrd, Debug, Clone)]
@@ -203,7 +203,7 @@ pub mod tests {
     use futures::stream::{self, Stream};
     use futures::Future;
     #[test]
-    fn it_should_initialise_with_a_trasnsmitter_with_correct_traits() {
+    fn it_should_parse_two_separate_packets() {
         let mut parser = SocketParser::new();
         let bytes1 = vec![172, 215, 103, 237, 0, 0, 0, 64, 60, 0, 0, 0, 10];
         let bytes2 = vec![
@@ -218,8 +218,17 @@ pub mod tests {
         ];
         parser.parse(&bytes1);
         assert_eq!(parser.state, ParseState::Body);
-        parser.parse(&bytes2);
-        assert_eq!(parser.buffer, expected_out);
+        let (parsed, bytes) = parser.parse(&bytes2).unwrap();
+        match parsed {
+            Some(vec) => {
+                let (buf, _route) = &vec[0];
+                assert_eq!(vec.len(), 1);
+                assert_eq!(buf, &expected_out);
+            }
+            None => {
+                assert!(1 < 0);
+            }
+        }
     }
 
     #[test]
