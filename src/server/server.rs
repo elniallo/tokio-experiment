@@ -96,6 +96,9 @@ impl Future for Peer {
                                 Err(e) => println!("Error: {}", e),
                             }
                         }
+                        Network_oneof_request::getPeersReturn(_) => {
+                            println!("get peers return");
+                        }
                         Network_oneof_request::getTip(_v) => {
                             let mut tip_return = network::GetTipReturn::new();
                             tip_return.set_height(0);
@@ -121,8 +124,80 @@ impl Future for Peer {
                                 Err(e) => println!("Error: {}", e),
                             }
                         }
-                        _ => {
-                            println!("Other Request");
+                        Network_oneof_request::getTipReturn(_) => {
+                            println!("get tip return");
+                        }
+                        Network_oneof_request::putBlock(block) => {
+                            println!("Block Received: {:?}", block);
+                        }
+                        Network_oneof_request::putBlockReturn(_) => {
+                            println!("Put block return");
+                        }
+                        Network_oneof_request::getTxs(_txs) => {
+                            println!("Get Txs");
+                        }
+                        Network_oneof_request::getTxsReturn(_) => {
+                            println!("get txs return");
+                        }
+                        Network_oneof_request::getHash(_h) => {
+                            println!("Get Hash");
+                        }
+                        Network_oneof_request::getHashReturn(_h) => {
+                            println!("Get hash return");
+                        }
+                        Network_oneof_request::getBlockTxs(_) => {
+                            println!("Get block txs");
+                        }
+                        Network_oneof_request::getBlockTxsReturn(_) => {
+                            println!("get block txs return");
+                        }
+                        Network_oneof_request::status(_) => {
+                            println!("status");
+                        }
+                        Network_oneof_request::statusReturn(_) => {
+                            println!("status return");
+                        }
+                        Network_oneof_request::getBlocksByHash(_) => {
+                            println!("get blocks by hash");
+                        }
+                        Network_oneof_request::getBlocksByHashReturn(_) => {
+                            println!("Get blocks by hash return");
+                        }
+                        Network_oneof_request::getBlocksByRange(_) => {
+                            println!("Get blocks by range");
+                        }
+                        Network_oneof_request::getBlocksByRangeReturn(_) => {
+                            println!("get blocks by range return");
+                        }
+                        Network_oneof_request::getHeadersByHash(_) => {
+                            println!("get headers by hash");
+                        }
+                        Network_oneof_request::getHeadersByHashReturn(_) => {
+                            println!("get headers by hash return");
+                        }
+                        Network_oneof_request::getHeadersByRange(_) => {
+                            println!("Get headers by range");
+                        }
+                        Network_oneof_request::getHeadersByRangeReturn(_) => {
+                            println!("Get Headers by range return");
+                        }
+                        Network_oneof_request::ping(_) => {
+                            println!("Ping");
+                        }
+                        Network_oneof_request::pingReturn(_) => {
+                            println!("Ping return");
+                        }
+                        Network_oneof_request::putHeaders(_) => {
+                            println!("put headers");
+                        }
+                        Network_oneof_request::putHeadersReturn(_) => {
+                            println!("put headers return");
+                        }
+                        Network_oneof_request::putTx(_) => {
+                            println!("put tx");
+                        }
+                        Network_oneof_request::putTxReturn(_) => {
+                            println!("put tx return");
                         }
                     }
                 }
