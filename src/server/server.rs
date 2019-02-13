@@ -79,7 +79,6 @@ impl Future for Peer {
                     let parsed = NetworkManager::decode(&bytes.to_vec()).unwrap();
                     match &parsed.message_type {
                         Network_oneof_request::getPeers(n) => {
-                            println!("Get peers Request");
                             let mut peer_return = network::GetPeersReturn::new();
                             peer_return.set_success(true);
                             peer_return.set_peers(::protobuf::RepeatedField::from(Vec::new()));
@@ -92,7 +91,6 @@ impl Future for Peer {
                                 .prepare_packet(route, &net_msg.encode().unwrap());
                             match bytes {
                                 Ok(msg) => {
-                                    println!("Message: {:?}", &msg);
                                     self.socket.buffer(&msg);
                                     self.socket.poll_flush();
                                 }
@@ -100,10 +98,15 @@ impl Future for Peer {
                             }
                         }
                         Network_oneof_request::getTip(v) => {
-                            println!("Get Tip Request");
                             let mut tip_return = network::GetTipReturn::new();
                             tip_return.set_height(0);
                             tip_return.set_success(true);
+                            tip_return.set_hash(vec![
+                                167, 196, 139, 41, 65, 52, 154, 132, 218, 236, 238, 209, 119, 24,
+                                195, 185, 74, 193, 125, 161, 51, 205, 18, 11, 115, 28, 81, 195,
+                                181, 95, 204, 235,
+                            ]);
+                            tip_return.set_totalwork(1.5);
                             let net_msg = NetworkMessage::new(Network_oneof_request::getTipReturn(
                                 tip_return,
                             ));
@@ -113,7 +116,6 @@ impl Future for Peer {
                                 .prepare_packet(route, &net_msg.encode().unwrap());
                             match bytes {
                                 Ok(msg) => {
-                                    println!("Message: {:?}", &msg);
                                     self.socket.buffer(&msg);
                                     self.socket.poll_flush();
                                 }
@@ -125,17 +127,18 @@ impl Future for Peer {
                         }
                     }
                 }
-                // if let Some((message, _route)) = self.socket.parser.parse(&bytes.to_vec()).unwrap()
-                // {
-                //     let msg = BytesMut::from(message);
-                //     println!("Message: {:?}", msg);
-                //     let msg = msg.freeze();
-                //     for (addr, tx) in &self.srv.lock().unwrap().peers {
-                //         if *addr != self.addr {
-                //             tx.unbounded_send(msg.clone()).unwrap();
-                //         }
-                //     }
-                // } else {
+            // if let Some((message, _route)) = self.socket.parser.parse(&bytes.to_vec()).unwrap()
+            // {
+            //     let msg = BytesMut::from(message);
+            //     println!("Message: {:?}", msg);
+            //     let msg = msg.freeze();
+            //     for (addr, tx) in &self.srv.lock().unwrap().peers {
+            //         if *addr != self.addr {
+            //             tx.unbounded_send(msg.clone()).unwrap();
+            //         }
+            //     }
+            // } else {
+            } else {
                 return Ok(Async::Ready(()));
             }
         }
@@ -182,7 +185,6 @@ impl BaseSocket {
         while !self.wr.is_empty() {
             let n = try_ready!(self.socket.poll_write(&self.wr));
             assert!(n > 0);
-            println!("Bytes Written: {}", n);
             let _ = self.wr.split_to(n);
         }
         Ok(Async::Ready(()))
@@ -192,7 +194,7 @@ impl BaseSocket {
         loop {
             self.rd.reserve(1024);
             let n = try_ready!(self.socket.read_buf(&mut self.rd));
-            if n == 0 {
+            if n == 0 || self.rd.len() > 0 {
                 return Ok(Async::Ready(()));
             }
         }
@@ -209,19 +211,15 @@ impl Stream for BaseSocket {
             let (parse_result, parsed) = self.parser.parse(&mut self.rd.to_vec()).unwrap();
             match parse_result {
                 Some((msg)) => {
-                    println!("Buffer: {:?}", msg);
                     self.rd.split_to(parsed);
                     let mut ret = Vec::with_capacity(msg.len());
                     for (buf, route) in msg {
                         ret.push((BytesMut::from(buf), route));
                     }
-                    println!("Buffer Remaining: {:?}", self.rd);
                     return Ok(Async::Ready(Some(ret)));
                 }
                 None => {
-                    println!("Parsed {} bytes", parsed);
                     self.rd.split_to(parsed);
-                    return Ok(Async::NotReady);
                 }
             }
         }
@@ -256,8 +254,6 @@ fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
                             .prepare_packet(*route, &net_msg.encode().unwrap());
                         match bytes {
                             Ok(msg) => {
-                                println!("This route");
-                                println!("Message: {:?}", &msg);
                                 peer.socket.buffer(&msg);
                             }
                             Err(e) => println!("Error: {}", e),
