@@ -4,6 +4,8 @@ use bytes::{BufMut, Bytes, BytesMut};
 use futures::future::{self, Either};
 use futures::stream::Stream;
 use futures::sync::mpsc;
+use protobuf::Message;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::io::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -12,6 +14,7 @@ use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 
+use crate::serialization::network::{self, Network_oneof_request};
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
 
 type Tx = mpsc::UnboundedSender<Bytes>;
@@ -71,19 +74,69 @@ impl Future for Peer {
         }
         let _ = self.socket.poll_flush()?;
         while let Async::Ready(data) = self.socket.poll()? {
-            if let Some((bytes,_route)) = data {
-                if let Some((message,_route)) = self.socket.parser.parse(&bytes.to_vec()).unwrap() {
-                    let msg = BytesMut::from(message);
-                    println!("Message: {:?}", msg);
-                    let msg = msg.freeze();
-                    for (addr, tx) in &self.srv.lock().unwrap().peers {
-                        if *addr != self.addr {
-                            tx.unbounded_send(msg.clone()).unwrap();
+            if let Some(messages) = data {
+                for (bytes, route) in messages {
+                    let parsed = NetworkManager::decode(&bytes.to_vec()).unwrap();
+                    match &parsed.message_type {
+                        Network_oneof_request::getPeers(n) => {
+                            println!("Get peers Request");
+                            let mut peer_return = network::GetPeersReturn::new();
+                            peer_return.set_success(true);
+                            peer_return.set_peers(::protobuf::RepeatedField::from(Vec::new()));
+                            let net_msg = NetworkMessage::new(
+                                Network_oneof_request::getPeersReturn(peer_return),
+                            );
+                            let bytes = self
+                                .socket
+                                .parser
+                                .prepare_packet(route, &net_msg.encode().unwrap());
+                            match bytes {
+                                Ok(msg) => {
+                                    println!("Message: {:?}", &msg);
+                                    self.socket.buffer(&msg);
+                                    self.socket.poll_flush();
+                                }
+                                Err(e) => println!("Error: {}", e),
+                            }
+                        }
+                        Network_oneof_request::getTip(v) => {
+                            println!("Get Tip Request");
+                            let mut tip_return = network::GetTipReturn::new();
+                            tip_return.set_height(0);
+                            tip_return.set_success(true);
+                            let net_msg = NetworkMessage::new(Network_oneof_request::getTipReturn(
+                                tip_return,
+                            ));
+                            let bytes = self
+                                .socket
+                                .parser
+                                .prepare_packet(route, &net_msg.encode().unwrap());
+                            match bytes {
+                                Ok(msg) => {
+                                    println!("Message: {:?}", &msg);
+                                    self.socket.buffer(&msg);
+                                    self.socket.poll_flush();
+                                }
+                                Err(e) => println!("Error: {}", e),
+                            }
+                        }
+                        _ => {
+                            println!("Other Request");
                         }
                     }
-                } else {
-                    return Ok(Async::Ready(()));
                 }
+                // if let Some((message, _route)) = self.socket.parser.parse(&bytes.to_vec()).unwrap()
+                // {
+                //     let msg = BytesMut::from(message);
+                //     println!("Message: {:?}", msg);
+                //     let msg = msg.freeze();
+                //     for (addr, tx) in &self.srv.lock().unwrap().peers {
+                //         if *addr != self.addr {
+                //             tx.unbounded_send(msg.clone()).unwrap();
+                //         }
+                //     }
+                // } else {
+                return Ok(Async::Ready(()));
             }
         }
         Ok(Async::NotReady)
@@ -129,6 +182,7 @@ impl BaseSocket {
         while !self.wr.is_empty() {
             let n = try_ready!(self.socket.poll_write(&self.wr));
             assert!(n > 0);
+            println!("Bytes Written: {}", n);
             let _ = self.wr.split_to(n);
         }
         Ok(Async::Ready(()))
@@ -146,15 +200,30 @@ impl BaseSocket {
 }
 
 impl Stream for BaseSocket {
-    type Item = (BytesMut,u32);
+    type Item = (Vec<(BytesMut, u32)>);
     type Error = std::io::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         let sock_closed = self.fill_read_buf()?.is_ready();
-        if let Some((buf,route)) = self.parser.parse(&mut self.rd.to_vec()).unwrap() {
-            println!("Buffer: {:?}", buf);
-            self.rd.clear();
-            return Ok(Async::Ready(Some((BytesMut::from(buf),route))));
+        if self.rd.len() > 0 {
+            let (parse_result, parsed) = self.parser.parse(&mut self.rd.to_vec()).unwrap();
+            match parse_result {
+                Some((msg)) => {
+                    println!("Buffer: {:?}", msg);
+                    self.rd.split_to(parsed);
+                    let mut ret = Vec::with_capacity(msg.len());
+                    for (buf, route) in msg {
+                        ret.push((BytesMut::from(buf), route));
+                    }
+                    println!("Buffer Remaining: {:?}", self.rd);
+                    return Ok(Async::Ready(Some(ret)));
+                }
+                None => {
+                    println!("Parsed {} bytes", parsed);
+                    self.rd.split_to(parsed);
+                    return Ok(Async::NotReady);
+                }
+            }
         }
         if sock_closed {
             Ok(Async::Ready(None))
@@ -170,25 +239,24 @@ fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
         .into_future()
         .map_err(|(e, _)| e)
         .and_then(move |(message, base)| {
-            if let Some((msg,route)) = message {
-                let parsed = NetworkManager::decode(&msg.to_vec()).unwrap();
+            if let Some(msg) = message {
+                let (message, route) = &msg[0];
+                let parsed = NetworkManager::decode(&message.to_vec()).unwrap();
                 match &parsed.message_type {
-                    crate::serialization::network::Network_oneof_request::status(v) => {
+                    Network_oneof_request::status(v) => {
                         let mut peer = Peer::new(server, base, v.clone());
                         let status = peer.return_status();
-                        let mut status_return = crate::serialization::network::StatusReturn::new();
+                        let mut status_return = network::StatusReturn::new();
                         status_return.set_status(status);
-                        let net_msg = NetworkMessage::new(
-                            crate::serialization::network::Network_oneof_request::statusReturn(
-                                status_return,
-                            ),
-                        );
+                        let net_msg =
+                            NetworkMessage::new(Network_oneof_request::statusReturn(status_return));
                         let bytes = peer
                             .socket
                             .parser
-                            .prepare_packet(route, &net_msg.encode().unwrap());
+                            .prepare_packet(*route, &net_msg.encode().unwrap());
                         match bytes {
                             Ok(msg) => {
+                                println!("This route");
                                 println!("Message: {:?}", &msg);
                                 peer.socket.buffer(&msg);
                             }
@@ -196,7 +264,9 @@ fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
                         }
                         return Either::B(peer);
                     }
-                    _ => {}
+                    _ => {
+                        println!("Other Request");
+                    }
                 }
                 return Either::A(future::ok(()));
             } else {

@@ -23,11 +23,7 @@ impl Decode for NetworkMessage {
         if let Some(message_type) = message.request {
             return Ok(Self { message_type });
         }
-        Ok(Self {
-            message_type: Network_oneof_request::statusReturn(
-                crate::serialization::network::StatusReturn::new(),
-            ),
-        })
+        Err(Box::new(Exception::new("Decode Failed")))
     }
 }
 
@@ -48,6 +44,12 @@ impl Proto for NetworkMessage {
             }
             Network_oneof_request::statusReturn(v) => {
                 proto_message.set_statusReturn(v);
+            }
+            Network_oneof_request::getPeersReturn(p) => {
+                proto_message.set_getPeersReturn(p);
+            }
+            Network_oneof_request::getTipReturn(t) => {
+                proto_message.set_getTipReturn(t);
             }
             _ => {}
         }

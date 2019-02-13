@@ -31,6 +31,7 @@ pub struct SocketParser {
     body_length: u32,
     route_buffer: Vec<u8>,
     length_buffer: Vec<u8>,
+    messages: Vec<(Vec<u8>, u32)>,
 }
 
 impl SocketParser {
@@ -42,8 +43,9 @@ impl SocketParser {
             scrap_buffer: Vec::with_capacity(4),
             route: 0,
             body_length: 0,
-            route_buffer: vec![0;HEADER_ROUTE_LENGTH],
-            length_buffer: vec![0;HEADER_POSTFIX_LENGTH],
+            route_buffer: vec![0; HEADER_ROUTE_LENGTH],
+            length_buffer: vec![0; HEADER_POSTFIX_LENGTH],
+            messages: Vec::new(),
         }
     }
 
@@ -56,7 +58,10 @@ impl SocketParser {
         self.body_length = 0;
     }
 
-    pub fn parse(&mut self, bytes: &Vec<u8>) -> Result<Option<(Vec<u8>,u32)>, Box<Error>> {
+    pub fn parse(
+        &mut self,
+        bytes: &Vec<u8>,
+    ) -> Result<(Option<Vec<(Vec<u8>, u32)>>, usize), Box<Error>> {
         let mut new_data_index = 0;
         while new_data_index < bytes.len() {
             match self.state {
@@ -74,10 +79,10 @@ impl SocketParser {
                 }
             }
         }
-        let mut opt = None;
-        if self.buffer.len() == self.body_length as usize && self.state == ParseState::Body {
-            opt = Some((self.buffer.clone(),self.route));
-            self.reset_parser();
+        let mut opt = (None, new_data_index);
+        if self.messages.len() > 0 {
+            opt = (Some(self.messages.clone()), new_data_index);
+            self.messages.clear();
         }
         Ok(opt)
     }
@@ -109,7 +114,6 @@ impl SocketParser {
         if let Some(route) = self.parse_uint_32_le(new_data_index, new_data) {
             self.state = ParseState::HeaderBodyLength;
             self.route = route;
-            println!("route set to {}",self.route);
             self.parse_index = 0;
         }
         Ok(())
@@ -140,7 +144,10 @@ impl SocketParser {
         while new_data_index < &mut new_data.len() {
             self.buffer.push(new_data[*new_data_index]);
             *new_data_index += 1;
-            if self.buffer.len() == self.body_length as usize {
+            self.parse_index += 1;
+            if self.parse_index == self.body_length as usize {
+                self.messages.push((self.buffer.clone(), self.route));
+                self.reset_parser();
                 break;
             }
         }
@@ -211,7 +218,6 @@ pub mod tests {
         ];
         parser.parse(&bytes1);
         assert_eq!(parser.state, ParseState::Body);
-        println!("This one fired");
         parser.parse(&bytes2);
         assert_eq!(parser.buffer, expected_out);
     }
@@ -224,6 +230,28 @@ pub mod tests {
         match res {
             Ok(_) => assert_eq!(1, 2),
             Err(e) => assert_eq!(1, 1),
+        }
+    }
+    #[test]
+    fn it_should_parse_messages_stuck_together() {
+        let mut parser = SocketParser::new();
+        let mut bytes = BytesMut::from(vec![
+            137, 136, 143, 254, 1, 0, 0, 64, 5, 0, 0, 0, 154, 1, 2, 16, 100, 137, 136, 143, 254, 2,
+            0, 0, 64, 5, 0, 0, 0, 170, 1, 2, 16, 0,
+        ]);
+        let res = parser.parse(&bytes.to_vec());
+        match res {
+            Ok(result) => {
+                let (opt, parsed) = result;
+                assert_eq!(parsed, 34);
+                match opt {
+                    Some(vec) => {
+                        assert_eq!(vec.len(), 2);
+                    }
+                    None => {}
+                }
+            }
+            Err(e) => {}
         }
     }
 }
