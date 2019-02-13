@@ -5,7 +5,6 @@ use futures::future::{self, Either};
 use futures::stream::Stream;
 use futures::sync::mpsc;
 use protobuf::Message;
-use std::cmp::min;
 use std::collections::HashMap;
 use std::io::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -92,12 +91,12 @@ impl Future for Peer {
                             match bytes {
                                 Ok(msg) => {
                                     self.socket.buffer(&msg);
-                                    self.socket.poll_flush();
+                                    self.socket.poll_flush()?;
                                 }
                                 Err(e) => println!("Error: {}", e),
                             }
                         }
-                        Network_oneof_request::getTip(v) => {
+                        Network_oneof_request::getTip(_v) => {
                             let mut tip_return = network::GetTipReturn::new();
                             tip_return.set_height(0);
                             tip_return.set_success(true);
@@ -117,7 +116,7 @@ impl Future for Peer {
                             match bytes {
                                 Ok(msg) => {
                                     self.socket.buffer(&msg);
-                                    self.socket.poll_flush();
+                                    self.socket.poll_flush()?;
                                 }
                                 Err(e) => println!("Error: {}", e),
                             }
@@ -127,17 +126,6 @@ impl Future for Peer {
                         }
                     }
                 }
-            // if let Some((message, _route)) = self.socket.parser.parse(&bytes.to_vec()).unwrap()
-            // {
-            //     let msg = BytesMut::from(message);
-            //     println!("Message: {:?}", msg);
-            //     let msg = msg.freeze();
-            //     for (addr, tx) in &self.srv.lock().unwrap().peers {
-            //         if *addr != self.addr {
-            //             tx.unbounded_send(msg.clone()).unwrap();
-            //         }
-            //     }
-            // } else {
             } else {
                 return Ok(Async::Ready(()));
             }
