@@ -14,6 +14,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 
 use crate::serialization::network::{self, Network_oneof_request};
+use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
 
 type Tx = mpsc::UnboundedSender<Bytes>;
@@ -38,12 +39,12 @@ impl Peer {
         status: crate::serialization::network::Status,
     ) -> Self {
         let (tx, rx) = mpsc::unbounded();
-        let addr = socket.socket.peer_addr().unwrap();
+        let addr = socket.get_socket().peer_addr().unwrap();
         srv.lock().unwrap().peers.insert(addr, tx);
         Self {
             addr,
             srv,
-            socket,
+            socket: socket,
             receiver: rx,
             status: PeerStatus::Connected(status),
         }
@@ -86,7 +87,7 @@ impl Future for Peer {
                             );
                             let bytes = self
                                 .socket
-                                .parser
+                                .get_parser_mut()
                                 .prepare_packet(route, &net_msg.encode().unwrap());
                             match bytes {
                                 Ok(msg) => {
@@ -114,7 +115,7 @@ impl Future for Peer {
                             ));
                             let bytes = self
                                 .socket
-                                .parser
+                                .get_parser_mut()
                                 .prepare_packet(route, &net_msg.encode().unwrap());
                             match bytes {
                                 Ok(msg) => {
@@ -230,76 +231,6 @@ impl Server {
     }
 }
 
-struct BaseSocket {
-    socket: TcpStream,
-    rd: BytesMut,
-    wr: BytesMut,
-    parser: SocketParser,
-}
-impl BaseSocket {
-    fn new(socket: TcpStream) -> Self {
-        Self {
-            socket,
-            rd: BytesMut::new(),
-            wr: BytesMut::new(),
-            parser: SocketParser::new(),
-        }
-    }
-    fn buffer(&mut self, line: &[u8]) {
-        self.wr.reserve(line.len());
-        self.wr.put(line)
-    }
-
-    fn poll_flush(&mut self) -> Poll<(), io::Error> {
-        while !self.wr.is_empty() {
-            let n = try_ready!(self.socket.poll_write(&self.wr));
-            assert!(n > 0);
-            let _ = self.wr.split_to(n);
-        }
-        Ok(Async::Ready(()))
-    }
-
-    fn fill_read_buf(&mut self) -> Poll<(), io::Error> {
-        loop {
-            self.rd.reserve(1024);
-            let n = try_ready!(self.socket.read_buf(&mut self.rd));
-            if n == 0 || self.rd.len() > 0 {
-                return Ok(Async::Ready(()));
-            }
-        }
-    }
-}
-
-impl Stream for BaseSocket {
-    type Item = (Vec<(BytesMut, u32)>);
-    type Error = std::io::Error;
-
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        let sock_closed = self.fill_read_buf()?.is_ready();
-        if self.rd.len() > 0 {
-            let (parse_result, parsed) = self.parser.parse(&mut self.rd.to_vec()).unwrap();
-            match parse_result {
-                Some((msg)) => {
-                    self.rd.split_to(parsed);
-                    let mut ret = Vec::with_capacity(msg.len());
-                    for (buf, route) in msg {
-                        ret.push((BytesMut::from(buf), route));
-                    }
-                    return Ok(Async::Ready(Some(ret)));
-                }
-                None => {
-                    self.rd.split_to(parsed);
-                }
-            }
-        }
-        if sock_closed {
-            Ok(Async::Ready(None))
-        } else {
-            Ok(Async::NotReady)
-        }
-    }
-}
-
 fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
     let base = BaseSocket::new(socket);
     let connection = base
@@ -319,7 +250,7 @@ fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
                             NetworkMessage::new(Network_oneof_request::statusReturn(status_return));
                         let bytes = peer
                             .socket
-                            .parser
+                            .get_parser_mut()
                             .prepare_packet(*route, &net_msg.encode().unwrap());
                         match bytes {
                             Ok(msg) => {

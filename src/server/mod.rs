@@ -1,3 +1,4 @@
+pub mod base_socket;
 pub mod network_manager;
 pub mod server;
 pub mod socket_parser;
