@@ -1,15 +1,11 @@
-use crate::server::socket_parser::SocketParser;
 use crate::server::Encode;
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::Bytes;
 use futures::future::{self, Either};
 use futures::stream::Stream;
 use futures::sync::mpsc;
-use protobuf::Message;
 use std::collections::HashMap;
-use std::io::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
-use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 
@@ -19,7 +15,6 @@ use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer::Peer;
 
 type Tx = mpsc::UnboundedSender<Bytes>;
-type Rx = mpsc::UnboundedReceiver<Bytes>;
 
 pub struct Server {
     peers: HashMap<SocketAddr, Tx>,

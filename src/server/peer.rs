@@ -12,7 +12,6 @@ use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::server::Server;
 use crate::server::Encode;
 
-type Tx = mpsc::UnboundedSender<Bytes>;
 type Rx = mpsc::UnboundedReceiver<Bytes>;
 
 enum PeerStatus {
@@ -77,7 +76,7 @@ impl Future for Peer {
                 for (bytes, route) in messages {
                     let parsed = NetworkManager::decode(&bytes.to_vec()).unwrap();
                     match &parsed.message_type {
-                        Network_oneof_request::getPeers(n) => {
+                        Network_oneof_request::getPeers(_n) => {
                             let mut peer_return = network::GetPeersReturn::new();
                             peer_return.set_success(true);
                             peer_return.set_peers(::protobuf::RepeatedField::from(Vec::new()));
