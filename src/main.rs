@@ -9,6 +9,7 @@ extern crate tokio_proto;
 
 pub mod serialization;
 pub mod server;
+pub mod traits;
 
 fn main() {
     let args: Vec<String> = ::std::env::args().collect();

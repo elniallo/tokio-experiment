@@ -1,4 +1,3 @@
-use crate::server::Encode;
 use bytes::Bytes;
 use futures::future::{self, Either};
 use futures::stream::Stream;
@@ -13,11 +12,11 @@ use crate::serialization::network::{self, Network_oneof_request};
 use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer::Peer;
+use crate::traits::Encode;
 
 type Tx = mpsc::UnboundedSender<Bytes>;
-
 pub struct Server {
-    peers: HashMap<SocketAddr, Tx>,
+    active_peers: HashMap<SocketAddr, Tx>,
     guid: String,
     version: u32,
 }
@@ -25,14 +24,14 @@ pub struct Server {
 impl Server {
     fn new() -> Self {
         Self {
-            peers: HashMap::new(),
+            active_peers: HashMap::new(),
             guid: String::from("MyRustyGuid"),
             version: 14,
         }
     }
 
     pub fn get_peers_mut(&mut self) -> &mut HashMap<SocketAddr, Tx> {
-        &mut self.peers
+        &mut self.active_peers
     }
 
     pub fn get_guid(&self) -> &String {

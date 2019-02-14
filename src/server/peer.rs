@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use futures::sync::mpsc;
 use futures::Future;
+use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use tokio::io;
@@ -9,12 +10,13 @@ use tokio::prelude::*;
 use crate::serialization::network::{self, Network_oneof_request};
 use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
+use crate::server::peer_database::DBPeer;
 use crate::server::server::Server;
-use crate::server::Encode;
+use crate::traits::{Encode, ToDBType};
 
 type Rx = mpsc::UnboundedReceiver<Bytes>;
-
-enum PeerStatus {
+#[derive(Debug, Clone)]
+pub enum PeerStatus {
     Disconnected,
     Connected(crate::serialization::network::Status),
 }
@@ -35,6 +37,7 @@ impl Peer {
         let (tx, rx) = mpsc::unbounded();
         let addr = socket.get_socket().peer_addr().unwrap();
         srv.lock().unwrap().get_peers_mut().insert(addr, tx);
+        println!("Peer Connected: {:?}", &status);
         Self {
             addr,
             srv,
@@ -56,6 +59,14 @@ impl Peer {
 
     pub fn get_socket(&mut self) -> &mut BaseSocket {
         &mut self.socket
+    }
+
+    pub fn get_addr(&self) -> &SocketAddr {
+        &self.addr
+    }
+
+    pub fn get_status(&self) -> &PeerStatus {
+        &self.status
     }
 }
 
@@ -208,8 +219,16 @@ impl Future for Peer {
     }
 }
 
+impl ToDBType<DBPeer> for Peer {
+    fn to_db_type(&self) -> Result<DBPeer, Box<Error>> {
+        let peer = DBPeer::from_peer(self);
+        Ok(peer)
+    }
+}
+
 impl Drop for Peer {
     fn drop(&mut self) {
+        println!("Socket Dropped: {:?}", &self.status);
         self.srv.lock().unwrap().get_peers_mut().remove(&self.addr);
     }
 }

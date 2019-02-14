@@ -1,6 +1,5 @@
 use crate::serialization::network::{Network as ProtoNetwork, Network_oneof_request};
-use crate::server::{Decode, Encode, Exception, Proto};
-use bytes::BytesMut;
+use crate::traits::{Decode, Encode, Exception, Proto};
 use protobuf::{CodedInputStream, Message as ProtoMessage};
 use std::error::Error;
 pub struct NetworkMessage {

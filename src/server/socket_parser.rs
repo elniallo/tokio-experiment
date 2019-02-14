@@ -1,10 +1,10 @@
-use crate::server::Exception;
 use byteorder::LittleEndian;
+use bytes;
 use bytes::ByteOrder;
-use bytes::{self, BytesMut};
-use futures;
 use std::cmp::min;
 use std::error::Error;
+
+use crate::traits::Exception;
 
 const HEADER_ROUTE_LENGTH: usize = 4;
 const HEADER_POSTFIX_LENGTH: usize = 4;
@@ -199,9 +199,7 @@ impl SocketParser {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use bytes::{BufMut, BytesMut};
-    use futures::stream::{self, Stream};
-    use futures::Future;
+    use bytes::BytesMut;
     #[test]
     fn it_should_parse_two_separate_packets() {
         let mut parser = SocketParser::new();
