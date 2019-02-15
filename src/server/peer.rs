@@ -15,7 +15,7 @@ use crate::server::server::Server;
 use crate::traits::{Encode, ToDBType};
 
 type Rx = mpsc::UnboundedReceiver<Bytes>;
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PeerStatus {
     Disconnected,
     Connected(crate::serialization::network::Status),
