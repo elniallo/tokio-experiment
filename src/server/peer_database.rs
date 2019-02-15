@@ -5,7 +5,17 @@ use rand::thread_rng;
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
+use std::time::{SystemTime, UNIX_EPOCH};
 
+fn get_current_time() -> usize {
+    let start = SystemTime::now();
+    start.duration_since(UNIX_EPOCH).unwrap().as_millis() as usize
+}
+
+enum PeerConnectionType {
+    Inbound,
+    Outbound,
+}
 trait DBPeerTrait {
     fn get_fail_count_mut(&mut self) -> &mut usize;
 }
@@ -36,29 +46,44 @@ impl DBPeer {
             fail_count,
         }
     }
-    fn get_fail_count(&self) -> &usize {
+    pub fn get_fail_count(&self) -> &usize {
         &self.fail_count
     }
-    fn get_mut_fail_count(&mut self) -> &mut usize {
+    pub fn get_mut_fail_count(&mut self) -> &mut usize {
         &mut self.fail_count
     }
-    fn get_status(&self) -> &PeerStatus {
+    pub fn get_status(&self) -> &PeerStatus {
         &self.status
     }
 
-    fn set_status(&mut self, status: PeerStatus) {
+    pub fn set_status(&mut self, status: PeerStatus) {
         self.status = status
     }
 
-    fn get_addr(&self) -> &SocketAddr {
+    pub fn get_addr(&self) -> &SocketAddr {
         &self.addr
     }
-    fn get_last_seen(&self) -> &usize {
+    pub fn get_last_seen(&self) -> &usize {
         &self.last_seen
     }
 
-    fn get_last_attempt(&self) -> &usize {
+    pub fn set_last_seen(&mut self, last_seen: usize) {
+        self.last_seen = last_seen
+    }
+
+    pub fn get_last_attempt(&self) -> &usize {
         &self.last_attempt
+    }
+
+    fn update_success_count(&mut self, connection_type: PeerConnectionType) {
+        match connection_type {
+            PeerConnectionType::Inbound => {
+                self.success_in_count += 1;
+            }
+            PeerConnectionType::Outbound => {
+                self.success_out_count += 1;
+            }
+        }
     }
 }
 
@@ -110,12 +135,28 @@ impl PeerDB<SocketAddr, DBPeer> for PeerDatabase<SocketAddr, DBPeer> {
     }
 
     fn inbound_connection(&mut self, key: SocketAddr, value: DBPeer) -> Result<(), Box<Error>> {
-        self.db.insert(key, value);
+        if let Some(peer) = self.db.get_mut(&key) {
+            peer.set_last_seen(get_current_time());
+            peer.update_success_count(PeerConnectionType::Inbound);
+        } else {
+            let mut peer = value.clone();
+            peer.set_last_seen(get_current_time());
+            peer.update_success_count(PeerConnectionType::Inbound);
+            self.db.insert(key, peer);
+        }
         Ok(())
     }
 
     fn outbound_connection(&mut self, key: SocketAddr, value: DBPeer) -> Result<(), Box<Error>> {
-        self.db.insert(key, value);
+        if let Some(peer) = self.db.get_mut(&key) {
+            peer.set_last_seen(get_current_time());
+            peer.update_success_count(PeerConnectionType::Outbound);
+        } else {
+            let mut peer = value.clone();
+            peer.set_last_seen(get_current_time());
+            peer.update_success_count(PeerConnectionType::Outbound);
+            self.db.insert(key, peer);
+        }
         Ok(())
     }
 
@@ -130,6 +171,7 @@ impl PeerDB<SocketAddr, DBPeer> for PeerDatabase<SocketAddr, DBPeer> {
     fn disconnect(&mut self, key: &SocketAddr) {
         if let Some(peer) = self.db.get_mut(key) {
             peer.set_status(PeerStatus::Disconnected);
+            peer.set_last_seen(get_current_time());
         }
     }
 
