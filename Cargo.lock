@@ -537,6 +537,7 @@ dependencies = [
  "protobuf-codegen-no-elision 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "protoc 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "protoc-rust-no-elision 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-core 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",

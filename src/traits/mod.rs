@@ -10,12 +10,12 @@ where
     fn inbound_connection(&mut self, key: K, value: I) -> Result<(), Box<Error>>;
     fn outbound_connection(&mut self, key: K, value: I) -> Result<(), Box<Error>>;
     fn connection_failure(&mut self, key: K) -> Result<(), Box<Error>>;
-    // fn disconnect(&mut self, key: K);
-    // fn put_multiple(&mut self, values: Vec<T>);
-    // fn get_recent(&self, limit: usize) -> Option<Vec<T>>;
-    // fn get_seen(&self, limit: usize) -> Option<Vec<T>>;
-    // fn get_oldest(&self, limit: usize) -> Option<Vec<T>>;
-    // fn get_random(&self, limit: usize) -> Option<Vec<T>>;
+    fn disconnect(&mut self, key: K);
+    fn put_multiple(&mut self, values: Vec<(K, I)>) -> Result<(), Box<Error>>;
+    fn get_recent(&self, limit: usize) -> Option<Vec<T>>;
+    fn get_seen(&self, limit: usize) -> Option<Vec<T>>;
+    fn get_oldest(&self, limit: usize) -> Option<Vec<T>>;
+    fn get_random(&self, limit: usize) -> Option<Vec<T>>;
 }
 
 pub trait ToDBType<T> {
