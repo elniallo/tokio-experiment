@@ -1,10 +1,9 @@
 use crate::server::peer::{Peer, PeerStatus};
-use crate::traits::{PeerDB, ToDBType};
+use crate::traits::PeerDB;
 use rand::seq::sample_iter;
 use rand::thread_rng;
 use std::collections::HashMap;
 use std::error::Error;
-use std::marker::PhantomData;
 use std::net::SocketAddr;
 
 trait DBPeerTrait {
@@ -47,20 +46,16 @@ impl DBPeer {
     }
 }
 
-pub struct PeerDatabase<Peer, SocketAddr, DBPeer> {
+pub struct PeerDatabase<SocketAddr, DBPeer> {
     db: HashMap<SocketAddr, DBPeer>,
-    phantom: PhantomData<Peer>,
 }
 
-impl PeerDatabase<Peer, SocketAddr, DBPeer> {
+impl PeerDatabase<SocketAddr, DBPeer> {
     pub fn new() -> Self {
-        Self {
-            db: HashMap::new(),
-            phantom: PhantomData,
-        }
+        Self { db: HashMap::new() }
     }
 }
-impl PeerDB<Peer, SocketAddr, DBPeer> for PeerDatabase<Peer, SocketAddr, DBPeer> {
+impl PeerDB<SocketAddr, DBPeer> for PeerDatabase<SocketAddr, DBPeer> {
     fn get(&self, key: SocketAddr) -> Option<DBPeer> {
         if let Some(t) = self.db.get(&key) {
             return Some(t.clone());
@@ -96,13 +91,13 @@ impl PeerDB<Peer, SocketAddr, DBPeer> for PeerDatabase<Peer, SocketAddr, DBPeer>
         None
     }
 
-    fn inbound_connection(&mut self, key: SocketAddr, value: Peer) -> Result<(), Box<Error>> {
-        self.db.insert(key, value.to_db_type()?);
+    fn inbound_connection(&mut self, key: SocketAddr, value: DBPeer) -> Result<(), Box<Error>> {
+        self.db.insert(key, value);
         Ok(())
     }
 
-    fn outbound_connection(&mut self, key: SocketAddr, value: Peer) -> Result<(), Box<Error>> {
-        self.db.insert(key, value.to_db_type()?);
+    fn outbound_connection(&mut self, key: SocketAddr, value: DBPeer) -> Result<(), Box<Error>> {
+        self.db.insert(key, value);
         Ok(())
     }
 
@@ -120,9 +115,9 @@ impl PeerDB<Peer, SocketAddr, DBPeer> for PeerDatabase<Peer, SocketAddr, DBPeer>
         }
     }
 
-    fn put_multiple(&mut self, values: Vec<(SocketAddr, Peer)>) -> Result<(), Box<Error>> {
+    fn put_multiple(&mut self, values: Vec<(SocketAddr, DBPeer)>) -> Result<(), Box<Error>> {
         for (key, value) in values {
-            self.db.insert(key, value.to_db_type()?);
+            self.db.insert(key, value);
         }
         Ok(())
     }
@@ -190,5 +185,16 @@ impl PeerDB<Peer, SocketAddr, DBPeer> for PeerDatabase<Peer, SocketAddr, DBPeer>
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use std::str::FromStr;
+    #[test]
+    fn it_inserts_and_retrieves_a_peer() {
+        let mut peer_db = PeerDatabase::new();
+        let socket_addr = SocketAddr::from_str("127.0.0.1:8148");
     }
 }
