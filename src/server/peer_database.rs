@@ -1,11 +1,17 @@
 use crate::server::peer::{Peer, PeerStatus};
 use crate::traits::PeerDB;
+use futures::sync::mpsc;
+use futures::Future;
 use rand::seq::sample_iter;
 use rand::thread_rng;
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::io;
+use tokio::prelude::*;
+
+type Rx = mpsc::UnboundedReceiver<DBPeer>;
 
 fn get_current_time() -> usize {
     let start = SystemTime::now();
@@ -89,11 +95,15 @@ impl DBPeer {
 
 pub struct PeerDatabase<SocketAddr, DBPeer> {
     db: HashMap<SocketAddr, DBPeer>,
+    receiver: Rx,
 }
 
 impl PeerDatabase<SocketAddr, DBPeer> {
-    pub fn new() -> Self {
-        Self { db: HashMap::new() }
+    pub fn new(rx: Rx) -> Self {
+        Self {
+            db: HashMap::new(),
+            receiver: rx,
+        }
     }
 }
 impl PeerDB<SocketAddr, DBPeer> for PeerDatabase<SocketAddr, DBPeer> {
@@ -262,6 +272,22 @@ impl PeerDB<SocketAddr, DBPeer> for PeerDatabase<SocketAddr, DBPeer> {
     }
 }
 
+impl Future for PeerDatabase<SocketAddr, DBPeer> {
+    type Item = SocketAddr;
+    type Error = io::Error;
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        match self.receiver.poll().unwrap() {
+            Async::Ready(Some(v)) => {
+                self.inbound_connection(v.get_addr().clone(), v);
+                println!("Incoming Connection");
+                task::current().notify();
+            }
+            _ => {}
+        }
+        Ok(Async::NotReady)
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
@@ -321,8 +347,9 @@ pub mod tests {
         vec
     }
     #[test]
-    fn it_inserts_and_retrieves_a_peer() {
-        let mut peer_db = PeerDatabase::new();
+    fn it_inserts_and_retrieves_an_inbound_peer() {
+        let (_, rx) = mpsc::unbounded();
+        let mut peer_db = PeerDatabase::new(rx);
         let socket_addr = SocketAddr::from_str("127.0.0.1:8148").unwrap();
         let db_peer = DBPeer {
             addr: socket_addr.clone(),
@@ -334,18 +361,49 @@ pub mod tests {
             last_attempt: 0,
         };
         peer_db.inbound_connection(socket_addr, db_peer.clone());
-        assert_eq!(Some(db_peer), peer_db.get(&socket_addr));
+        if let Some(peer) = peer_db.get(&socket_addr) {
+            assert!(peer.get_last_seen() != &0);
+            assert_eq!(peer.success_in_count, 1);
+        } else {
+            panic!("Couldn't retrieve a peer");
+        }
     }
+
+    #[test]
+    fn it_inserts_and_retrieves_an_outbound_peer() {
+        let (_, rx) = mpsc::unbounded();
+        let mut peer_db = PeerDatabase::new(rx);
+        let socket_addr = SocketAddr::from_str("127.0.0.1:8148").unwrap();
+        let db_peer = DBPeer {
+            addr: socket_addr.clone(),
+            status: PeerStatus::Disconnected,
+            success_out_count: 0,
+            success_in_count: 0,
+            last_seen: 0,
+            fail_count: 0,
+            last_attempt: 0,
+        };
+        peer_db.outbound_connection(socket_addr, db_peer.clone());
+        if let Some(peer) = peer_db.get(&socket_addr) {
+            assert!(peer.get_last_seen() != &0);
+            assert_eq!(peer.success_out_count, 1);
+        } else {
+            panic!("Couldn't retrieve a peer");
+        }
+    }
+
     #[test]
     fn it_inserts_multiple_peers() {
-        let mut peer_db = PeerDatabase::new();
+        let (_, rx) = mpsc::unbounded();
+        let mut peer_db = PeerDatabase::new(rx);
         let peers = peer_factory(20, false, true);
         peer_db.put_multiple(peers);
         assert_eq!(peer_db.db.len(), 20);
     }
     #[test]
     fn it_returns_all_peers() {
-        let mut peer_db = PeerDatabase::new();
+        let (_, rx) = mpsc::unbounded();
+        let mut peer_db = PeerDatabase::new(rx);
         let peers = peer_factory(20, false, true);
         let _ = peer_db.put_multiple(peers);
         assert_eq!(peer_db.db.len(), 20);
@@ -357,7 +415,8 @@ pub mod tests {
     }
     #[test]
     fn it_updates_the_fail_count() {
-        let mut peer_db = PeerDatabase::new();
+        let (_, rx) = mpsc::unbounded();
+        let mut peer_db = PeerDatabase::new(rx);
         let socket_addr = SocketAddr::from_str("127.0.0.1:8148").unwrap();
         let db_peer = DBPeer {
             addr: socket_addr.clone(),
@@ -380,7 +439,8 @@ pub mod tests {
 
     #[test]
     fn it_gets_multiple_peers_or_all_if_limit_exceeds_length() {
-        let mut peer_db = PeerDatabase::new();
+        let (_, rx) = mpsc::unbounded();
+        let mut peer_db = PeerDatabase::new(rx);
         let peers = peer_factory(20, false, true);
         let _ = peer_db.put_multiple(peers);
         if let Some(returned_peers) = peer_db.get_multiple(10) {
@@ -397,7 +457,8 @@ pub mod tests {
 
     #[test]
     fn it_sets_a_peer_to_disconnected() {
-        let mut peer_db = PeerDatabase::new();
+        let (_, rx) = mpsc::unbounded();
+        let mut peer_db = PeerDatabase::new(rx);
         let socket_addr = SocketAddr::from_str("127.0.0.1:8148").unwrap();
         let db_peer = DBPeer {
             addr: socket_addr.clone(),
@@ -423,7 +484,8 @@ pub mod tests {
     }
     #[test]
     fn it_returns_peers_ordered_by_most_recent() {
-        let mut peer_db = PeerDatabase::new();
+        let (_, rx) = mpsc::unbounded();
+        let mut peer_db = PeerDatabase::new(rx);
         // Forced ordered peer generation for easy validation of ordering
         let peers = peer_factory(20, true, true);
         let _ = peer_db.put_multiple(peers.clone());
@@ -443,7 +505,8 @@ pub mod tests {
 
     #[test]
     fn it_returns_peers_ordered_by_oldest() {
-        let mut peer_db = PeerDatabase::new();
+        let (_, rx) = mpsc::unbounded();
+        let mut peer_db = PeerDatabase::new(rx);
         // Forced ordered peer generation for easy validation of ordering
         let peers = peer_factory(20, true, true);
         let _ = peer_db.put_multiple(peers.clone());
@@ -461,7 +524,8 @@ pub mod tests {
 
     #[test]
     fn it_returns_seen_peers() {
-        let mut peer_db = PeerDatabase::new();
+        let (_, rx) = mpsc::unbounded();
+        let mut peer_db = PeerDatabase::new(rx);
         // Forced ordered peer generation for easy validation of ordering
         let peers = peer_factory(20, true, true);
         let unseen_peers = peer_factory(20, false, false);
@@ -476,7 +540,8 @@ pub mod tests {
 
     #[test]
     fn it_returns_random_peers() {
-        let mut peer_db = PeerDatabase::new();
+        let (_, rx) = mpsc::unbounded();
+        let mut peer_db = PeerDatabase::new(rx);
         let peers = peer_factory(20, false, true);
         let _ = peer_db.put_multiple(peers);
         if let Some(returned_peers) = peer_db.get_random(10) {

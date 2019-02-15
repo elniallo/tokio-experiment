@@ -63,7 +63,7 @@ impl Stream for BaseSocket {
         if self.rd.len() > 0 {
             let (parse_result, parsed) = self.parser.parse(&mut self.rd.to_vec()).unwrap();
             match parse_result {
-                Some((msg)) => {
+                Some(msg) => {
                     self.rd.split_to(parsed);
                     let mut ret = Vec::with_capacity(msg.len());
                     for (buf, route) in msg {
