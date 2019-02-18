@@ -5,6 +5,7 @@ use futures::sync::mpsc;
 use std::collections::HashMap;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
+use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 
@@ -13,6 +14,7 @@ use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer::Peer;
 use crate::server::peer_database::{DBPeer, PeerDatabase};
+use crate::server::socket_parser::SocketParser;
 use crate::traits::{Encode, ToDBType};
 
 type Tx = mpsc::UnboundedSender<Bytes>;
@@ -111,15 +113,34 @@ pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
         .expect("could not parse address");
     let socket = TcpListener::bind(&addr)?;
     let peer_db = peer_database
-        .and_then(move |socket_addr| {
-            let stream = TcpStream::connect(&socket_addr);
-            stream
+        .into_future()
+        .map_err(|(e, _)| e)
+        .and_then(move |(socket_addr, _peer_database)| match socket_addr {
+            Some(addr) => Either::A(TcpStream::connect(&addr)),
+            None => Either::B(futures::future::err(io::Error::from(
+                io::ErrorKind::ConnectionAborted,
+            ))),
         })
         .map_err(|err| {
             println!("Accept error = {:?}", err);
         })
-        .and_then(move |stream| {
-            // TODO: get status message
+        .and_then(move |mut stream| {
+            let mut get_status_message = network::Status::new();
+            get_status_message.set_guid(srv_clone.lock().unwrap().get_guid().clone());
+            get_status_message.set_version(srv_clone.lock().unwrap().get_version().clone());
+            get_status_message.set_port(3553);
+            get_status_message.set_publicPort(3553);
+            get_status_message.set_networkid("hycon".to_string());
+            let msg = NetworkMessage::new(Network_oneof_request::status(get_status_message));
+            let parsed = SocketParser::prepare_packet_default(0, &msg.encode().unwrap());
+            match parsed {
+                Ok(message) => {
+                    stream.poll_write(&message).unwrap();
+                }
+                Err(e) => {
+                    println!("Parsing error: {:?}", e);
+                }
+            }
             process_socket(stream, srv_clone.clone());
             Ok(())
         })

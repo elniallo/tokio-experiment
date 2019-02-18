@@ -194,6 +194,22 @@ impl SocketParser {
         bytes.extend_from_slice(buf);
         Ok(bytes)
     }
+    /// Prepares a packet to send to the defined route without requiring an instance of the socket parser struct
+    pub fn prepare_packet_default(route: u32, buf: &[u8]) -> Result<Vec<u8>, Box<Error>> {
+        if buf.len() > MAX_PACKET_SIZE {
+            return Err(Box::new(Exception::new("Max packet size exceeded")));
+        }
+        let mut route_buffer = vec![0; HEADER_ROUTE_LENGTH];
+        let mut length_buffer = vec![0; HEADER_POSTFIX_LENGTH];
+        LittleEndian::write_u32(&mut route_buffer, route);
+        LittleEndian::write_u32(&mut length_buffer, buf.len() as u32);
+        let mut bytes = Vec::with_capacity(buf.len() + 12);
+        bytes.extend_from_slice(&HEADER_PREFIX);
+        bytes.extend_from_slice(&route_buffer);
+        bytes.extend_from_slice(&length_buffer);
+        bytes.extend_from_slice(buf);
+        Ok(bytes)
+    }
 }
 
 #[cfg(test)]

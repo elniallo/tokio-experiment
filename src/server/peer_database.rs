@@ -1,15 +1,16 @@
 use crate::server::peer::{Peer, PeerStatus};
 use crate::traits::PeerDB;
 use futures::sync::mpsc;
-use futures::Future;
 use rand::seq::sample_iter;
 use rand::thread_rng;
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
+use std::time::{Duration, Instant};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io;
 use tokio::prelude::*;
+use tokio::timer::Interval;
 
 type Rx = mpsc::UnboundedReceiver<DBPeer>;
 
@@ -272,10 +273,10 @@ impl PeerDB<SocketAddr, DBPeer> for PeerDatabase<SocketAddr, DBPeer> {
     }
 }
 
-impl Future for PeerDatabase<SocketAddr, DBPeer> {
+impl Stream for PeerDatabase<SocketAddr, DBPeer> {
     type Item = SocketAddr;
     type Error = io::Error;
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         match self.receiver.poll().unwrap() {
             Async::Ready(Some(v)) => {
                 self.inbound_connection(v.get_addr().clone(), v);
