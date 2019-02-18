@@ -16,7 +16,7 @@ pub trait PeerDB<K, T> {
 }
 
 pub trait ToDBType<T> {
-    fn to_db_type(&self) -> Result<T, Box<Error>>;
+    fn to_db_type(&self) -> T;
 }
 
 pub trait Encode {

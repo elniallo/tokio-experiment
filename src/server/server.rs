@@ -16,17 +16,20 @@ use crate::server::peer::Peer;
 use crate::server::peer_database::{DBPeer, PeerDatabase};
 use crate::server::socket_parser::SocketParser;
 use crate::traits::{Encode, ToDBType};
-
+pub enum NotificationType<T> {
+    Inbound(T),
+    Disconnect(T),
+}
 type Tx = mpsc::UnboundedSender<Bytes>;
 pub struct Server {
     active_peers: HashMap<SocketAddr, Tx>,
     guid: String,
     version: u32,
-    peer_channel: mpsc::UnboundedSender<DBPeer>,
+    peer_channel: mpsc::UnboundedSender<NotificationType<DBPeer>>,
 }
 
 impl Server {
-    fn new(transmitter: mpsc::UnboundedSender<DBPeer>) -> Self {
+    fn new(transmitter: mpsc::UnboundedSender<NotificationType<DBPeer>>) -> Self {
         Self {
             active_peers: HashMap::new(),
             guid: String::from("MyRustyGuid"),
@@ -46,7 +49,7 @@ impl Server {
         &self.version
     }
 
-    pub fn notify_channel(&self, msg: DBPeer) {
+    pub fn notify_channel(&self, msg: NotificationType<DBPeer>) {
         self.peer_channel
             .unbounded_send(msg)
             .expect("Sending error");
@@ -83,7 +86,7 @@ fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
                         peer.get_srv()
                             .lock()
                             .unwrap()
-                            .notify_channel(peer.to_db_type().unwrap());
+                            .notify_channel(NotificationType::Inbound(peer.to_db_type()));
                         return Either::B(peer);
                     }
                     _ => {
@@ -102,7 +105,7 @@ fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
 }
 
 pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
-    let (tx, rx) = mpsc::unbounded::<DBPeer>();
+    let (tx, rx) = mpsc::unbounded::<NotificationType<DBPeer>>();
     let peer_database = PeerDatabase::new(rx);
     let srv = Arc::new(Mutex::new(Server::new(tx)));
     let srv_clone = srv.clone();
@@ -115,7 +118,7 @@ pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
     let peer_db = peer_database
         .into_future()
         .map_err(|(e, _)| e)
-        .and_then(move |(socket_addr, _peer_database)| match socket_addr {
+        .and_then(move |(socket_addr, peer_database)| match socket_addr {
             Some(addr) => Either::A(TcpStream::connect(&addr)),
             None => Either::B(futures::future::err(io::Error::from(
                 io::ErrorKind::ConnectionAborted,

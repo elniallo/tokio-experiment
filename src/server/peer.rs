@@ -11,7 +11,7 @@ use crate::serialization::network::{self, Network_oneof_request};
 use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer_database::DBPeer;
-use crate::server::server::Server;
+use crate::server::server::{NotificationType, Server};
 use crate::traits::{Encode, ToDBType};
 
 type Rx = mpsc::UnboundedReceiver<Bytes>;
@@ -224,15 +224,18 @@ impl Future for Peer {
 }
 
 impl ToDBType<DBPeer> for Peer {
-    fn to_db_type(&self) -> Result<DBPeer, Box<Error>> {
+    fn to_db_type(&self) -> DBPeer {
         let peer = DBPeer::from_peer(self);
-        Ok(peer)
+        peer
     }
 }
 
 impl Drop for Peer {
     fn drop(&mut self) {
         println!("Socket Dropped: {:?}", &self.status);
-        self.srv.lock().unwrap().get_peers_mut().remove(&self.addr);
+
+        let mut guard = self.srv.lock().unwrap();
+        guard.get_peers_mut().remove(&self.addr);
+        guard.notify_channel(NotificationType::Disconnect(self.to_db_type()));
     }
 }

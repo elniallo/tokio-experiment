@@ -1,4 +1,5 @@
 use crate::server::peer::{Peer, PeerStatus};
+use crate::server::server::NotificationType;
 use crate::traits::PeerDB;
 use futures::sync::mpsc;
 use rand::seq::sample_iter;
@@ -6,14 +7,14 @@ use rand::thread_rng;
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io;
 use tokio::prelude::*;
 use tokio::timer::Interval;
 
-type Rx = mpsc::UnboundedReceiver<DBPeer>;
-
+type Rx = mpsc::UnboundedReceiver<NotificationType<DBPeer>>;
+type IntervalStream = tokio::timer::Interval;
 fn get_current_time() -> usize {
     let start = SystemTime::now();
     start.duration_since(UNIX_EPOCH).unwrap().as_millis() as usize
@@ -97,13 +98,16 @@ impl DBPeer {
 pub struct PeerDatabase<SocketAddr, DBPeer> {
     db: HashMap<SocketAddr, DBPeer>,
     receiver: Rx,
+    interval: IntervalStream,
 }
 
 impl PeerDatabase<SocketAddr, DBPeer> {
     pub fn new(rx: Rx) -> Self {
+        let interval = Interval::new_interval(Duration::from_millis(1000));
         Self {
             db: HashMap::new(),
             receiver: rx,
+            interval,
         }
     }
 }
@@ -278,13 +282,56 @@ impl Stream for PeerDatabase<SocketAddr, DBPeer> {
     type Error = io::Error;
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         match self.receiver.poll().unwrap() {
-            Async::Ready(Some(v)) => {
-                self.inbound_connection(v.get_addr().clone(), v);
-                println!("Incoming Connection");
-                task::current().notify();
-            }
+            Async::Ready(Some(notification)) => match notification {
+                NotificationType::Inbound(v) => {
+                    let mut port = 8148u16;
+                    match &v.status {
+                        PeerStatus::Connected(status) => {
+                            port = status.get_publicPort() as u16;
+                        }
+                        _ => {}
+                    }
+                    let server_addr = SocketAddr::new(v.get_addr().ip(), port);
+                    self.inbound_connection(server_addr, v);
+                    println!("Incoming Connection");
+                    task::current().notify();
+                    return Ok(Async::NotReady);
+                }
+                NotificationType::Disconnect(v) => {
+                    self.disconnect(v.get_addr());
+                }
+            },
             _ => {}
         }
+        match self.interval.poll() {
+            Ok(v) => match v {
+                Async::Ready(_) => {
+                    task::current().notify();
+                    if let Some(peer_to_connect) = self.get_random(1) {
+                        if peer_to_connect.len() == 1 {
+                            match peer_to_connect[0].status {
+                                PeerStatus::Connected(_) => {}
+                                PeerStatus::Disconnected => {
+                                    println!(
+                                        "Attempt to Connect to: {:?}",
+                                        &peer_to_connect[0].addr
+                                    );
+                                }
+                            }
+                            // return Ok(Async::Ready(Some(peer_to_connect[0].get_addr().clone())));
+                        }
+                    }
+                }
+                Async::NotReady => {
+                    task::current().notify();
+                    return Ok(Async::NotReady);
+                }
+            },
+            Err(e) => {
+                println!("error: {:?}", e);
+            }
+        }
+        task::current().notify();
         Ok(Async::NotReady)
     }
 }
