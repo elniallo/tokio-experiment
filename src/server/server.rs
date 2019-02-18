@@ -3,9 +3,7 @@ use futures::future::{self, Either};
 use futures::stream::Stream;
 use futures::sync::mpsc;
 use std::collections::HashMap;
-use std::error::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
-use std::sync::mpsc::SendError;
 use std::sync::{Arc, Mutex};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
@@ -15,7 +13,7 @@ use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer::Peer;
 use crate::server::peer_database::{DBPeer, PeerDatabase};
-use crate::traits::Encode;
+use crate::traits::{Encode, ToDBType};
 
 type Tx = mpsc::UnboundedSender<Bytes>;
 pub struct Server {
@@ -80,6 +78,10 @@ fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
                             }
                             Err(e) => println!("Error: {}", e),
                         }
+                        peer.get_srv()
+                            .lock()
+                            .unwrap()
+                            .notify_channel(peer.to_db_type().unwrap());
                         return Either::B(peer);
                     }
                     _ => {

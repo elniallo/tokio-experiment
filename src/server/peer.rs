@@ -68,6 +68,10 @@ impl Peer {
     pub fn get_status(&self) -> &PeerStatus {
         &self.status
     }
+
+    pub fn get_srv(&self) -> Arc<Mutex<Server>> {
+        self.srv.clone()
+    }
 }
 
 impl Future for Peer {
