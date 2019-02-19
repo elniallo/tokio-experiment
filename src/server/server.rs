@@ -21,20 +21,75 @@ pub enum NotificationType<T> {
     Disconnect(T),
 }
 type Tx = mpsc::UnboundedSender<Bytes>;
+
+pub struct PeerDBFuture {
+    db: PeerDatabase<SocketAddr, DBPeer>,
+    srv: Arc<Mutex<Server>>,
+}
+
+impl PeerDBFuture {
+    pub fn new(db: PeerDatabase<SocketAddr, DBPeer>, srv: Arc<Mutex<Server>>) -> Self {
+        Self { db, srv }
+    }
+}
+
+impl Future for PeerDBFuture {
+    type Item = ();
+    type Error = io::Error;
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        while let Async::Ready(data) = self.db.poll()? {
+            if let Some(addr) = data {
+                println!("Address: {:?}", addr);
+                let srv_clone = self.srv.clone();
+                let fut = TcpStream::connect(&addr)
+                    .and_then(|mut stream| {
+                        let mut get_status_message = network::Status::new();
+                        get_status_message.set_guid(srv_clone.lock().unwrap().get_guid().clone());
+                        get_status_message
+                            .set_version(srv_clone.lock().unwrap().get_version().clone());
+                        get_status_message.set_port(3553);
+                        get_status_message.set_publicPort(3553);
+                        get_status_message.set_networkid("hycon".to_string());
+                        let msg =
+                            NetworkMessage::new(Network_oneof_request::status(get_status_message));
+                        let parsed =
+                            SocketParser::prepare_packet_default(0, &msg.encode().unwrap());
+                        match parsed {
+                            Ok(message) => {
+                                stream.poll_write(&message).unwrap();
+                            }
+                            Err(e) => {
+                                println!("Parsing error: {:?}", e);
+                            }
+                        }
+                        process_socket(stream, srv_clone);
+                        Ok(())
+                    })
+                    .map_err(|e| println!("error connecting: {:?}", e));
+                tokio::spawn(fut);
+            }
+        }
+        Ok(Async::NotReady)
+    }
+}
 pub struct Server {
     active_peers: HashMap<SocketAddr, Tx>,
     guid: String,
     version: u32,
     peer_channel: mpsc::UnboundedSender<NotificationType<DBPeer>>,
+    peer_db: Option<PeerDatabase<SocketAddr, DBPeer>>,
+    block_count: usize,
 }
 
 impl Server {
-    fn new(transmitter: mpsc::UnboundedSender<NotificationType<DBPeer>>) -> Self {
+    pub fn new(transmitter: mpsc::UnboundedSender<NotificationType<DBPeer>>) -> Self {
         Self {
             active_peers: HashMap::new(),
             guid: String::from("MyRustyGuid"),
             version: 14,
             peer_channel: transmitter,
+            peer_db: None,
+            block_count: 0,
         }
     }
 
@@ -50,13 +105,31 @@ impl Server {
     }
 
     pub fn notify_channel(&self, msg: NotificationType<DBPeer>) {
-        self.peer_channel
-            .unbounded_send(msg)
-            .expect("Sending error");
+        let res = self.peer_channel.unbounded_send(msg);
+        match res {
+            Ok(_) => {}
+            Err(e) => {
+                println!("Error: {:?}", e);
+            }
+        }
+    }
+
+    pub fn remove_peer(&mut self, peer: DBPeer) {
+        self.active_peers.remove(peer.get_addr());
+        self.notify_channel(NotificationType::Disconnect(peer));
+    }
+
+    pub fn update_peer_db(&mut self, peer_db: PeerDatabase<SocketAddr, DBPeer>) {
+        self.peer_db = Some(peer_db)
+    }
+
+    pub fn increment_block_count(&mut self) {
+        self.block_count += 1;
+        println!("Blocks received: {:?}", self.block_count);
     }
 }
 
-fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
+pub fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
     let base = BaseSocket::new(socket);
     let connection = base
         .into_future()
@@ -106,8 +179,8 @@ fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
 
 pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
     let (tx, rx) = mpsc::unbounded::<NotificationType<DBPeer>>();
-    let peer_database = PeerDatabase::new(rx);
     let srv = Arc::new(Mutex::new(Server::new(tx)));
+    let peer_database = PeerDatabase::new(rx);
     let srv_clone = srv.clone();
     let addr = args[2]
         .to_socket_addrs()
@@ -115,41 +188,44 @@ pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
         .next()
         .expect("could not parse address");
     let socket = TcpListener::bind(&addr)?;
-    let peer_db = peer_database
-        .into_future()
-        .map_err(|(e, _)| e)
-        .and_then(move |(socket_addr, peer_database)| match socket_addr {
-            Some(addr) => Either::A(TcpStream::connect(&addr)),
-            None => Either::B(futures::future::err(io::Error::from(
-                io::ErrorKind::ConnectionAborted,
-            ))),
-        })
-        .map_err(|err| {
-            println!("Accept error = {:?}", err);
-        })
-        .and_then(move |mut stream| {
-            let mut get_status_message = network::Status::new();
-            get_status_message.set_guid(srv_clone.lock().unwrap().get_guid().clone());
-            get_status_message.set_version(srv_clone.lock().unwrap().get_version().clone());
-            get_status_message.set_port(3553);
-            get_status_message.set_publicPort(3553);
-            get_status_message.set_networkid("hycon".to_string());
-            let msg = NetworkMessage::new(Network_oneof_request::status(get_status_message));
-            let parsed = SocketParser::prepare_packet_default(0, &msg.encode().unwrap());
-            match parsed {
-                Ok(message) => {
-                    stream.poll_write(&message).unwrap();
-                }
-                Err(e) => {
-                    println!("Parsing error: {:?}", e);
-                }
-            }
-            process_socket(stream, srv_clone.clone());
-            Ok(())
-        })
-        .map_err(|err| {
-            println!("Accept error = {:?}", err);
-        });
+    let peer_db = PeerDBFuture::new(peer_database, srv.clone()).map_err(|e| {
+        println!("Error: {:?}", e);
+    });
+    // let peer_db = peer_database
+    //     .into_future()
+    //     .map_err(|(e, _)| e)
+    //     .and_then(|(socket_addr, peer_database)| match socket_addr {
+    //         Some(addr) => Either::A(TcpStream::connect(&addr)),
+    //         None => Either::B(futures::future::err(io::Error::from(
+    //             io::ErrorKind::ConnectionAborted,
+    //         ))),
+    //     })
+    //     .map_err(|err| {
+    //         println!("Accept error = {:?}", err);
+    //     })
+    //     .and_then(move |mut stream| {
+    //         let mut get_status_message = network::Status::new();
+    //         get_status_message.set_guid(srv_clone.lock().unwrap().get_guid().clone());
+    //         get_status_message.set_version(srv_clone.lock().unwrap().get_version().clone());
+    //         get_status_message.set_port(3553);
+    //         get_status_message.set_publicPort(3553);
+    //         get_status_message.set_networkid("hycon".to_string());
+    //         let msg = NetworkMessage::new(Network_oneof_request::status(get_status_message));
+    //         let parsed = SocketParser::prepare_packet_default(0, &msg.encode().unwrap());
+    //         match parsed {
+    //             Ok(message) => {
+    //                 stream.poll_write(&message).unwrap();
+    //             }
+    //             Err(e) => {
+    //                 println!("Parsing error: {:?}", e);
+    //             }
+    //         }
+    //         process_socket(stream, srv_clone.clone());
+    //         Ok(())
+    //     })
+    //     .map_err(|err| {
+    //         println!("Accept error = {:?}", err);
+    //     });
     let server = socket
         .incoming()
         .for_each(move |socket| {

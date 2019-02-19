@@ -35,11 +35,12 @@ impl Peer {
         status: crate::serialization::network::Status,
     ) -> Self {
         let (tx, rx) = mpsc::unbounded();
-        let addr = socket.get_socket().peer_addr().unwrap();
-        srv.lock().unwrap().get_peers_mut().insert(addr, tx);
+        let addr = socket.get_socket().peer_addr().unwrap().ip();
+        let peer_addr = SocketAddr::new(addr, status.get_port() as u16);
+        srv.lock().unwrap().get_peers_mut().insert(peer_addr, tx);
         println!("Peer Connected: {:?}", &status);
         Self {
-            addr,
+            addr: peer_addr,
             srv,
             socket: socket,
             receiver: rx,
@@ -142,6 +143,7 @@ impl Future for Peer {
                             println!("get tip return");
                         }
                         Network_oneof_request::putBlock(block) => {
+                            self.srv.lock().unwrap().increment_block_count();
                             println!("Block Received: {:?}", block);
                         }
                         Network_oneof_request::putBlockReturn(_) => {
@@ -232,10 +234,12 @@ impl ToDBType<DBPeer> for Peer {
 
 impl Drop for Peer {
     fn drop(&mut self) {
+        {
+            self.srv
+                .lock()
+                .unwrap()
+                .remove_peer(self.to_db_type().clone());
+        }
         println!("Socket Dropped: {:?}", &self.status);
-
-        let mut guard = self.srv.lock().unwrap();
-        guard.get_peers_mut().remove(&self.addr);
-        guard.notify_channel(NotificationType::Disconnect(self.to_db_type()));
     }
 }

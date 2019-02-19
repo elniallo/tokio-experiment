@@ -1,15 +1,18 @@
 use crate::server::peer::{Peer, PeerStatus};
-use crate::server::server::NotificationType;
+use crate::server::server::{process_socket, NotificationType, Server};
 use crate::traits::PeerDB;
+use futures::future;
 use futures::sync::mpsc;
 use rand::seq::sample_iter;
 use rand::thread_rng;
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io;
+use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio::timer::Interval;
 
@@ -19,7 +22,6 @@ fn get_current_time() -> usize {
     let start = SystemTime::now();
     start.duration_since(UNIX_EPOCH).unwrap().as_millis() as usize
 }
-
 enum PeerConnectionType {
     Inbound,
     Outbound,
@@ -103,7 +105,7 @@ pub struct PeerDatabase<SocketAddr, DBPeer> {
 
 impl PeerDatabase<SocketAddr, DBPeer> {
     pub fn new(rx: Rx) -> Self {
-        let interval = Interval::new_interval(Duration::from_millis(1000));
+        let interval = Interval::new_interval(Duration::from_millis(10000));
         Self {
             db: HashMap::new(),
             receiver: rx,
@@ -153,6 +155,7 @@ impl PeerDB<SocketAddr, DBPeer> for PeerDatabase<SocketAddr, DBPeer> {
         if let Some(peer) = self.db.get_mut(&key) {
             peer.set_last_seen(get_current_time());
             peer.update_success_count(PeerConnectionType::Inbound);
+            peer.set_status(value.status);
         } else {
             let mut peer = value.clone();
             peer.set_last_seen(get_current_time());
@@ -166,6 +169,7 @@ impl PeerDB<SocketAddr, DBPeer> for PeerDatabase<SocketAddr, DBPeer> {
         if let Some(peer) = self.db.get_mut(&key) {
             peer.set_last_seen(get_current_time());
             peer.update_success_count(PeerConnectionType::Outbound);
+            peer.set_status(value.status);
         } else {
             let mut peer = value.clone();
             peer.set_last_seen(get_current_time());
@@ -284,21 +288,14 @@ impl Stream for PeerDatabase<SocketAddr, DBPeer> {
         match self.receiver.poll().unwrap() {
             Async::Ready(Some(notification)) => match notification {
                 NotificationType::Inbound(v) => {
-                    let mut port = 8148u16;
-                    match &v.status {
-                        PeerStatus::Connected(status) => {
-                            port = status.get_publicPort() as u16;
-                        }
-                        _ => {}
-                    }
-                    let server_addr = SocketAddr::new(v.get_addr().ip(), port);
-                    self.inbound_connection(server_addr, v);
-                    println!("Incoming Connection");
+                    self.inbound_connection(v.get_addr().clone(), v);
                     task::current().notify();
                     return Ok(Async::NotReady);
                 }
                 NotificationType::Disconnect(v) => {
                     self.disconnect(v.get_addr());
+                    task::current().notify();
+                    return Ok(Async::NotReady);
                 }
             },
             _ => {}
@@ -312,13 +309,11 @@ impl Stream for PeerDatabase<SocketAddr, DBPeer> {
                             match peer_to_connect[0].status {
                                 PeerStatus::Connected(_) => {}
                                 PeerStatus::Disconnected => {
-                                    println!(
-                                        "Attempt to Connect to: {:?}",
-                                        &peer_to_connect[0].addr
-                                    );
+                                    return Ok(Async::Ready(Some(
+                                        peer_to_connect[0].get_addr().clone(),
+                                    )));
                                 }
                             }
-                            // return Ok(Async::Ready(Some(peer_to_connect[0].get_addr().clone())));
                         }
                     }
                 }
@@ -333,6 +328,12 @@ impl Stream for PeerDatabase<SocketAddr, DBPeer> {
         }
         task::current().notify();
         Ok(Async::NotReady)
+    }
+}
+
+impl<SocketAddr, DBPeer> Drop for PeerDatabase<SocketAddr, DBPeer> {
+    fn drop(&mut self) {
+        println!("Dropping peer database");
     }
 }
 
