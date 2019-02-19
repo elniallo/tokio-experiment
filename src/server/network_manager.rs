@@ -53,6 +53,12 @@ impl Proto for NetworkMessage {
             Network_oneof_request::getPeers(n) => {
                 proto_message.set_getPeers(n);
             }
+            Network_oneof_request::putTxReturn(t) => {
+                proto_message.set_putTxReturn(t);
+            }
+            Network_oneof_request::putBlockReturn(b) => {
+                proto_message.set_putBlockReturn(b);
+            }
             _ => {}
         }
         Ok(proto_message)

@@ -118,12 +118,12 @@ impl Future for Peer {
                                 let addr = SocketAddr::new(ip, peer.get_port() as u16);
                                 vec.push(DBPeer::from_net_peer(&addr));
                             }
-                            if vec.len() > 0 {
-                                self.srv
-                                    .lock()
-                                    .unwrap()
-                                    .notify_channel(NotificationType::Peers(vec));
-                            }
+                            // if vec.len() > 0 {
+                            //     self.srv
+                            //         .lock()
+                            //         .unwrap()
+                            //         .notify_channel(NotificationType::Peers(vec));
+                            // }
                         }
                         Network_oneof_request::getTip(_v) => {
                             let mut tip_return = network::GetTipReturn::new();
@@ -155,6 +155,23 @@ impl Future for Peer {
                         }
                         Network_oneof_request::putBlock(block) => {
                             self.srv.lock().unwrap().increment_block_count();
+                            let mut put_block_return = network::PutBlockReturn::new();
+                            put_block_return
+                                .set_statusChanges(::protobuf::RepeatedField::from(Vec::new()));
+                            let net_msg = NetworkMessage::new(
+                                Network_oneof_request::putBlockReturn(put_block_return),
+                            );
+                            let bytes = self
+                                .socket
+                                .get_parser_mut()
+                                .prepare_packet(route, &net_msg.encode().unwrap());
+                            match bytes {
+                                Ok(msg) => {
+                                    self.socket.buffer(&msg);
+                                    self.socket.poll_flush()?;
+                                }
+                                Err(e) => println!("Error: {}", e),
+                            }
                             println!("Block Received: {:?}", block);
                         }
                         Network_oneof_request::putBlockReturn(_) => {
@@ -221,7 +238,22 @@ impl Future for Peer {
                             println!("put headers return");
                         }
                         Network_oneof_request::putTx(_) => {
-                            println!("put tx");
+                            let mut put_tx_return = network::PutTxReturn::new();
+                            put_tx_return.set_success(true);
+                            let net_msg = NetworkMessage::new(Network_oneof_request::putTxReturn(
+                                put_tx_return,
+                            ));
+                            let bytes = self
+                                .socket
+                                .get_parser_mut()
+                                .prepare_packet(route, &net_msg.encode().unwrap());
+                            match bytes {
+                                Ok(msg) => {
+                                    self.socket.buffer(&msg);
+                                    self.socket.poll_flush()?;
+                                }
+                                Err(e) => println!("Error: {}", e),
+                            }
                         }
                         Network_oneof_request::putTxReturn(_) => {
                             println!("put tx return");

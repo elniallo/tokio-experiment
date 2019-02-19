@@ -8,7 +8,7 @@ use crate::traits::Exception;
 
 const HEADER_ROUTE_LENGTH: usize = 4;
 const HEADER_POSTFIX_LENGTH: usize = 4;
-// Main Net
+//Main Net
 const HEADER_PREFIX: [u8; 4] = [172, 215, 103, 237];
 //Test Net
 // const HEADER_PREFIX: [u8; 4] = [137, 136, 143, 254];
