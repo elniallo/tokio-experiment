@@ -2,7 +2,7 @@ use bytes::Bytes;
 use futures::sync::mpsc;
 use futures::Future;
 use std::error::Error;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use tokio::io;
 use tokio::prelude::*;
@@ -111,8 +111,19 @@ impl Future for Peer {
                                 Err(e) => println!("Error: {}", e),
                             }
                         }
-                        Network_oneof_request::getPeersReturn(_) => {
-                            println!("get peers return");
+                        Network_oneof_request::getPeersReturn(p) => {
+                            let mut vec = Vec::with_capacity(p.get_peers().len());
+                            for peer in p.get_peers() {
+                                let ip: IpAddr = peer.get_host().parse().unwrap();
+                                let addr = SocketAddr::new(ip, peer.get_port() as u16);
+                                vec.push(DBPeer::from_net_peer(&addr));
+                            }
+                            if vec.len() > 0 {
+                                self.srv
+                                    .lock()
+                                    .unwrap()
+                                    .notify_channel(NotificationType::Peers(vec));
+                            }
                         }
                         Network_oneof_request::getTip(_v) => {
                             let mut tip_return = network::GetTipReturn::new();

@@ -5,9 +5,11 @@ use futures::sync::mpsc;
 use std::collections::HashMap;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
+use tokio::timer::Interval;
 
 use crate::serialization::network::{self, Network_oneof_request};
 use crate::server::base_socket::BaseSocket;
@@ -19,17 +21,20 @@ use crate::traits::{Encode, ToDBType};
 pub enum NotificationType<T> {
     Inbound(T),
     Disconnect(T),
+    Peers(Vec<T>),
 }
 type Tx = mpsc::UnboundedSender<Bytes>;
 
 pub struct PeerDBFuture {
     db: PeerDatabase<SocketAddr, DBPeer>,
     srv: Arc<Mutex<Server>>,
+    interval: Interval,
 }
 
 impl PeerDBFuture {
     pub fn new(db: PeerDatabase<SocketAddr, DBPeer>, srv: Arc<Mutex<Server>>) -> Self {
-        Self { db, srv }
+        let interval = Interval::new_interval(Duration::from_millis(30000));
+        Self { db, srv, interval }
     }
 }
 
@@ -67,6 +72,31 @@ impl Future for PeerDBFuture {
                     })
                     .map_err(|e| println!("error connecting: {:?}", e));
                 tokio::spawn(fut);
+            }
+        }
+        match self.interval.poll() {
+            Ok(v) => match v {
+                Async::Ready(_) => {
+                    let mut get_peers_message = network::GetPeers::new();
+                    get_peers_message.set_count(20);
+                    let msg =
+                        NetworkMessage::new(Network_oneof_request::getPeers(get_peers_message));
+                    let parsed = SocketParser::prepare_packet_default(0, &msg.encode().unwrap());
+                    match parsed {
+                        Ok(message) => {
+                            for tx in self.srv.lock().unwrap().get_peers_mut().values() {
+                                tx.unbounded_send(Bytes::from(message.clone()));
+                            }
+                        }
+                        Err(e) => {
+                            println!("Parsing error: {:?}", e);
+                        }
+                    }
+                }
+                Async::NotReady => {}
+            },
+            Err(e) => {
+                println!("Interval Error: {:?}", e);
             }
         }
         Ok(Async::NotReady)
@@ -116,6 +146,7 @@ impl Server {
 
     pub fn remove_peer(&mut self, peer: DBPeer) {
         self.active_peers.remove(peer.get_addr());
+        println!("Active Peers: {:?}", self.active_peers.len());
         self.notify_channel(NotificationType::Disconnect(peer));
     }
 
@@ -181,7 +212,6 @@ pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
     let (tx, rx) = mpsc::unbounded::<NotificationType<DBPeer>>();
     let srv = Arc::new(Mutex::new(Server::new(tx)));
     let peer_database = PeerDatabase::new(rx);
-    let srv_clone = srv.clone();
     let addr = args[2]
         .to_socket_addrs()
         .unwrap()
@@ -191,41 +221,6 @@ pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
     let peer_db = PeerDBFuture::new(peer_database, srv.clone()).map_err(|e| {
         println!("Error: {:?}", e);
     });
-    // let peer_db = peer_database
-    //     .into_future()
-    //     .map_err(|(e, _)| e)
-    //     .and_then(|(socket_addr, peer_database)| match socket_addr {
-    //         Some(addr) => Either::A(TcpStream::connect(&addr)),
-    //         None => Either::B(futures::future::err(io::Error::from(
-    //             io::ErrorKind::ConnectionAborted,
-    //         ))),
-    //     })
-    //     .map_err(|err| {
-    //         println!("Accept error = {:?}", err);
-    //     })
-    //     .and_then(move |mut stream| {
-    //         let mut get_status_message = network::Status::new();
-    //         get_status_message.set_guid(srv_clone.lock().unwrap().get_guid().clone());
-    //         get_status_message.set_version(srv_clone.lock().unwrap().get_version().clone());
-    //         get_status_message.set_port(3553);
-    //         get_status_message.set_publicPort(3553);
-    //         get_status_message.set_networkid("hycon".to_string());
-    //         let msg = NetworkMessage::new(Network_oneof_request::status(get_status_message));
-    //         let parsed = SocketParser::prepare_packet_default(0, &msg.encode().unwrap());
-    //         match parsed {
-    //             Ok(message) => {
-    //                 stream.poll_write(&message).unwrap();
-    //             }
-    //             Err(e) => {
-    //                 println!("Parsing error: {:?}", e);
-    //             }
-    //         }
-    //         process_socket(stream, srv_clone.clone());
-    //         Ok(())
-    //     })
-    //     .map_err(|err| {
-    //         println!("Accept error = {:?}", err);
-    //     });
     let server = socket
         .incoming()
         .for_each(move |socket| {

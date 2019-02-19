@@ -41,6 +41,21 @@ pub struct DBPeer {
 }
 
 impl DBPeer {
+    pub fn from_net_peer(addr: &SocketAddr) -> Self {
+        let addr = addr.clone();
+        let status = PeerStatus::Disconnected;
+        let (success_in_count, success_out_count, last_seen, fail_count, last_attempt) =
+            (0, 0, 0, 0, 0);
+        Self {
+            addr,
+            status,
+            success_in_count,
+            success_out_count,
+            last_seen,
+            last_attempt,
+            fail_count,
+        }
+    }
     pub fn from_peer(peer: &Peer) -> Self {
         let addr = peer.get_addr().clone();
         let status = peer.get_status().clone();
@@ -105,7 +120,7 @@ pub struct PeerDatabase<SocketAddr, DBPeer> {
 
 impl PeerDatabase<SocketAddr, DBPeer> {
     pub fn new(rx: Rx) -> Self {
-        let interval = Interval::new_interval(Duration::from_millis(10000));
+        let interval = Interval::new_interval(Duration::from_millis(20000));
         Self {
             db: HashMap::new(),
             receiver: rx,
@@ -196,7 +211,9 @@ impl PeerDB<SocketAddr, DBPeer> for PeerDatabase<SocketAddr, DBPeer> {
 
     fn put_multiple(&mut self, values: Vec<(SocketAddr, DBPeer)>) -> Result<(), Box<Error>> {
         for (key, value) in values {
-            self.db.insert(key, value);
+            if let None = self.db.get_mut(&key) {
+                self.db.insert(key, value);
+            }
         }
         Ok(())
     }
@@ -296,6 +313,13 @@ impl Stream for PeerDatabase<SocketAddr, DBPeer> {
                     self.disconnect(v.get_addr());
                     task::current().notify();
                     return Ok(Async::NotReady);
+                }
+                NotificationType::Peers(v) => {
+                    let mut vec = Vec::with_capacity(v.len());
+                    for peer in v {
+                        vec.push((peer.get_addr().clone(), peer));
+                    }
+                    self.put_multiple(vec);
                 }
             },
             _ => {}

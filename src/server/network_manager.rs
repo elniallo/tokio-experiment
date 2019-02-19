@@ -50,6 +50,9 @@ impl Proto for NetworkMessage {
             Network_oneof_request::getTipReturn(t) => {
                 proto_message.set_getTipReturn(t);
             }
+            Network_oneof_request::getPeers(n) => {
+                proto_message.set_getPeers(n);
+            }
             _ => {}
         }
         Ok(proto_message)
