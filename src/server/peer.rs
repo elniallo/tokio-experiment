@@ -90,6 +90,7 @@ impl Future for Peer {
         while let Async::Ready(data) = self.socket.poll()? {
             if let Some(messages) = data {
                 for (bytes, route) in messages {
+                    let msg_vec = bytes.clone().to_vec();
                     let parsed = NetworkManager::decode(&bytes.to_vec()).unwrap();
                     match &parsed.message_type {
                         Network_oneof_request::getPeers(_n) => {
@@ -154,7 +155,6 @@ impl Future for Peer {
                             println!("get tip return");
                         }
                         Network_oneof_request::putBlock(block) => {
-                            self.srv.lock().unwrap().increment_block_count();
                             let mut put_block_return = network::PutBlockReturn::new();
                             put_block_return
                                 .set_statusChanges(::protobuf::RepeatedField::from(Vec::new()));
@@ -172,7 +172,10 @@ impl Future for Peer {
                                 }
                                 Err(e) => println!("Error: {}", e),
                             }
-                            println!("Block Received: {:?}", block);
+                            if self.srv.lock().unwrap().new_data(msg_vec) {
+                                self.srv.lock().unwrap().increment_block_count();
+                                println!("Block Received: {:?}", block);
+                            }
                         }
                         Network_oneof_request::putBlockReturn(_) => {
                             println!("Put block return");

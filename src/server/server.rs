@@ -2,7 +2,7 @@ use bytes::Bytes;
 use futures::future::{self, Either};
 use futures::stream::Stream;
 use futures::sync::mpsc;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -112,6 +112,7 @@ pub struct Server {
     peer_channel: mpsc::UnboundedSender<NotificationType<DBPeer>>,
     peer_db: Option<PeerDatabase<SocketAddr, DBPeer>>,
     block_count: usize,
+    seen_messages: HashSet<Vec<u8>>,
 }
 
 impl Server {
@@ -123,6 +124,7 @@ impl Server {
             peer_channel: transmitter,
             peer_db: None,
             block_count: 0,
+            seen_messages: HashSet::new(),
         }
     }
 
@@ -164,6 +166,9 @@ impl Server {
 
     pub fn get_peer_count(&self) -> usize {
         self.active_peers.len()
+    }
+    pub fn new_data(&mut self, msg: Vec<u8>) -> bool {
+        self.seen_messages.insert(msg)
     }
 }
 
