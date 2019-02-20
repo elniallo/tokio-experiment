@@ -2,15 +2,17 @@ extern crate byteorder;
 extern crate bytes;
 #[macro_use]
 extern crate futures;
+extern crate cryptonight;
+extern crate openssl;
 extern crate rand;
 extern crate tokio;
-extern crate tokio_core;
 extern crate tokio_io;
 extern crate tokio_proto;
 
 pub mod serialization;
 pub mod server;
 pub mod traits;
+pub mod util;
 
 fn main() {
     let args: Vec<String> = ::std::env::args().collect();

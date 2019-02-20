@@ -79,6 +79,8 @@ impl Future for PeerDBFuture {
                 Async::Ready(_) => {
                     let mut get_peers_message = network::GetPeers::new();
                     get_peers_message.set_count(20);
+                    let peer_count = self.srv.lock().unwrap().get_peer_count();
+                    println!("Peers Count: {}", peer_count);
                     let msg =
                         NetworkMessage::new(Network_oneof_request::getPeers(get_peers_message));
                     let parsed = SocketParser::prepare_packet_default(0, &msg.encode().unwrap());

@@ -118,12 +118,12 @@ impl Future for Peer {
                                 let addr = SocketAddr::new(ip, peer.get_port() as u16);
                                 vec.push(DBPeer::from_net_peer(&addr));
                             }
-                            // if vec.len() > 0 {
-                            //     self.srv
-                            //         .lock()
-                            //         .unwrap()
-                            //         .notify_channel(NotificationType::Peers(vec));
-                            // }
+                            if vec.len() > 0 {
+                                self.srv
+                                    .lock()
+                                    .unwrap()
+                                    .notify_channel(NotificationType::Peers(vec));
+                            }
                         }
                         Network_oneof_request::getTip(_v) => {
                             let mut tip_return = network::GetTipReturn::new();

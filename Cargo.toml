@@ -1,7 +1,7 @@
 [package]
 name = "tokio-experiment"
 version = "0.1.0"
-authors = ["niall"]
+authors = ["Niall Moore<niall@hycon.io>"]
 edition = "2018"
 build = "build.rs"
 
@@ -11,13 +11,19 @@ protoc-rust-no-elision = "2.0.4"
 protobuf-codegen-no-elision = "2.0.4"
 
 [dependencies]
-bytes = "0.4"
-futures = "*"
+blake2-rfc = "0.2.18"
+byteorder="1.3.1"
+bytes = "^0.4"
+cryptonight-rs = "^0.2"
+futures = "^0.1.25"
+openssl = {version = "0.10.11", features = ["vendored"]}
 protobuf = "2.0.4"
-tokio = "*"
-tokio-core = "0.1"
-tokio-proto="0.1"
-tokio-io="0.1"
-byteorder="*"
-rand="0.4"
+rand="^0.6"
+tokio = "^0.1.15"
+tokio-io="^0.1"
+tokio-proto="^0.1"
+
+
+
+
 
