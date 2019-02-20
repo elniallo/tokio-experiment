@@ -102,6 +102,7 @@ impl Future for PeerDBFuture {
         Ok(Async::NotReady)
     }
 }
+
 pub struct Server {
     active_peers: HashMap<SocketAddr, Tx>,
     guid: String,
@@ -157,6 +158,10 @@ impl Server {
     pub fn increment_block_count(&mut self) {
         self.block_count += 1;
         println!("Blocks received: {:?}", self.block_count);
+    }
+
+    pub fn get_peer_count(&self) -> usize {
+        self.active_peers.len()
     }
 }
 
