@@ -2,7 +2,7 @@ use bytes::Bytes;
 use futures::future::{self, Either};
 use futures::stream::Stream;
 use futures::sync::mpsc;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -113,6 +113,7 @@ pub struct Server {
     peer_db: Option<PeerDatabase<SocketAddr, DBPeer>>,
     block_count: usize,
     seen_messages: HashSet<Vec<u8>>,
+    seen_message_vec: VecDeque<Vec<u8>>,
 }
 
 impl Server {
@@ -125,6 +126,7 @@ impl Server {
             peer_db: None,
             block_count: 0,
             seen_messages: HashSet::new(),
+            seen_message_vec: VecDeque::with_capacity(1000),
         }
     }
 
@@ -168,7 +170,16 @@ impl Server {
         self.active_peers.len()
     }
     pub fn new_data(&mut self, msg: Vec<u8>) -> bool {
-        self.seen_messages.insert(msg)
+        let res = self.seen_messages.insert(msg.clone());
+        if res {
+            self.seen_message_vec.push_back(msg);
+            while self.seen_message_vec.len() >= 1000 {
+                if let Some(v) = self.seen_message_vec.pop_front() {
+                    self.seen_messages.remove(&v);
+                }
+            }
+        }
+        res
     }
 }
 

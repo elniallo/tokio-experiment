@@ -13,6 +13,7 @@ use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer_database::DBPeer;
 use crate::server::server::{NotificationType, Server};
 use crate::traits::{Encode, ToDBType};
+use crate::util::hash::hash;
 
 type Rx = mpsc::UnboundedReceiver<Bytes>;
 #[derive(Debug, Clone, PartialEq)]
@@ -90,7 +91,7 @@ impl Future for Peer {
         while let Async::Ready(data) = self.socket.poll()? {
             if let Some(messages) = data {
                 for (bytes, route) in messages {
-                    let msg_vec = bytes.clone().to_vec();
+                    let msg_vec = hash(&bytes.to_vec(), 32);
                     let parsed = NetworkManager::decode(&bytes.to_vec()).unwrap();
                     match &parsed.message_type {
                         Network_oneof_request::getPeers(_n) => {
