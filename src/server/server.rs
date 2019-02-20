@@ -2,10 +2,11 @@ use bytes::Bytes;
 use futures::future::{self, Either};
 use futures::stream::Stream;
 use futures::sync::mpsc;
+use slog::{Drain, Logger};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{self, Duration};
 use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
@@ -29,12 +30,22 @@ pub struct PeerDBFuture {
     db: PeerDatabase<SocketAddr, DBPeer>,
     srv: Arc<Mutex<Server>>,
     interval: Interval,
+    logger: Logger,
 }
 
 impl PeerDBFuture {
-    pub fn new(db: PeerDatabase<SocketAddr, DBPeer>, srv: Arc<Mutex<Server>>) -> Self {
+    pub fn new(
+        db: PeerDatabase<SocketAddr, DBPeer>,
+        srv: Arc<Mutex<Server>>,
+        logger: Logger,
+    ) -> Self {
         let interval = Interval::new_interval(Duration::from_millis(30000));
-        Self { db, srv, interval }
+        Self {
+            db,
+            srv,
+            interval,
+            logger,
+        }
     }
 }
 
@@ -44,10 +55,12 @@ impl Future for PeerDBFuture {
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         while let Async::Ready(data) = self.db.poll()? {
             if let Some(addr) = data {
-                println!("Address: {:?}", addr);
+                info!(self.logger, "Address: {:?}", addr);
                 let srv_clone = self.srv.clone();
+                let logger = self.logger.clone();
+                let logger_2 = logger.clone();
                 let fut = TcpStream::connect(&addr)
-                    .and_then(|mut stream| {
+                    .and_then(move |mut stream| {
                         let mut get_status_message = network::Status::new();
                         get_status_message.set_guid(srv_clone.lock().unwrap().get_guid().clone());
                         get_status_message
@@ -64,13 +77,13 @@ impl Future for PeerDBFuture {
                                 stream.poll_write(&message).unwrap();
                             }
                             Err(e) => {
-                                println!("Parsing error: {:?}", e);
+                                error!(logger, "Parsing error: {:?}", e);
                             }
                         }
                         process_socket(stream, srv_clone);
                         Ok(())
                     })
-                    .map_err(|e| println!("error connecting: {:?}", e));
+                    .map_err(move |e| warn!(logger_2, "error connecting: {:?}", e));
                 tokio::spawn(fut);
             }
         }
@@ -80,7 +93,7 @@ impl Future for PeerDBFuture {
                     let mut get_peers_message = network::GetPeers::new();
                     get_peers_message.set_count(20);
                     let peer_count = self.srv.lock().unwrap().get_peer_count();
-                    println!("Peers Count: {}", peer_count);
+                    info!(self.logger, "Peers Count: {}", peer_count);
                     let msg =
                         NetworkMessage::new(Network_oneof_request::getPeers(get_peers_message));
                     let parsed = SocketParser::prepare_packet_default(0, &msg.encode().unwrap());
@@ -114,10 +127,14 @@ pub struct Server {
     block_count: usize,
     seen_messages: HashSet<Vec<u8>>,
     seen_message_vec: VecDeque<Vec<u8>>,
+    logger: Logger,
 }
 
 impl Server {
-    pub fn new(transmitter: mpsc::UnboundedSender<NotificationType<DBPeer>>) -> Self {
+    pub fn new(
+        transmitter: mpsc::UnboundedSender<NotificationType<DBPeer>>,
+        logger: Logger,
+    ) -> Self {
         Self {
             active_peers: HashMap::new(),
             guid: String::from("MyRustyGuid"),
@@ -127,6 +144,7 @@ impl Server {
             block_count: 0,
             seen_messages: HashSet::new(),
             seen_message_vec: VecDeque::with_capacity(1000),
+            logger,
         }
     }
 
@@ -146,14 +164,14 @@ impl Server {
         match res {
             Ok(_) => {}
             Err(e) => {
-                println!("Error: {:?}", e);
+                error!(self.logger, "Error: {:?}", e);
             }
         }
     }
 
     pub fn remove_peer(&mut self, peer: DBPeer) {
         self.active_peers.remove(peer.get_addr());
-        println!("Active Peers: {:?}", self.active_peers.len());
+        info!(self.logger, "Active Peers: {:?}", self.active_peers.len());
         self.notify_channel(NotificationType::Disconnect(peer));
     }
 
@@ -163,7 +181,7 @@ impl Server {
 
     pub fn increment_block_count(&mut self) {
         self.block_count += 1;
-        println!("Blocks received: {:?}", self.block_count);
+        info!(self.logger, "Blocks received: {:?}", self.block_count);
     }
 
     pub fn get_peer_count(&self) -> usize {
@@ -181,10 +199,17 @@ impl Server {
         }
         res
     }
+
+    pub fn get_logger(&self) -> &Logger {
+        &self.logger
+    }
 }
 
 pub fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
     let base = BaseSocket::new(socket);
+    let base_logger = server.lock().unwrap().get_logger().clone();
+    let logger = base_logger.clone();
+    let peer_logger = logger.new(o!());
     let connection = base
         .into_future()
         .map_err(|(e, _)| e)
@@ -194,7 +219,7 @@ pub fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
                 let parsed = NetworkManager::decode(&message.to_vec()).unwrap();
                 match &parsed.message_type {
                     Network_oneof_request::status(v) => {
-                        let mut peer = Peer::new(server, base, v.clone());
+                        let mut peer = Peer::new(server, base, v.clone(), peer_logger.clone());
                         let status = peer.return_status();
                         let mut status_return = network::StatusReturn::new();
                         status_return.set_status(status);
@@ -208,7 +233,7 @@ pub fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
                             Ok(msg) => {
                                 peer.get_socket().buffer(&msg);
                             }
-                            Err(e) => println!("Error: {}", e),
+                            Err(e) => error!(logger, "Error: {}", e),
                         }
                         peer.get_srv()
                             .lock()
@@ -217,7 +242,7 @@ pub fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
                         return Either::B(peer);
                     }
                     _ => {
-                        println!("Other Request");
+                        info!(logger, "Other Request");
                     }
                 }
                 return Either::A(future::ok(()));
@@ -225,35 +250,44 @@ pub fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
                 return Either::A(future::ok(()));
             }
         })
-        .map_err(|e| {
-            println!("Connection Error {:?}", e);
+        .map_err(move |e| {
+            error!(base_logger, "Connection Error {:?}", e);
         });
     tokio::spawn(connection);
 }
 
 pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
+    let decorator = slog_term::TermDecorator::new().build();
+    let drain = slog_term::CompactFormat::new(decorator).build();
+    let drain = std::sync::Mutex::new(drain).fuse();
+    let root_logger = Logger::root(drain, o!("version" => "1.0"));
+    info!(root_logger, "Application started");
     let (tx, rx) = mpsc::unbounded::<NotificationType<DBPeer>>();
-    let srv = Arc::new(Mutex::new(Server::new(tx)));
-    let peer_database = PeerDatabase::new(rx);
+    let srv = Arc::new(Mutex::new(Server::new(tx, root_logger.clone())));
+    let cloned = root_logger.clone();
+    let peer_db_logger = root_logger.new(o!());
+    let peer_database = PeerDatabase::new(rx, peer_db_logger);
     let addr = args[2]
         .to_socket_addrs()
         .unwrap()
         .next()
         .expect("could not parse address");
     let socket = TcpListener::bind(&addr)?;
-    let peer_db = PeerDBFuture::new(peer_database, srv.clone()).map_err(|e| {
-        println!("Error: {:?}", e);
-    });
+    let peer_db =
+        PeerDBFuture::new(peer_database, srv.clone(), root_logger.clone()).map_err(move |e| {
+            error!(cloned, "Error: {:?}", e);
+        });
+    let second_clone = root_logger.clone();
     let server = socket
         .incoming()
         .for_each(move |socket| {
             process_socket(socket, srv.clone());
             Ok(())
         })
-        .map_err(|err| {
-            println!("Accept error = {:?}", err);
+        .map_err(move |err| {
+            error!(root_logger.clone(), "Accept error = {:?}", err);
         });
-    println!("Server Running on {:?}", &addr);
+    info!(second_clone, "Server Running on {:?}", &addr);
     tokio::run(server.join(peer_db).map(|(_, _)| ()));
     Ok(())
 }

@@ -1,18 +1,16 @@
 use crate::server::peer::{Peer, PeerStatus};
-use crate::server::server::{process_socket, NotificationType, Server};
+use crate::server::server::NotificationType;
 use crate::traits::PeerDB;
-use futures::future;
 use futures::sync::mpsc;
-use rand::seq::sample_iter;
+use rand::seq::SliceRandom;
 use rand::thread_rng;
+use slog::Logger;
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io;
-use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio::timer::Interval;
 
@@ -116,15 +114,17 @@ pub struct PeerDatabase<SocketAddr, DBPeer> {
     db: HashMap<SocketAddr, DBPeer>,
     receiver: Rx,
     interval: IntervalStream,
+    logger: Logger,
 }
 
 impl PeerDatabase<SocketAddr, DBPeer> {
-    pub fn new(rx: Rx) -> Self {
+    pub fn new(rx: Rx, logger: Logger) -> Self {
         let interval = Interval::new_interval(Duration::from_millis(20000));
         Self {
             db: HashMap::new(),
             receiver: rx,
             interval,
+            logger,
         }
     }
 }
@@ -283,15 +283,8 @@ impl PeerDB<SocketAddr, DBPeer> for PeerDatabase<SocketAddr, DBPeer> {
                 return Some(vec);
             } else {
                 let mut rng = thread_rng();
-                let res = sample_iter(&mut rng, vec, limit);
-                match res {
-                    Ok(v) => {
-                        return Some(v);
-                    }
-                    Err(_) => {
-                        return None;
-                    }
-                }
+                let res: Vec<DBPeer> = vec.choose_multiple(&mut rng, limit).cloned().collect();
+                return Some(res);
             }
         }
         None
@@ -347,7 +340,7 @@ impl Stream for PeerDatabase<SocketAddr, DBPeer> {
                 }
             },
             Err(e) => {
-                println!("error: {:?}", e);
+                error!(self.logger, "error: {:?}", e);
             }
         }
         task::current().notify();
@@ -357,7 +350,7 @@ impl Stream for PeerDatabase<SocketAddr, DBPeer> {
 
 impl<SocketAddr, DBPeer> Drop for PeerDatabase<SocketAddr, DBPeer> {
     fn drop(&mut self) {
-        println!("Dropping peer database");
+        error!(self.logger, "Dropping peer database");
     }
 }
 
@@ -365,6 +358,7 @@ impl<SocketAddr, DBPeer> Drop for PeerDatabase<SocketAddr, DBPeer> {
 pub mod tests {
     use super::*;
     use rand::Rng;
+    use slog::Drain;
     use std::net::{IpAddr, Ipv4Addr};
     use std::str::FromStr;
     /// Creates a `Vec<(SocketAddr, DBPeer)>`.
@@ -422,7 +416,11 @@ pub mod tests {
     #[test]
     fn it_inserts_and_retrieves_an_inbound_peer() {
         let (_, rx) = mpsc::unbounded();
-        let mut peer_db = PeerDatabase::new(rx);
+        let decorator = slog_term::TermDecorator::new().build();
+        let drain = slog_term::CompactFormat::new(decorator).build();
+        let drain = std::sync::Mutex::new(drain).fuse();
+        let root_logger = Logger::root(drain, o!("version" => "0.5"));
+        let mut peer_db = PeerDatabase::new(rx, root_logger);
         let socket_addr = SocketAddr::from_str("127.0.0.1:8148").unwrap();
         let db_peer = DBPeer {
             addr: socket_addr.clone(),
@@ -445,7 +443,11 @@ pub mod tests {
     #[test]
     fn it_inserts_and_retrieves_an_outbound_peer() {
         let (_, rx) = mpsc::unbounded();
-        let mut peer_db = PeerDatabase::new(rx);
+        let decorator = slog_term::TermDecorator::new().build();
+        let drain = slog_term::CompactFormat::new(decorator).build();
+        let drain = std::sync::Mutex::new(drain).fuse();
+        let root_logger = Logger::root(drain, o!("version" => "0.5"));
+        let mut peer_db = PeerDatabase::new(rx, root_logger);
         let socket_addr = SocketAddr::from_str("127.0.0.1:8148").unwrap();
         let db_peer = DBPeer {
             addr: socket_addr.clone(),
@@ -468,7 +470,11 @@ pub mod tests {
     #[test]
     fn it_inserts_multiple_peers() {
         let (_, rx) = mpsc::unbounded();
-        let mut peer_db = PeerDatabase::new(rx);
+        let decorator = slog_term::TermDecorator::new().build();
+        let drain = slog_term::CompactFormat::new(decorator).build();
+        let drain = std::sync::Mutex::new(drain).fuse();
+        let root_logger = Logger::root(drain, o!("version" => "0.5"));
+        let mut peer_db = PeerDatabase::new(rx, root_logger);
         let peers = peer_factory(20, false, true);
         peer_db.put_multiple(peers);
         assert_eq!(peer_db.db.len(), 20);
@@ -476,7 +482,11 @@ pub mod tests {
     #[test]
     fn it_returns_all_peers() {
         let (_, rx) = mpsc::unbounded();
-        let mut peer_db = PeerDatabase::new(rx);
+        let decorator = slog_term::TermDecorator::new().build();
+        let drain = slog_term::CompactFormat::new(decorator).build();
+        let drain = std::sync::Mutex::new(drain).fuse();
+        let root_logger = Logger::root(drain, o!("version" => "0.5"));
+        let mut peer_db = PeerDatabase::new(rx, root_logger);
         let peers = peer_factory(20, false, true);
         let _ = peer_db.put_multiple(peers);
         assert_eq!(peer_db.db.len(), 20);
@@ -489,7 +499,11 @@ pub mod tests {
     #[test]
     fn it_updates_the_fail_count() {
         let (_, rx) = mpsc::unbounded();
-        let mut peer_db = PeerDatabase::new(rx);
+        let decorator = slog_term::TermDecorator::new().build();
+        let drain = slog_term::CompactFormat::new(decorator).build();
+        let drain = std::sync::Mutex::new(drain).fuse();
+        let root_logger = Logger::root(drain, o!("version" => "0.5"));
+        let mut peer_db = PeerDatabase::new(rx, root_logger);
         let socket_addr = SocketAddr::from_str("127.0.0.1:8148").unwrap();
         let db_peer = DBPeer {
             addr: socket_addr.clone(),
@@ -513,7 +527,11 @@ pub mod tests {
     #[test]
     fn it_gets_multiple_peers_or_all_if_limit_exceeds_length() {
         let (_, rx) = mpsc::unbounded();
-        let mut peer_db = PeerDatabase::new(rx);
+        let decorator = slog_term::TermDecorator::new().build();
+        let drain = slog_term::CompactFormat::new(decorator).build();
+        let drain = std::sync::Mutex::new(drain).fuse();
+        let root_logger = Logger::root(drain, o!("version" => "0.5"));
+        let mut peer_db = PeerDatabase::new(rx, root_logger);
         let peers = peer_factory(20, false, true);
         let _ = peer_db.put_multiple(peers);
         if let Some(returned_peers) = peer_db.get_multiple(10) {
@@ -531,7 +549,11 @@ pub mod tests {
     #[test]
     fn it_sets_a_peer_to_disconnected() {
         let (_, rx) = mpsc::unbounded();
-        let mut peer_db = PeerDatabase::new(rx);
+        let decorator = slog_term::TermDecorator::new().build();
+        let drain = slog_term::CompactFormat::new(decorator).build();
+        let drain = std::sync::Mutex::new(drain).fuse();
+        let root_logger = Logger::root(drain, o!("version" => "0.5"));
+        let mut peer_db = PeerDatabase::new(rx, root_logger);
         let socket_addr = SocketAddr::from_str("127.0.0.1:8148").unwrap();
         let db_peer = DBPeer {
             addr: socket_addr.clone(),
@@ -558,7 +580,11 @@ pub mod tests {
     #[test]
     fn it_returns_peers_ordered_by_most_recent() {
         let (_, rx) = mpsc::unbounded();
-        let mut peer_db = PeerDatabase::new(rx);
+        let decorator = slog_term::TermDecorator::new().build();
+        let drain = slog_term::CompactFormat::new(decorator).build();
+        let drain = std::sync::Mutex::new(drain).fuse();
+        let root_logger = Logger::root(drain, o!("version" => "0.5"));
+        let mut peer_db = PeerDatabase::new(rx, root_logger);
         // Forced ordered peer generation for easy validation of ordering
         let peers = peer_factory(20, true, true);
         let _ = peer_db.put_multiple(peers.clone());
@@ -579,7 +605,11 @@ pub mod tests {
     #[test]
     fn it_returns_peers_ordered_by_oldest() {
         let (_, rx) = mpsc::unbounded();
-        let mut peer_db = PeerDatabase::new(rx);
+        let decorator = slog_term::TermDecorator::new().build();
+        let drain = slog_term::CompactFormat::new(decorator).build();
+        let drain = std::sync::Mutex::new(drain).fuse();
+        let root_logger = Logger::root(drain, o!("version" => "0.5"));
+        let mut peer_db = PeerDatabase::new(rx, root_logger);
         // Forced ordered peer generation for easy validation of ordering
         let peers = peer_factory(20, true, true);
         let _ = peer_db.put_multiple(peers.clone());
@@ -598,7 +628,11 @@ pub mod tests {
     #[test]
     fn it_returns_seen_peers() {
         let (_, rx) = mpsc::unbounded();
-        let mut peer_db = PeerDatabase::new(rx);
+        let decorator = slog_term::TermDecorator::new().build();
+        let drain = slog_term::CompactFormat::new(decorator).build();
+        let drain = std::sync::Mutex::new(drain).fuse();
+        let root_logger = Logger::root(drain, o!("version" => "0.5"));
+        let mut peer_db = PeerDatabase::new(rx, root_logger);
         // Forced ordered peer generation for easy validation of ordering
         let peers = peer_factory(20, true, true);
         let unseen_peers = peer_factory(20, false, false);
@@ -614,7 +648,11 @@ pub mod tests {
     #[test]
     fn it_returns_random_peers() {
         let (_, rx) = mpsc::unbounded();
-        let mut peer_db = PeerDatabase::new(rx);
+        let decorator = slog_term::TermDecorator::new().build();
+        let drain = slog_term::CompactFormat::new(decorator).build();
+        let drain = std::sync::Mutex::new(drain).fuse();
+        let root_logger = Logger::root(drain, o!("version" => "0.5"));
+        let mut peer_db = PeerDatabase::new(rx, root_logger);
         let peers = peer_factory(20, false, true);
         let _ = peer_db.put_multiple(peers);
         if let Some(returned_peers) = peer_db.get_random(10) {

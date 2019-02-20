@@ -5,6 +5,9 @@ extern crate futures;
 extern crate cryptonight;
 extern crate openssl;
 extern crate rand;
+#[macro_use]
+extern crate slog;
+extern crate slog_term;
 extern crate tokio;
 extern crate tokio_io;
 extern crate tokio_proto;

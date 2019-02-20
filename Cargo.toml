@@ -19,6 +19,8 @@ futures = "^0.1.25"
 openssl = {version = "0.10.11", features = ["vendored"]}
 protobuf = "2.0.4"
 rand="^0.6"
+slog = "^2.4.1"
+slog-term = "2.4.0"
 tokio = "^0.1.15"
 tokio-io="^0.1"
 tokio-proto="^0.1"

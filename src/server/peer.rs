@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use futures::sync::mpsc;
 use futures::Future;
+use slog::Logger;
 use std::error::Error;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
@@ -27,6 +28,7 @@ pub struct Peer {
     socket: BaseSocket,
     receiver: Rx,
     status: PeerStatus,
+    logger: Logger,
 }
 
 impl Peer {
@@ -34,18 +36,20 @@ impl Peer {
         srv: Arc<Mutex<Server>>,
         socket: BaseSocket,
         status: crate::serialization::network::Status,
+        logger: Logger,
     ) -> Self {
         let (tx, rx) = mpsc::unbounded();
         let addr = socket.get_socket().peer_addr().unwrap().ip();
         let peer_addr = SocketAddr::new(addr, status.get_port() as u16);
         srv.lock().unwrap().get_peers_mut().insert(peer_addr, tx);
-        println!("Peer Connected: {:?}", &status);
+        info!(logger, "Peer Connected: {:?}", &status);
         Self {
             addr: peer_addr,
             srv,
             socket: socket,
             receiver: rx,
             status: PeerStatus::Connected(status),
+            logger,
         }
     }
 
@@ -110,7 +114,7 @@ impl Future for Peer {
                                     self.socket.buffer(&msg);
                                     self.socket.poll_flush()?;
                                 }
-                                Err(e) => println!("Error: {}", e),
+                                Err(e) => error!(self.logger, "Error: {}", e),
                             }
                         }
                         Network_oneof_request::getPeersReturn(p) => {
@@ -149,11 +153,11 @@ impl Future for Peer {
                                     self.socket.buffer(&msg);
                                     self.socket.poll_flush()?;
                                 }
-                                Err(e) => println!("Error: {}", e),
+                                Err(e) => error!(self.logger, "Error: {}", e),
                             }
                         }
                         Network_oneof_request::getTipReturn(_) => {
-                            println!("get tip return");
+                            info!(self.logger, "get tip return");
                         }
                         Network_oneof_request::putBlock(block) => {
                             let mut put_block_return = network::PutBlockReturn::new();
@@ -171,75 +175,75 @@ impl Future for Peer {
                                     self.socket.buffer(&msg);
                                     self.socket.poll_flush()?;
                                 }
-                                Err(e) => println!("Error: {}", e),
+                                Err(e) => error!(self.logger, "Error: {}", e),
                             }
                             if self.srv.lock().unwrap().new_data(msg_vec) {
                                 self.srv.lock().unwrap().increment_block_count();
-                                println!("Block Received: {:?}", block);
+                                info!(self.logger, "Block Received: {:?}", block);
                             }
                         }
                         Network_oneof_request::putBlockReturn(_) => {
-                            println!("Put block return");
+                            info!(self.logger, "Put block return");
                         }
                         Network_oneof_request::getTxs(_txs) => {
-                            println!("Get Txs");
+                            info!(self.logger, "Get Txs");
                         }
                         Network_oneof_request::getTxsReturn(_) => {
-                            println!("get txs return");
+                            info!(self.logger, "get txs return");
                         }
                         Network_oneof_request::getHash(_h) => {
-                            println!("Get Hash");
+                            info!(self.logger, "Get Hash");
                         }
                         Network_oneof_request::getHashReturn(_h) => {
-                            println!("Get hash return");
+                            info!(self.logger, "Get hash return");
                         }
                         Network_oneof_request::getBlockTxs(_) => {
-                            println!("Get block txs");
+                            info!(self.logger, "Get block txs");
                         }
                         Network_oneof_request::getBlockTxsReturn(_) => {
-                            println!("get block txs return");
+                            info!(self.logger, "get block txs return");
                         }
                         Network_oneof_request::status(_) => {
-                            println!("status");
+                            info!(self.logger, "status");
                         }
                         Network_oneof_request::statusReturn(_) => {
-                            println!("status return");
+                            info!(self.logger, "status return");
                         }
                         Network_oneof_request::getBlocksByHash(_) => {
-                            println!("get blocks by hash");
+                            info!(self.logger, "get blocks by hash");
                         }
                         Network_oneof_request::getBlocksByHashReturn(_) => {
-                            println!("Get blocks by hash return");
+                            info!(self.logger, "Get blocks by hash return");
                         }
                         Network_oneof_request::getBlocksByRange(_) => {
-                            println!("Get blocks by range");
+                            info!(self.logger, "Get blocks by range");
                         }
                         Network_oneof_request::getBlocksByRangeReturn(_) => {
-                            println!("get blocks by range return");
+                            info!(self.logger, "get blocks by range return");
                         }
                         Network_oneof_request::getHeadersByHash(_) => {
-                            println!("get headers by hash");
+                            info!(self.logger, "get headers by hash");
                         }
                         Network_oneof_request::getHeadersByHashReturn(_) => {
-                            println!("get headers by hash return");
+                            info!(self.logger, "get headers by hash return");
                         }
                         Network_oneof_request::getHeadersByRange(_) => {
-                            println!("Get headers by range");
+                            info!(self.logger, "Get headers by range");
                         }
                         Network_oneof_request::getHeadersByRangeReturn(_) => {
-                            println!("Get Headers by range return");
+                            info!(self.logger, "Get Headers by range return");
                         }
                         Network_oneof_request::ping(_) => {
-                            println!("Ping");
+                            info!(self.logger, "Ping");
                         }
                         Network_oneof_request::pingReturn(_) => {
-                            println!("Ping return");
+                            info!(self.logger, "Ping return");
                         }
                         Network_oneof_request::putHeaders(_) => {
-                            println!("put headers");
+                            info!(self.logger, "put headers");
                         }
                         Network_oneof_request::putHeadersReturn(_) => {
-                            println!("put headers return");
+                            info!(self.logger, "put headers return");
                         }
                         Network_oneof_request::putTx(_) => {
                             let mut put_tx_return = network::PutTxReturn::new();
@@ -256,11 +260,11 @@ impl Future for Peer {
                                     self.socket.buffer(&msg);
                                     self.socket.poll_flush()?;
                                 }
-                                Err(e) => println!("Error: {}", e),
+                                Err(e) => error!(self.logger, "Error: {}", e),
                             }
                         }
                         Network_oneof_request::putTxReturn(_) => {
-                            println!("put tx return");
+                            info!(self.logger, "put tx return");
                         }
                     }
                 }
@@ -287,6 +291,6 @@ impl Drop for Peer {
                 .unwrap()
                 .remove_peer(self.to_db_type().clone());
         }
-        println!("Socket Dropped: {:?}", &self.status);
+        error!(self.logger, "Socket Dropped: {:?}", &self.status);
     }
 }
