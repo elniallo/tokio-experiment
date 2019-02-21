@@ -16,16 +16,7 @@ pub struct Meta {
 }
 
 impl Meta {
-    pub fn new(
-        height: u32,
-        t_ema: f64,
-        p_ema: f64,
-        next_difficulty: f64,
-        total_work: f64,
-        file_number: Option<u32>,
-        offset: Option<u64>,
-        length: Option<u32>,
-    ) -> Meta {
+    pub fn new(height: u32, t_ema: f64, p_ema: f64, next_difficulty: f64, total_work: f64, file_number: Option<u32>, offset: Option<u64>, length: Option<u32>) -> Meta {
         Meta {
             height,
             t_ema,
@@ -34,7 +25,7 @@ impl Meta {
             total_work,
             file_number,
             offset,
-            length,
+            length
         }
     }
 }
@@ -75,25 +66,18 @@ impl Decode for Meta {
     type ProtoType = ProtoBlockDB;
     fn decode(buffer: &Vec<u8>) -> Result<Meta, Box<Error>> {
         let mut proto_meta = Self::ProtoType::new();
-
+        
         proto_meta.merge_from_bytes(buffer)?;
-        let meta_info = Meta::new(
-            proto_meta.height,
+        let meta_info = Meta::new(proto_meta.height,
             proto_meta.tEMA,
             proto_meta.pEMA,
             proto_meta.nextDifficulty,
             proto_meta.totalWork,
             Some(proto_meta.fileNumber),
             Some(proto_meta.offset),
-            Some(proto_meta.length),
-        );
+            Some( proto_meta.length));
         Ok(meta_info)
-    }
-}
-
-mod tests {
     use super::*;
-
     #[test]
     fn it_makes_meta_without_file_info() {
         let height = 150000;
@@ -101,16 +85,7 @@ mod tests {
         let p_ema = 0.000001;
         let next_difficulty = 0.0001;
         let total_work = 1e15;
-        let meta = Meta::new(
-            height,
-            t_ema,
-            p_ema,
-            next_difficulty,
-            total_work,
-            None,
-            None,
-            None,
-        );
+        let meta = Meta::new(height, t_ema, p_ema, next_difficulty, total_work, None, None, None);
 
         assert_eq!(meta.height, height);
         assert_eq!(meta.t_ema, t_ema);
@@ -131,16 +106,7 @@ mod tests {
         let offset = 123;
         let file_number = 234;
         let length = 345;
-        let meta = Meta::new(
-            height,
-            t_ema,
-            p_ema,
-            next_difficulty,
-            total_work,
-            Some(file_number),
-            Some(offset),
-            Some(length),
-        );
+        let meta = Meta::new(height, t_ema, p_ema, next_difficulty, total_work, Some(file_number), Some(offset), Some(length));
 
         assert_eq!(meta.height, height);
         assert_eq!(meta.t_ema, t_ema);

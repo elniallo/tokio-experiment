@@ -36,7 +36,7 @@ impl Wallet {
         let public_key = PublicKey::from_secret_key(&secp, &private_key);
         Wallet {
             private_key,
-            public_key,
+            public_key
         }
     }
 
@@ -77,11 +77,10 @@ mod tests {
         let secp_message = Message::from_slice(&message[..]).unwrap();
         let recoverable_signature = wallet.sign(&message.to_vec()).unwrap();
         let secp = Secp256k1::verification_only();
-        let signature = recoverable_signature.to_standard(&secp);
+        let signature= recoverable_signature.to_standard(&secp);
         let pubkey = secp.recover(&secp_message, &recoverable_signature).unwrap();
         assert_eq!(pubkey, wallet.public_key);
-        secp.verify(&secp_message, &signature, &wallet.public_key)
-            .unwrap();
+        secp.verify(&secp_message, &signature, &wallet.public_key).unwrap();
     }
 
     #[test]
@@ -109,7 +108,6 @@ mod tests {
         let signature = recoverable_signature.to_standard(&secp);
         let pubkey = secp.recover(&secp_message, &recoverable_signature).unwrap();
         assert_eq!(pubkey, wallet.public_key);
-        secp.verify(&secp_message, &signature, &wallet.public_key)
-            .unwrap();
+        secp.verify(&secp_message, &signature, &wallet.public_key).unwrap();
     }
 }

@@ -18,36 +18,17 @@ pub struct SignedGenesisTx {
 }
 
 impl Transaction for SignedGenesisTx {
-    fn get_from(&self) -> Option<Address> {
-        None
-    }
-    fn get_to(&self) -> Option<Address> {
-        Some(self.to)
-    }
-    fn get_amount(&self) -> u64 {
-        self.amount
-    }
-    fn get_fee(&self) -> Option<u64> {
-        None
-    }
-    fn get_nonce(&self) -> Option<u32> {
-        None
-    }
-    fn get_signature(&self) -> Option<RecoverableSignature> {
-        Some(self.signature)
-    }
-    fn get_recovery(&self) -> Option<RecoveryId> {
-        Some(self.recovery)
-    }
+    fn get_from(&self) -> Option<Address> {None}
+    fn get_to(&self) -> Option<Address> {Some(self.to)}
+    fn get_amount(&self) -> u64 {self.amount}
+    fn get_fee(&self) -> Option<u64> {None}
+    fn get_nonce(&self) -> Option<u32> {None}
+    fn get_signature(&self) -> Option<RecoverableSignature> {Some(self.signature)}
+    fn get_recovery(&self) -> Option<RecoveryId> {Some(self.recovery)}
 }
 
 impl SignedGenesisTx {
-    pub fn new(
-        to: Address,
-        amount: u64,
-        signature: RecoverableSignature,
-        recovery: RecoveryId,
-    ) -> SignedGenesisTx {
+    pub fn new(to: Address, amount: u64, signature: RecoverableSignature, recovery: RecoveryId) -> SignedGenesisTx {
         SignedGenesisTx {
             to,
             amount,
@@ -86,17 +67,8 @@ impl Decode for SignedGenesisTx {
         let mut to = [0u8; 20];
         to.clone_from_slice(&proto_signed_genesis_tx.to);
         let recovery = RecoveryId::from_i32(proto_signed_genesis_tx.recovery as i32)?;
-        let signature = RecoverableSignature::from_compact(
-            &secp,
-            &proto_signed_genesis_tx.signature,
-            recovery,
-        )?;
-        Ok(SignedGenesisTx::new(
-            to,
-            proto_signed_genesis_tx.amount,
-            signature,
-            recovery,
-        ))
+        let signature = RecoverableSignature::from_compact(&secp, &proto_signed_genesis_tx.signature, recovery)?;
+        Ok(SignedGenesisTx::new(to, proto_signed_genesis_tx.amount, signature, recovery))
     }
 }
 
@@ -111,20 +83,16 @@ impl Valid for SignedGenesisTx {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::address::ValidAddress;
+    use common::address::ValidAddress;
     use rand::{thread_rng, Rng};
 
     #[test]
     fn it_creates_a_signed_genesis_transaction() {
-        let to: Address =
-            Address::from_string(&"HLjHZYkjRNkjH3zPmXoU8FDEJ3ALDkuA".to_string()).unwrap();
+        let to: Address = Address::from_string(&"HLjHZYkjRNkjH3zPmXoU8FDEJ3ALDkuA".to_string()).unwrap();
         let amount = 100;
-        let signature_bytes = [
-            155, 15, 206, 7, 232, 20, 132, 186, 33, 220, 220, 31, 36, 100, 48, 103, 61, 198, 40,
-            155, 48, 189, 196, 64, 162, 132, 254, 252, 160, 242, 136, 253, 42, 105, 138, 104, 227,
-            162, 198, 254, 59, 114, 252, 62, 3, 211, 77, 93, 196, 72, 221, 18, 128, 112, 143, 185,
-            199, 178, 56, 0, 141, 232, 12, 201,
-        ];
+        let signature_bytes = [155,15,206,7,232,20,132,186,33,220,220,31,36,100,48,103,61,198,40,
+        155,48,189,196,64,162,132,254,252,160,242,136,253,42,105,138,104,227,162,198,254,59,114,252,
+        62,3,211,77,93,196,72,221,18,128,112,143,185,199,178,56,0,141,232,12,201];
         let secp = Secp256k1::without_caps();
         let recovery = RecoveryId::from_i32(0).unwrap();
         let signature =
@@ -138,15 +106,11 @@ mod tests {
 
     #[test]
     fn it_verifies_a_signed_genesis_transaction() {
-        let to: Address =
-            Address::from_string(&"HLjHZYkjRNkjH3zPmXoU8FDEJ3ALDkuA".to_string()).unwrap();
+        let to: Address = Address::from_string(&"HLjHZYkjRNkjH3zPmXoU8FDEJ3ALDkuA".to_string()).unwrap();
         let amount = 100;
-        let signature_bytes = [
-            155, 15, 206, 7, 232, 20, 132, 186, 33, 220, 220, 31, 36, 100, 48, 103, 61, 198, 40,
-            155, 48, 189, 196, 64, 162, 132, 254, 252, 160, 242, 136, 253, 42, 105, 138, 104, 227,
-            162, 198, 254, 59, 114, 252, 62, 3, 211, 77, 93, 196, 72, 221, 18, 128, 112, 143, 185,
-            199, 178, 56, 0, 141, 232, 12, 201,
-        ];
+        let signature_bytes = [155,15,206,7,232,20,132,186,33,220,220,31,36,100,48,103,61,198,40,
+        155,48,189,196,64,162,132,254,252,160,242,136,253,42,105,138,104,227,162,198,254,59,114,252,
+        62,3,211,77,93,196,72,221,18,128,112,143,185,199,178,56,0,141,232,12,201];
         let secp = Secp256k1::without_caps();
         let recovery = RecoveryId::from_i32(0).unwrap();
         let signature =
@@ -154,18 +118,14 @@ mod tests {
         let signed_genesis_tx = SignedGenesisTx::new(to, amount, signature, recovery);
         signed_genesis_tx.verify().unwrap();
     }
-
+    
     #[test]
     fn it_rejects_a_forged_genesis_transaction() {
-        let to: Address =
-            Address::from_string(&"HLjHZYkjRNkjH3zPmXoU8FDEJ3ALDkuA".to_string()).unwrap();
+        let to: Address = Address::from_string(&"HLjHZYkjRNkjH3zPmXoU8FDEJ3ALDkuA".to_string()).unwrap();
         let amount = 200;
-        let signature_bytes = [
-            155, 15, 206, 7, 232, 20, 132, 186, 33, 220, 220, 31, 36, 100, 48, 103, 61, 198, 40,
-            155, 48, 189, 196, 64, 162, 132, 254, 252, 160, 242, 136, 253, 42, 105, 138, 104, 227,
-            162, 198, 254, 59, 114, 252, 62, 3, 211, 77, 93, 196, 72, 221, 18, 128, 112, 143, 185,
-            199, 178, 56, 0, 141, 232, 12, 201,
-        ];
+        let signature_bytes = [155,15,206,7,232,20,132,186,33,220,220,31,36,100,48,103,61,198,40,
+        155,48,189,196,64,162,132,254,252,160,242,136,253,42,105,138,104,227,162,198,254,59,114,252,
+        62,3,211,77,93,196,72,221,18,128,112,143,185,199,178,56,0,141,232,12,201];
         let secp = Secp256k1::without_caps();
         let recovery = RecoveryId::from_i32(0).unwrap();
         let signature =
@@ -179,15 +139,11 @@ mod tests {
 
     #[test]
     fn it_decodes_a_signed_genesis_transaction() {
-        let to: Address =
-            Address::from_string(&"HLjHZYkjRNkjH3zPmXoU8FDEJ3ALDkuA".to_string()).unwrap();
+        let to: Address = Address::from_string(&"HLjHZYkjRNkjH3zPmXoU8FDEJ3ALDkuA".to_string()).unwrap();
         let amount = 100;
-        let signature_bytes = [
-            155, 15, 206, 7, 232, 20, 132, 186, 33, 220, 220, 31, 36, 100, 48, 103, 61, 198, 40,
-            155, 48, 189, 196, 64, 162, 132, 254, 252, 160, 242, 136, 253, 42, 105, 138, 104, 227,
-            162, 198, 254, 59, 114, 252, 62, 3, 211, 77, 93, 196, 72, 221, 18, 128, 112, 143, 185,
-            199, 178, 56, 0, 141, 232, 12, 201,
-        ];
+        let signature_bytes = [155,15,206,7,232,20,132,186,33,220,220,31,36,100,48,103,61,198,40,
+            155,48,189,196,64,162,132,254,252,160,242,136,253,42,105,138,104,227,162,198,254,59,114,252,
+            62,3,211,77,93,196,72,221,18,128,112,143,185,199,178,56,0,141,232,12,201];
         let secp = Secp256k1::without_caps();
         let recovery = RecoveryId::from_i32(0).unwrap();
         let signature =
