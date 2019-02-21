@@ -7,7 +7,7 @@ use rand::thread_rng;
 use slog::Logger;
 use std::collections::HashMap;
 use std::error::Error;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io;
@@ -120,8 +120,16 @@ pub struct PeerDatabase<SocketAddr, DBPeer> {
 impl PeerDatabase<SocketAddr, DBPeer> {
     pub fn new(rx: Rx, logger: Logger) -> Self {
         let interval = Interval::new_interval(Duration::from_millis(20000));
+        let mut db = HashMap::new();
+        let seed = "rapid1.hycon.io:8148"
+            .to_socket_addrs()
+            .unwrap()
+            .next()
+            .expect("could not parse address");
+        let peer = DBPeer::from_net_peer(&seed);
+        db.insert(seed, peer);
         Self {
-            db: HashMap::new(),
+            db,
             receiver: rx,
             interval,
             logger,
