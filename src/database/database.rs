@@ -1,12 +1,12 @@
 use rocksdb::{DB as RocksDB, Options as RocksDBOptions, BlockBasedOptions, BlockBasedIndexType, SliceTransform};
 use database::DBError;
 use database::dbkeys::DBKeys;
-use common::meta::Meta;
-use common::{Decode, Encode};
+use crate::common::meta::Meta;
+use crate::common::{Decode, Encode};
 use database::block_file::{BlockFile, BlockFileOps, PutResult as WriteLocation};
-use common::block_status::{BlockStatus, EnumConverter};
+use crate::common::block_status::{BlockStatus, EnumConverter};
 use byteorder::{ByteOrder, BigEndian};
-use common::Proto;
+use crate::common::Proto;
 use std::path::PathBuf;
 
 type DBResult<T> = Result<T, DBError>;
@@ -216,11 +216,11 @@ impl<'a, BlockFileType, DatabaseType, OptionType> Database<'a, BlockFileType, Da
 mod tests {
     use super::*;
     use database::database::IDB;
-    use common::block::Block;
-    use common::header::Header;
-    use common::signed_tx::SignedTx;
-    use common::common_tests::common_tests::assert_block;
-    use common::block::tests::create_test_block_without_meta;
+    use crate::common::block::Block;
+    use crate::common::header::Header;
+    use crate::common::signed_tx::SignedTx;
+    use crate::common::common_tests::common_tests::assert_block;
+    use crate::common::block::tests::create_test_block_without_meta;
     use std::collections::HashMap;
     use database::block_file::BlockFileResult;
 

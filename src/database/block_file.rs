@@ -1,8 +1,8 @@
-use common::block::Block;
-use common::genesis_block::GenesisBlock;
-use common::header::Header;
-use common::signed_tx::SignedTx;
-use common::{Decode, Encode, Exception, Proto};
+use crate::common::block::Block;
+use crate::common::genesis_block::GenesisBlock;
+use crate::common::header::Header;
+use crate::common::signed_tx::SignedTx;
+use crate::common::{Decode, Encode, Exception, Proto};
 use std::error::Error;
 use std::fs::{DirBuilder, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -312,12 +312,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::block::tests::{create_expected_block_encoding, create_test_block_without_meta};
-    use common::genesis_block::tests::{create_expected_genesis_encoding, create_genesis_block};
+    use crate::common::block::tests::{create_expected_block_encoding, create_test_block_without_meta};
+    use crate::common::genesis_block::tests::{create_expected_genesis_encoding, create_genesis_block};
     use double::Mock;
     use std::fmt::{self, Display, Formatter};
     use std::io;
-    use common::common_tests::common_tests::{assert_block, assert_genesis_block};
+    use crate::common::common_tests::common_tests::{assert_block, assert_genesis_block};
 
     macro_rules! impl_read {
         ($class_name:ident) => {

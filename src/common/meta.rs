@@ -77,6 +77,9 @@ impl Decode for Meta {
             Some(proto_meta.offset),
             Some( proto_meta.length));
         Ok(meta_info)
+    }
+}
+    mod tests {
     use super::*;
     #[test]
     fn it_makes_meta_without_file_info() {

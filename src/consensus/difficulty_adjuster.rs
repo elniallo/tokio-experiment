@@ -1,9 +1,9 @@
-use std::f64::consts;
 use std::error::Error;
+use std::f64::consts;
 
-use common::block::Block;
-use common::header::BlockHeader;
-use common::Exception;
+use crate::common::block::Block;
+use crate::common::header::BlockHeader;
+use crate::traits::Exception;
 
 use byteorder::{ByteOrder, LittleEndian};
 
@@ -16,8 +16,13 @@ pub fn calc_ema(new_value: f64, previous_value: f64, alpha: f64) -> f64 {
     alpha * new_value + (1.0 - alpha) * previous_value
 }
 
-pub fn adjust_difficulty<HeaderType, TxType>(previous_block: Block<HeaderType, TxType>, time_stamp: f64) -> Result<(f64, f64, f64), Box<Error>>
-    where HeaderType: BlockHeader{
+pub fn adjust_difficulty<HeaderType, TxType>(
+    previous_block: Block<HeaderType, TxType>,
+    time_stamp: f64,
+) -> Result<(f64, f64, f64), Box<Error>>
+where
+    HeaderType: BlockHeader,
+{
     let height: u32;
     let previous_time_ema: f64;
     let previous_difficulty_ema: f64;
@@ -28,8 +33,12 @@ pub fn adjust_difficulty<HeaderType, TxType>(previous_block: Block<HeaderType, T
             previous_time_ema = meta.t_ema;
             previous_difficulty_ema = meta.p_ema;
             difficulty = meta.next_difficulty;
-        },
-        None => return Err(Box::new(Exception::new("Previous block is missing meta information")))
+        }
+        None => {
+            return Err(Box::new(Exception::new(
+                "Previous block is missing meta information",
+            )));
+        }
     }
 
     let time_delta: f64;
@@ -41,11 +50,10 @@ pub fn adjust_difficulty<HeaderType, TxType>(previous_block: Block<HeaderType, T
 
     let time_ema = calc_ema(time_delta, previous_time_ema, ALPHA);
     let difficulty_ema = calc_ema(difficulty, previous_difficulty_ema, ALPHA);
-    let mut next_difficulty = (time_ema * difficulty_ema ) / TARGET_TIME;
+    let mut next_difficulty = (time_ema * difficulty_ema) / TARGET_TIME;
     if next_difficulty > MAX_DIFFICULTY {
         next_difficulty = MAX_DIFFICULTY;
-    }
-    else if next_difficulty < MIN_DIFFICULTY {
+    } else if next_difficulty < MIN_DIFFICULTY {
         next_difficulty = MIN_DIFFICULTY;
     }
 
@@ -54,7 +62,7 @@ pub fn adjust_difficulty<HeaderType, TxType>(previous_block: Block<HeaderType, T
 
 pub fn get_target(difficulty: f64, length: usize) -> Result<Vec<u8>, Box<Error>> {
     if length < 8 {
-        return Err(Box::new(Exception::new("Invalid length")))
+        return Err(Box::new(Exception::new("Invalid length")));
     }
 
     let mut target = vec![0xFFu8; length];
@@ -62,7 +70,7 @@ pub fn get_target(difficulty: f64, length: usize) -> Result<Vec<u8>, Box<Error>>
     if difficulty == 1.0 {
         return Ok(target);
     } else if difficulty > MAX_DIFFICULTY || difficulty < MIN_DIFFICULTY {
-        return Err(Box::new(Exception::new("Invalid difficulty value")))
+        return Err(Box::new(Exception::new("Invalid difficulty value")));
     }
 
     let exponent = -1.0 * difficulty.log2();
@@ -80,11 +88,11 @@ pub fn get_target(difficulty: f64, length: usize) -> Result<Vec<u8>, Box<Error>>
         target[i] = 0;
         scaled_difficulty *= 2f64.powf(8.0);
     }
-    let num = LittleEndian::read_u64(&target[index-8..index]);
+    let num = LittleEndian::read_u64(&target[index - 8..index]);
     let product = num as f64 * scaled_difficulty;
     let product_converted = product as u64 - 1;
 
-    LittleEndian::write_u64(&mut target[index-8..index], product_converted);
+    LittleEndian::write_u64(&mut target[index - 8..index], product_converted);
 
     Ok(target)
 }
@@ -109,16 +117,18 @@ pub fn get_legacy_target(difficulty: f64, length: usize) -> Vec<u8> {
     target
 }
 
-pub fn acceptable(hash: Vec<u8>, target: Vec<u8>) -> Result<bool, Box<Error>>{
+pub fn acceptable(hash: Vec<u8>, target: Vec<u8>) -> Result<bool, Box<Error>> {
     if hash.len() != target.len() {
-        return Err(Box::new(Exception::new("Hash and target are of different lengths")))
+        return Err(Box::new(Exception::new(
+            "Hash and target are of different lengths",
+        )));
     }
 
     for i in (0..target.len()).rev() {
         if hash[i] < target[i] {
-            return Ok(true)
+            return Ok(true);
         } else if hash[i] > target[i] {
-            return Ok(false)
+            return Ok(false);
         }
     }
     Ok(true)
@@ -127,17 +137,27 @@ pub fn acceptable(hash: Vec<u8>, target: Vec<u8>) -> Result<bool, Box<Error>>{
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::header::Header;
+    use crate::common::meta::Meta;
+    use crate::common::signed_tx::SignedTx;
     use rand::{Rng, SeedableRng, StdRng};
-    use common::header::Header;
-    use common::meta::Meta;
-    use common::signed_tx::SignedTx;
 
     #[test]
     fn it_adjusts_difficulty() {
-        let previous_block_header = Header::new(vec![0u8; 32], 0, 0.5, vec![0u8; 32], vec![vec![0u8; 32]], 0, [0u8; 20]);
+        let previous_block_header = Header::new(
+            vec![0u8; 32],
+            0,
+            0.5,
+            vec![0u8; 32],
+            vec![vec![0u8; 32]],
+            0,
+            [0u8; 20],
+        );
         let meta = Meta::new(1, 0.5, 0.5, 0.5, 0.0, None, None, None);
-        let previous_block: Block<Header, SignedTx> = Block::new(previous_block_header,None, Some(meta));
-        let (next_difficulty, time_ema, difficulty_ema) = adjust_difficulty(previous_block,1.0).unwrap();
+        let previous_block: Block<Header, SignedTx> =
+            Block::new(previous_block_header, None, Some(meta));
+        let (next_difficulty, time_ema, difficulty_ema) =
+            adjust_difficulty(previous_block, 1.0).unwrap();
         let expected_next_difficulty = 0.000005793555184180208;
         let expected_time_ema = 0.5015;
         let expected_difficulty_ema = 0.5;
@@ -155,7 +175,15 @@ mod tests {
         let nonce = 0;
         let miner = [0u8; 20];
         let difficulty = 1.0;
-        let mut previous_block_header = Header::new(merkle_root.clone(), time_stamp, difficulty, state_root.clone(), previous_hash.clone(), nonce, miner);
+        let mut previous_block_header = Header::new(
+            merkle_root.clone(),
+            time_stamp,
+            difficulty,
+            state_root.clone(),
+            previous_hash.clone(),
+            nonce,
+            miner,
+        );
         let height = 1;
         let mut t_ema = 0.5;
         let mut p_ema = 0.5;
@@ -164,16 +192,43 @@ mod tests {
         let file_number = None;
         let offset = None;
         let length = None;
-        let mut meta = Meta::new(height, t_ema, p_ema, next_difficulty, total_work, file_number, offset, length);
-        let mut block: Block<Header, SignedTx> = Block::new(previous_block_header, None, Some(meta));
+        let mut meta = Meta::new(
+            height,
+            t_ema,
+            p_ema,
+            next_difficulty,
+            total_work,
+            file_number,
+            offset,
+            length,
+        );
+        let mut block: Block<Header, SignedTx> =
+            Block::new(previous_block_header, None, Some(meta));
         for _ in 0..30000 {
             time_stamp += TARGET_TIME as u64;
             let adjustment = adjust_difficulty(block, time_stamp as f64).unwrap();
             next_difficulty = adjustment.0;
             t_ema = adjustment.1;
             p_ema = adjustment.2;
-            meta = Meta::new(height, t_ema, p_ema, next_difficulty, total_work, file_number, offset, length);
-            previous_block_header = Header::new(merkle_root.clone(), time_stamp, next_difficulty, state_root.clone(), previous_hash.clone(), nonce, miner);
+            meta = Meta::new(
+                height,
+                t_ema,
+                p_ema,
+                next_difficulty,
+                total_work,
+                file_number,
+                offset,
+                length,
+            );
+            previous_block_header = Header::new(
+                merkle_root.clone(),
+                time_stamp,
+                next_difficulty,
+                state_root.clone(),
+                previous_hash.clone(),
+                nonce,
+                miner,
+            );
             block = Block::new(previous_block_header, None, Some(meta));
         }
 
@@ -236,7 +291,7 @@ mod tests {
                 scaled_difficulty *= 2f64.powf(8.0);
             }
             let mut expected_value = 0xFFFF_FFFF_FFFF_FFFF_u64 as f64 * scaled_difficulty - 1.0;
-            let value = LittleEndian::read_u64(&target[index-8..index]);
+            let value = LittleEndian::read_u64(&target[index - 8..index]);
             assert_eq!(value as f64, expected_value.ceil());
         }
     }
@@ -261,8 +316,9 @@ mod tests {
                     for _ in (index..length).rev() {
                         scaled_difficulty *= 2f64.powf(8.0);
                     }
-                    let mut expected_value = 0xFFFF_FFFF_FFFF_FFFF_u64 as f64 * scaled_difficulty - 1.0;
-                    let value = LittleEndian::read_u64(&target[index-8..index]);
+                    let mut expected_value =
+                        0xFFFF_FFFF_FFFF_FFFF_u64 as f64 * scaled_difficulty - 1.0;
+                    let value = LittleEndian::read_u64(&target[index - 8..index]);
                     assert_eq!(value as f64, expected_value.ceil());
                 }
             }
@@ -275,10 +331,9 @@ mod tests {
         let length = 32;
         let target = get_legacy_target(difficulty, length);
         let expected_target = vec![
-            255, 255, 255, 255, 255, 255, 255, 255,
-            255, 255, 255, 255, 255, 255, 255, 255,
-            255, 255, 255, 255, 255, 255, 255, 255,
-            255, 255, 255, 255, 255, 255, 255, 127];
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 127,
+        ];
         assert_eq!(target, expected_target);
     }
 
@@ -288,10 +343,9 @@ mod tests {
         let length = 32;
         let target = get_legacy_target(difficulty, length);
         let expected_target = vec![
-            51, 51, 51, 51, 51, 51, 51, 51,
-            51, 51, 51, 51, 51, 51, 51, 51,
-            51, 51, 49, 51, 49, 51, 51, 53,
-            97, 50, 85, 48, 42, 169, 19, 0];
+            51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 49, 51, 49, 51,
+            51, 53, 97, 50, 85, 48, 42, 169, 19, 0,
+        ];
         assert_eq!(target, expected_target);
     }
 
@@ -301,10 +355,9 @@ mod tests {
         let length = 32;
         let target = get_legacy_target(difficulty, length);
         let expected_target = vec![
-            0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 224,
-            224, 224, 112, 143, 32, 77, 238, 148];
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 224, 224, 224,
+            112, 143, 32, 77, 238, 148,
+        ];
         assert_eq!(target, expected_target);
     }
 
@@ -313,10 +366,10 @@ mod tests {
         let difficulty = 0.5;
         let target = get_target(difficulty, 32).unwrap();
         let solution = vec![
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F];
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0x7F,
+        ];
         assert_eq!(acceptable(solution, target).unwrap(), true);
     }
 
@@ -325,10 +378,10 @@ mod tests {
         let difficulty = 0.5;
         let target = get_target(difficulty, 32).unwrap();
         let solution = vec![
-            0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F];
+            0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0x7F,
+        ];
         assert_eq!(acceptable(solution, target).unwrap(), true);
     }
 
@@ -337,10 +390,10 @@ mod tests {
         let difficulty = 0.5;
         let target = get_target(difficulty, 32).unwrap();
         let solution = vec![
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x80];
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0x80,
+        ];
         assert_eq!(acceptable(solution, target).unwrap(), false);
     }
 }

@@ -83,7 +83,7 @@ impl Valid for SignedGenesisTx {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::address::ValidAddress;
+    use crate::common::address::ValidAddress;
     use rand::{thread_rng, Rng};
 
     #[test]
