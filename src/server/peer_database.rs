@@ -483,6 +483,12 @@ pub mod tests {
         let drain = std::sync::Mutex::new(drain).fuse();
         let root_logger = Logger::root(drain, o!("version" => "0.5"));
         let mut peer_db = PeerDatabase::new(rx, root_logger);
+        let seed = "rapid1.hycon.io:8148"
+            .to_socket_addrs()
+            .unwrap()
+            .next()
+            .expect("could not parse address");
+        peer_db.db.remove(&seed);
         let peers = peer_factory(20, false, true);
         peer_db.put_multiple(peers);
         assert_eq!(peer_db.db.len(), 20);
@@ -495,6 +501,12 @@ pub mod tests {
         let drain = std::sync::Mutex::new(drain).fuse();
         let root_logger = Logger::root(drain, o!("version" => "0.5"));
         let mut peer_db = PeerDatabase::new(rx, root_logger);
+        let seed = "rapid1.hycon.io:8148"
+            .to_socket_addrs()
+            .unwrap()
+            .next()
+            .expect("could not parse address");
+        peer_db.db.remove(&seed);
         let peers = peer_factory(20, false, true);
         let _ = peer_db.put_multiple(peers);
         assert_eq!(peer_db.db.len(), 20);
@@ -540,6 +552,12 @@ pub mod tests {
         let drain = std::sync::Mutex::new(drain).fuse();
         let root_logger = Logger::root(drain, o!("version" => "0.5"));
         let mut peer_db = PeerDatabase::new(rx, root_logger);
+        let seed = "rapid1.hycon.io:8148"
+            .to_socket_addrs()
+            .unwrap()
+            .next()
+            .expect("could not parse address");
+        peer_db.db.remove(&seed);
         let peers = peer_factory(20, false, true);
         let _ = peer_db.put_multiple(peers);
         if let Some(returned_peers) = peer_db.get_multiple(10) {
@@ -618,6 +636,12 @@ pub mod tests {
         let drain = std::sync::Mutex::new(drain).fuse();
         let root_logger = Logger::root(drain, o!("version" => "0.5"));
         let mut peer_db = PeerDatabase::new(rx, root_logger);
+        let seed = "rapid1.hycon.io:8148"
+            .to_socket_addrs()
+            .unwrap()
+            .next()
+            .expect("could not parse address");
+        peer_db.db.remove(&seed);
         // Forced ordered peer generation for easy validation of ordering
         let peers = peer_factory(20, true, true);
         let _ = peer_db.put_multiple(peers.clone());
@@ -661,6 +685,12 @@ pub mod tests {
         let drain = std::sync::Mutex::new(drain).fuse();
         let root_logger = Logger::root(drain, o!("version" => "0.5"));
         let mut peer_db = PeerDatabase::new(rx, root_logger);
+        let seed = "rapid1.hycon.io:8148"
+            .to_socket_addrs()
+            .unwrap()
+            .next()
+            .expect("could not parse address");
+        peer_db.db.remove(&seed);
         let peers = peer_factory(20, false, true);
         let _ = peer_db.put_multiple(peers);
         if let Some(returned_peers) = peer_db.get_random(10) {

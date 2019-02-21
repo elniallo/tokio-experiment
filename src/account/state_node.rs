@@ -25,9 +25,7 @@ impl Decode for StateNode {
         data_node.merge_from_bytes(buffer)?;
         let mut refs: Vec<NodeRef> = vec![];
         for proto_node_ref in data_node.nodeRefs.into_iter() {
-            let mut address = [0; 20];
-            address.clone_from_slice(&proto_node_ref.address);
-            let r = NodeRef::new(&address, &proto_node_ref.child);
+            let r = NodeRef::new(&proto_node_ref.address, &proto_node_ref.child);
             refs.push(r);
         }
 
@@ -73,7 +71,7 @@ mod tests {
         assert_eq!(encoding1, javascript_encoding1);
 
         // When node_refs is not empty
-        let addr_slice = [109, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let addr_slice = vec![109, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let child = vec![
             137, 28, 167, 193, 135, 226, 96, 56, 197, 123, 221, 237, 249, 5, 134, 194, 38, 184,
             100, 131, 41, 152, 47, 186, 185, 70, 18, 162, 105, 115, 14, 42,
@@ -92,7 +90,7 @@ mod tests {
 
     #[test]
     fn it_encodes_like_javascript_for_zero() {
-        let addr_slice = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];;
+        let addr_slice = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];;
         let child = vec![
             0, 28, 0, 193, 0, 226, 0, 56, 0, 123, 0, 237, 0, 5, 0, 194, 0, 184, 0, 131, 0, 152, 0,
             186, 0, 70, 0, 162, 0, 115, 0, 42,
