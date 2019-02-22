@@ -5,9 +5,11 @@ use crate::common::tx::Tx;
 use crate::traits::Encode;
 use crate::util::hash::hash;
 
-use rand::{thread_rng, Rng};
+use rand::{EntropyRng, Rng};
 use secp256k1::key::{PublicKey, SecretKey};
 use secp256k1::{Message, RecoverableSignature, Secp256k1};
+
+type WalletResult<T> = Result<T, Box<Error>>;
 
 pub struct Wallet {
     private_key: SecretKey,
@@ -16,19 +18,9 @@ pub struct Wallet {
 
 impl Wallet {
     pub fn new() -> Wallet {
-        let secp = Secp256k1::without_caps();
-        let mut secret_key = [0u8; 32];
-        loop {
-            thread_rng().fill(&mut secret_key);
-            let priv_key = SecretKey::from_slice(&secp, &secret_key[..]);
-            match priv_key {
-                Ok(private_key) => {
-                    let wallet = Wallet::from_private_key(private_key);
-                    return wallet;
-                }
-                Err(_) => {}
-            }
-        }
+        let mut rng = EntropyRng::new();
+        let private_key = Wallet::generate_private_key(&mut rng);
+        Wallet::from_private_key(private_key)
     }
 
     pub fn from_private_key(private_key: SecretKey) -> Wallet {
@@ -36,23 +28,38 @@ impl Wallet {
         let public_key = PublicKey::from_secret_key(&secp, &private_key);
         Wallet {
             private_key,
-            public_key
+            public_key,
         }
     }
 
-    pub fn sign(&self, message: &Vec<u8>) -> Result<RecoverableSignature, Box<Error>> {
+    pub fn sign(&self, message: &Vec<u8>) -> WalletResult<RecoverableSignature> {
         let msg = Message::from_slice(&message)?;
         let secp = Secp256k1::signing_only();
         Ok(secp.sign_recoverable(&msg, &self.private_key))
     }
 
-    pub fn sign_tx(&self, tx: &Tx) -> Result<SignedTx, Box<Error>> {
+    pub fn sign_tx(&self, tx: &Tx) -> WalletResult<SignedTx> {
         let encoded_tx = hash(&tx.encode()?, 32);
         let signature = self.sign(&encoded_tx)?;
         let secp = Secp256k1::without_caps();
         let recovery = signature.serialize_compact(&secp).0;
 
         Ok(SignedTx::from_tx(tx, signature, recovery))
+    }
+
+    pub fn generate_private_key<RngType>(rng: &mut RngType) -> SecretKey
+    where
+        RngType: Rng,
+    {
+        let secp = Secp256k1::without_caps();
+        let mut secret_key = [0u8; 32];
+        loop {
+            rng.fill(&mut secret_key);
+            let priv_key = SecretKey::from_slice(&secp, &secret_key[..]);
+            if let Ok(key) = priv_key {
+                return key;
+            }
+        }
     }
 }
 
@@ -77,10 +84,11 @@ mod tests {
         let secp_message = Message::from_slice(&message[..]).unwrap();
         let recoverable_signature = wallet.sign(&message.to_vec()).unwrap();
         let secp = Secp256k1::verification_only();
-        let signature= recoverable_signature.to_standard(&secp);
+        let signature = recoverable_signature.to_standard(&secp);
         let pubkey = secp.recover(&secp_message, &recoverable_signature).unwrap();
         assert_eq!(pubkey, wallet.public_key);
-        secp.verify(&secp_message, &signature, &wallet.public_key).unwrap();
+        secp.verify(&secp_message, &signature, &wallet.public_key)
+            .unwrap();
     }
 
     #[test]
@@ -108,6 +116,7 @@ mod tests {
         let signature = recoverable_signature.to_standard(&secp);
         let pubkey = secp.recover(&secp_message, &recoverable_signature).unwrap();
         assert_eq!(pubkey, wallet.public_key);
-        secp.verify(&secp_message, &signature, &wallet.public_key).unwrap();
+        secp.verify(&secp_message, &signature, &wallet.public_key)
+            .unwrap();
     }
 }

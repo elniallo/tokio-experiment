@@ -1,7 +1,7 @@
 pub mod address;
 pub mod block;
 pub mod block_status;
-pub mod common_tests;
+pub mod test_functions;
 pub mod genesis_block;
 pub mod genesis_header;
 pub mod genesis_tx;

@@ -21,8 +21,7 @@ impl Deref for GenesisBlock {
 }
 
 impl Decode for GenesisBlock {
-    type ProtoType = ProtoBlock;
-    fn decode(bytes: &Vec<u8>) -> Result<GenesisBlock, Box<Error>> {
+    fn decode(bytes: &[u8]) -> Result<GenesisBlock, Box<Error>> {
         Ok(GenesisBlock(Block::decode(bytes)?))
     }
 }

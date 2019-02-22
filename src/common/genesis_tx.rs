@@ -9,8 +9,8 @@ use secp256k1::{RecoverableSignature, RecoveryId};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GenesisTx {
-    pub to: Address,
-    pub amount: u64,
+    to: Address,
+    amount: u64
 }
 
 impl Transaction for GenesisTx {
@@ -61,8 +61,7 @@ impl Encode for GenesisTx {
 }
 
 impl Decode for GenesisTx {
-    type ProtoType = ProtoGenesisTx;
-    fn decode(buffer: &Vec<u8>) -> Result<GenesisTx, Box<Error>> {
+    fn decode(buffer: &[u8]) -> Result<GenesisTx, Box<Error>> {
         let mut proto_genesis_tx = ProtoGenesisTx::new();
         proto_genesis_tx.merge_from_bytes(&buffer)?;
         let mut to: Address = [0; 20];
@@ -74,7 +73,7 @@ impl Decode for GenesisTx {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{thread_rng, Rng};
+    use rand::{Rng, SeedableRng, StdRng};
 
     #[test]
     fn it_makes_a_genesis_transaction() {
@@ -84,8 +83,8 @@ mod tests {
         ];
         let amount = 123456789;
         let genesis_tx = GenesisTx::new(to, amount);
-        assert_eq!(genesis_tx.to, to);
-        assert_eq!(genesis_tx.amount, amount);
+        assert_eq!(genesis_tx.get_to(), Some(to));
+        assert_eq!(genesis_tx.get_amount(), amount);
     }
 
     #[test]
@@ -136,8 +135,10 @@ mod tests {
     #[test]
     #[should_panic]
     fn it_fails_to_decode_random_bad_bytes() {
+        let seed = [0x77u8; 32];
+        let mut rng: StdRng = SeedableRng::from_seed(seed);
         let mut random_bytes = [0u8; 256];
-        thread_rng().fill(&mut random_bytes);
+        rng.fill(&mut random_bytes);
         GenesisTx::decode(&random_bytes.to_vec()).unwrap();
     }
 }

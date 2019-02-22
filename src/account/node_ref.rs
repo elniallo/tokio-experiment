@@ -22,9 +22,8 @@ impl NodeRef {
 }
 
 impl Decode for NodeRef {
-    type ProtoType = ProtoNodeRef;
-    fn decode(buffer: &Vec<u8>) -> Result<NodeRef, Box<Error>> {
-        let mut proto_node_ref = Self::ProtoType::new();
+    fn decode(buffer: &[u8]) -> Result<NodeRef, Box<Error>> {
+        let mut proto_node_ref = ProtoNodeRef::new();
         proto_node_ref.merge_from_bytes(buffer)?;
 
         Ok(NodeRef::new(&proto_node_ref.address, &proto_node_ref.child))

@@ -75,8 +75,7 @@ impl Encode for Tx {
 }
 
 impl Decode for Tx {
-    type ProtoType = ProtoTx;
-    fn decode(buffer: &Vec<u8>) -> Result<Tx, Box<Error>> {
+    fn decode(buffer: &[u8]) -> Result<Tx, Box<Error>> {
         let mut proto_tx = ProtoTx::new();
         proto_tx.merge_from_bytes(&buffer)?;
         let mut from = [0u8; 20];
@@ -116,7 +115,7 @@ impl PartialOrd for Tx {
 mod tests {
     use super::*;
     use crate::common::address::ValidAddress;
-    use rand::{thread_rng, Rng};
+    use rand::{Rng, SeedableRng, StdRng};
 
     #[test]
     fn it_makes_a_transaction() {
@@ -230,8 +229,10 @@ mod tests {
     #[test]
     #[should_panic]
     fn it_fails_to_decode_random_bad_bytes() {
+        let seed = [0x1Eu8; 32];
+        let mut rng: StdRng = SeedableRng::from_seed(seed);
         let mut random_bytes = [0u8; 256];
-        thread_rng().fill(&mut random_bytes);
+        rng.fill(&mut random_bytes);
         Tx::decode(&random_bytes.to_vec()).unwrap();
     }
 }

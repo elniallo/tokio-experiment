@@ -1,7 +1,7 @@
 [package]
 name = "hycon_rust"
 version = "0.1.0"
-authors = ["Niall Moore<niall@hycon.io>,Josiah Evans <koreanhalo@gmail.com>, HYCON Team <support@hycon.io>"]
+authors = ["Niall Moore<niall@hycon.io>, Josiah Evans <koreanhalo@gmail.com>, HYCON Team <support@hycon.io>"]
 edition = "2018"
 build = "build.rs"
 
@@ -32,10 +32,9 @@ rocksdb = "0.11.0"
 rust-base58 = "0.0.4"
 hex = "0.3.2"
 tiny-keccak = "1.4.2"
-
-[dependencies.uuid]
-version = "0.6.5"
-features = ["v4"]
+lazy_static = "1.1.0"
+starling = "1.2.1"
+uuid = {version = "0.6.5", features= ["v4"]}
 
 [dev-dependencies]
 criterion = "^0.2"
@@ -53,3 +52,4 @@ include = [
     "/LICENSE",
     "/mnemonic/*.json"
 ]
+

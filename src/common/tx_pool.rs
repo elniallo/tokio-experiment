@@ -67,7 +67,7 @@ impl TxPool {
         // Assume Txs that reach here have passed world state validation (TODO)
         // Loop through Txs
         for tx in txs {
-            let mut tx_hash: Vec<u8> = Vec::with_capacity(32);
+            let mut tx_hash;
             // Check if tx already processed
             match &tx.encode() {
                 Ok(encoded) => {

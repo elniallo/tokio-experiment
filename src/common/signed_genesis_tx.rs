@@ -59,8 +59,7 @@ impl Encode for SignedGenesisTx {
 }
 
 impl Decode for SignedGenesisTx {
-    type ProtoType = ProtoGenesisSignedTx;
-    fn decode(buffer: &Vec<u8>) -> Result<SignedGenesisTx, Box<Error>> {
+    fn decode(buffer: &[u8]) -> Result<SignedGenesisTx, Box<Error>> {
         let secp = Secp256k1::without_caps();
         let mut proto_signed_genesis_tx = ProtoGenesisSignedTx::new();
         proto_signed_genesis_tx.merge_from_bytes(&buffer)?;

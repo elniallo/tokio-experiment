@@ -343,10 +343,10 @@ mod tests {
     use crate::common::block::tests::{
         create_expected_block_encoding, create_test_block_without_meta,
     };
-    use crate::common::common_tests::common_tests::{assert_block, assert_genesis_block};
     use crate::common::genesis_block::tests::{
         create_expected_genesis_encoding, create_genesis_block,
     };
+    use crate::common::test_functions::common_tests::{assert_block, assert_genesis_block};
     use double::Mock;
     use std::fmt::{self, Display, Formatter};
     use std::io;

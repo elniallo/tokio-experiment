@@ -13,10 +13,9 @@ impl NetworkMessage {
 }
 
 impl Decode for NetworkMessage {
-    type ProtoType = ProtoNetwork;
-    fn decode(buffer: &Vec<u8>) -> Result<Self, Box<Error>> {
+    fn decode(buffer: &[u8]) -> Result<Self, Box<Error>> {
         let mut message: ProtoNetwork = ProtoNetwork::new();
-        if let Err(_) = message.merge_from(&mut CodedInputStream::from_bytes(buffer.as_slice())) {
+        if let Err(_) = message.merge_from(&mut CodedInputStream::from_bytes(buffer)) {
             // return Err(Box::new(Exception::new("Decoding fail")));
         }
         if let Some(message_type) = message.request {

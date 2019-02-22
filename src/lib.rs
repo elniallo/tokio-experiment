@@ -14,6 +14,7 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 extern crate slog_term;
+extern crate starling;
 extern crate tokio;
 extern crate tokio_io;
 extern crate tokio_proto;
