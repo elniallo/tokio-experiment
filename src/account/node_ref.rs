@@ -37,7 +37,6 @@ impl Proto for NodeRef {
         let mut proto_node_ref = Self::ProtoType::new();
         proto_node_ref.set_address(self.node_location.clone());
         proto_node_ref.set_child(self.child.clone());
-
         Ok(proto_node_ref)
     }
 }

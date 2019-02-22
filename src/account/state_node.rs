@@ -37,9 +37,8 @@ impl Proto for StateNode {
     type ProtoType = ProtoStateNode;
     fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>> {
         let mut proto_state_node = Self::ProtoType::new();
-        let mut proto_node_refs: Vec<ProtoNodeRef> = vec![];
-        let node_refs = self.node_refs.clone();
-        for node_ref in node_refs.into_iter() {
+        let mut proto_node_refs: Vec<ProtoNodeRef> = Vec::with_capacity(self.node_refs.len());
+        for node_ref in &self.node_refs {
             match node_ref.to_proto() {
                 Ok(proto_node_ref) => proto_node_refs.push(proto_node_ref),
                 Err(_) => {}
