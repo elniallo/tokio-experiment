@@ -8,3 +8,17 @@ Evaluating Tokio for use in the rust implementation of the Hycon-core client
 
 ## Resources
 Used [tokio chat example](https://github.com/tokio-rs/tokio-core/blob/master/examples/chat.rs) as a reference.
+
+## Usage
+To run a client:
+```
+cargo run server $HOST:$PORT
+```
+Testing and Benchmarks(using Criterion) also included via:
+```
+cargo test
+```
+and
+```
+cargo bench
+```
