@@ -8,6 +8,7 @@ extern crate rand;
 #[macro_use]
 extern crate slog;
 extern crate rust_base58;
+extern crate rocksdb;
 extern crate secp256k1;
 extern crate serde;
 #[macro_use]
@@ -22,6 +23,7 @@ extern crate uuid;
 pub mod account;
 pub mod common;
 pub mod consensus;
+pub mod database;
 pub mod serialization;
 pub mod server;
 pub mod traits;

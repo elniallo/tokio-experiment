@@ -1,12 +1,14 @@
-use rocksdb::{DB as RocksDB, Options as RocksDBOptions, BlockBasedOptions, BlockBasedIndexType, SliceTransform};
-use database::DBError;
-use database::dbkeys::DBKeys;
-use crate::common::meta::Meta;
-use crate::common::{Decode, Encode};
-use database::block_file::{BlockFile, BlockFileOps, PutResult as WriteLocation};
 use crate::common::block_status::{BlockStatus, EnumConverter};
-use byteorder::{ByteOrder, BigEndian};
-use crate::common::Proto;
+use crate::common::meta::Meta;
+use crate::database::block_file::{BlockFile, BlockFileOps, PutResult as WriteLocation};
+use crate::database::dbkeys::DBKeys;
+use crate::database::DBError;
+use crate::traits::{Decode, Encode, Proto};
+use byteorder::{BigEndian, ByteOrder};
+use rocksdb::{
+    BlockBasedIndexType, BlockBasedOptions, Options as RocksDBOptions, SliceTransform,
+    DB as RocksDB,
+};
 use std::path::PathBuf;
 
 type DBResult<T> = Result<T, DBError>;
@@ -15,8 +17,12 @@ type HashValue = Vec<u8>;
 pub trait IDB {
     type OptionType;
     fn get_default_option() -> Self::OptionType;
-    fn open(db_path: PathBuf, options: Option<Self::OptionType>) -> DBResult<Self> where Self: Sized;
-    fn destroy(db_path: PathBuf) -> DBResult<()> where Self: Sized;
+    fn open(db_path: PathBuf, options: Option<Self::OptionType>) -> DBResult<Self>
+    where
+        Self: Sized;
+    fn destroy(db_path: PathBuf) -> DBResult<()>
+    where
+        Self: Sized;
     fn get(&self, key: &[u8]) -> DBResult<Vec<u8>>;
     fn set(&mut self, key: &[u8], value: &Vec<u8>) -> DBResult<()>;
 }
@@ -52,21 +58,23 @@ impl IDB for RocksDB {
         match self.get(key) {
             Ok(Some(val)) => Ok(val.to_vec()),
             Ok(None) => Err(DBError::NotFoundError),
-            Err(err) => Err(DBError::RocksDBError(err))
+            Err(err) => Err(DBError::RocksDBError(err)),
         }
     }
 
     fn set(&mut self, key: &[u8], value: &Vec<u8>) -> DBResult<()> {
         match self.put(key, value) {
             Ok(()) => Ok(()),
-            Err(err) => Err(DBError::RocksDBError(err))
+            Err(err) => Err(DBError::RocksDBError(err)),
         }
     }
 }
 
-
 pub struct Database<'a, BlockFileType = BlockFile, DatabaseType = RocksDB>
-    where BlockFileType: BlockFileOps, DatabaseType: IDB {
+where
+    BlockFileType: BlockFileOps,
+    DatabaseType: IDB,
+{
     database: DatabaseType,
     block_file: BlockFileType,
     file_number: u32,
@@ -74,8 +82,16 @@ pub struct Database<'a, BlockFileType = BlockFile, DatabaseType = RocksDB>
 }
 
 impl<'a, BlockFileType, DatabaseType, OptionType> Database<'a, BlockFileType, DatabaseType>
-    where BlockFileType: BlockFileOps, DatabaseType: IDB<OptionType = OptionType> {
-    fn new(db_path: PathBuf, file_path: PathBuf, db_keys: &'a DBKeys, options: Option<OptionType>) -> DBResult<Self> {
+where
+    BlockFileType: BlockFileOps,
+    DatabaseType: IDB<OptionType = OptionType>,
+{
+    fn new(
+        db_path: PathBuf,
+        file_path: PathBuf,
+        db_keys: &'a DBKeys,
+        options: Option<OptionType>,
+    ) -> DBResult<Self> {
         let mut database = DatabaseType::open(db_path, options)?;
         let file_number = match database.get(&db_keys.file_number) {
             Ok(val) => BigEndian::read_u32(&val),
@@ -83,7 +99,7 @@ impl<'a, BlockFileType, DatabaseType, OptionType> Database<'a, BlockFileType, Da
                 database.set(&db_keys.file_number, &vec![0; 4])?;
                 0
             }
-            Err(err) => return Err(err)
+            Err(err) => return Err(err),
         };
         let file_position = match database.get(&db_keys.file_position) {
             Ok(val) => BigEndian::read_u64(&val),
@@ -91,7 +107,7 @@ impl<'a, BlockFileType, DatabaseType, OptionType> Database<'a, BlockFileType, Da
                 database.set(&db_keys.file_number, &vec![0; 8])?;
                 0
             }
-            Err(err) => return Err(err)
+            Err(err) => return Err(err),
         };
         Ok(Database {
             database,
@@ -145,21 +161,28 @@ impl<'a, BlockFileType, DatabaseType, OptionType> Database<'a, BlockFileType, Da
     }
 
     fn set_block<T>(&mut self, block: &mut T) -> DBResult<WriteLocation>
-        where T: Encode + Proto, {
+    where
+        T: Encode + Proto,
+    {
         let write_location = self.block_file.put::<T>(block)?;
         if self.file_number != write_location.file_number {
             self.file_number = write_location.file_number;
             let mut file_number_buf = vec![0; 4];
             BigEndian::write_u32(&mut file_number_buf, write_location.file_number);
-            self.database.set(&self.db_keys.file_number, &file_number_buf)?;
+            self.database
+                .set(&self.db_keys.file_number, &file_number_buf)?;
         }
         let mut file_position_buf = vec![0; 8];
         BigEndian::write_u64(&mut file_position_buf, write_location.file_position);
-        self.database.set(&self.db_keys.file_position, &file_position_buf)?;
+        self.database
+            .set(&self.db_keys.file_position, &file_position_buf)?;
         Ok(write_location)
     }
 
-    fn get_blocks<T>(&mut self, from_height: u32, count: u32) -> DBResult<Vec<T>> where T: Decode + Clone {
+    fn get_blocks<T>(&mut self, from_height: u32, count: u32) -> DBResult<Vec<T>>
+    where
+        T: Decode + Clone,
+    {
         let mut i = 0;
         let mut blocks = Vec::new();
         let _limit = count - 1;
@@ -170,26 +193,40 @@ impl<'a, BlockFileType, DatabaseType, OptionType> Database<'a, BlockFileType, Da
         Ok(blocks)
     }
 
-    fn get_block<T>(&mut self, hash: &HashValue) -> DBResult<T> where T: Decode + Clone {
+    fn get_block<T>(&mut self, hash: &HashValue) -> DBResult<T>
+    where
+        T: Decode + Clone,
+    {
         let meta_info = self.get_meta(hash)?;
         self.get_block_by_meta_info::<T>(meta_info)
     }
 
-    fn get_block_by_height<T>(&mut self, height: u32) -> DBResult<T> where T: Decode + Clone {
+    fn get_block_by_height<T>(&mut self, height: u32) -> DBResult<T>
+    where
+        T: Decode + Clone,
+    {
         let hash = self.get_hash_by_height(height)?;
         self.get_block::<T>(&hash)
     }
 
-    fn get_block_by_meta_info<T>(&mut self, meta_info: Meta) -> DBResult<T> where T: Decode + Clone {
-        if meta_info.length == Some(0) || meta_info.file_number.is_none()
-            || meta_info.offset.is_none() || meta_info.length.is_none() {
+    fn get_block_by_meta_info<T>(&mut self, meta_info: Meta) -> DBResult<T>
+    where
+        T: Decode + Clone,
+    {
+        if meta_info.length == Some(0)
+            || meta_info.file_number.is_none()
+            || meta_info.offset.is_none()
+            || meta_info.length.is_none()
+        {
             return Err(From::from("No Block Information".to_string()));
         }
 
-        Ok(self.block_file.get::<T>(meta_info.file_number.unwrap(), meta_info.offset.unwrap(),
-                                    meta_info.length.unwrap() as usize)?)
+        Ok(self.block_file.get::<T>(
+            meta_info.file_number.unwrap(),
+            meta_info.offset.unwrap(),
+            meta_info.length.unwrap() as usize,
+        )?)
     }
-
 
     fn set_block_status(&mut self, hash: &Vec<u8>, status: BlockStatus) -> DBResult<()> {
         let mut hash_cpy = hash.clone();
@@ -211,19 +248,17 @@ impl<'a, BlockFileType, DatabaseType, OptionType> Database<'a, BlockFileType, Da
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use database::database::IDB;
+    use crate::common::block::tests::create_test_block_without_meta;
     use crate::common::block::Block;
+    use crate::common::common_tests::common_tests::assert_block;
     use crate::common::header::Header;
     use crate::common::signed_tx::SignedTx;
-    use crate::common::common_tests::common_tests::assert_block;
-    use crate::common::block::tests::create_test_block_without_meta;
+    use crate::database::block_file::BlockFileResult;
+    use crate::database::database::IDB;
     use std::collections::HashMap;
-    use database::block_file::BlockFileResult;
-
 
     struct RocksDBMock {
         db: HashMap<Vec<u8>, Vec<u8>>,
@@ -231,9 +266,7 @@ mod tests {
 
     impl RocksDBMock {
         pub fn new(db: HashMap<Vec<u8>, Vec<u8>>) -> RocksDBMock {
-            RocksDBMock {
-                db
-            }
+            RocksDBMock { db }
         }
     }
 
@@ -254,7 +287,7 @@ mod tests {
         fn get(&self, key: &[u8]) -> DBResult<Vec<u8>> {
             match self.db.get(key) {
                 Some(val) => Ok(val.clone()),
-                None => Err(DBError::NotFoundError)
+                None => Err(DBError::NotFoundError),
             }
         }
 
@@ -273,7 +306,7 @@ mod tests {
         pub fn new(write_location: WriteLocation, encoded_block: Vec<u8>) -> BlockFileMock {
             BlockFileMock {
                 write_location,
-                encoded_block
+                encoded_block,
             }
         }
     }
@@ -286,24 +319,40 @@ mod tests {
                 file_number: 0,
                 file_position: 0,
                 offset: 0,
-                length: 0
+                length: 0,
             };
             Ok(BlockFileMock::new(write_location, vec![]))
         }
         fn get<T>(&mut self, _file_number: u32, _offset: u64, _length: usize) -> BlockFileResult<T>
-            where T: Decode {
+        where
+            T: Decode,
+        {
             T::decode(&self.encoded_block)
         }
         fn put<T>(&mut self, any_block: &mut T) -> BlockFileResult<WriteLocation>
-            where T: Encode + Proto {
+        where
+            T: Encode + Proto,
+        {
             let bytes = any_block.encode()?;
             let length = bytes.len() as u64;
             self.encoded_block = bytes.clone();
 
-            let carry = if self.write_location.file_position + length > MAX_MOCK_FILE_SIZE { 1 } else { 0 };
+            let carry = if self.write_location.file_position + length > MAX_MOCK_FILE_SIZE {
+                1
+            } else {
+                0
+            };
             self.write_location.file_number = self.write_location.file_number + carry;
-            self.write_location.file_position = if carry == 1 { length } else { self.write_location.file_position + length };
-            self.write_location.offset = if carry == 1 { 0 } else { self.write_location.file_position - length };
+            self.write_location.file_position = if carry == 1 {
+                length
+            } else {
+                self.write_location.file_position + length
+            };
+            self.write_location.offset = if carry == 1 {
+                0
+            } else {
+                self.write_location.file_position - length
+            };
 
             Ok(WriteLocation {
                 file_number: self.write_location.file_number,
@@ -330,7 +379,6 @@ mod tests {
             _ => panic!("It should not exist {:?}", hash),
         }
     }
-
 
     #[test]
     fn it_set_hash_using_height_and_get_from_db() {
@@ -393,7 +441,10 @@ mod tests {
         let database_blocks: Vec<Block<Header, SignedTx>> = db.get_blocks(1, 255).unwrap();
         let blocks_cnt = database_blocks.len();
         for i in 0..blocks_cnt - 1 {
-            assert_block(blocks.get(i).unwrap().clone(), database_blocks.get(i).unwrap().clone());
+            assert_block(
+                blocks.get(i).unwrap().clone(),
+                database_blocks.get(i).unwrap().clone(),
+            );
         }
     }
 
@@ -419,9 +470,10 @@ mod tests {
         let mut db = create_database(&db_keys);
         let meta_info = create_meta();
 
-        let mut hash = vec![218, 175, 98, 56, 136, 59, 157, 43, 178, 250, 66, 194, 50, 129, 87, 37,
-                            147, 54, 157, 79, 238, 83, 118, 209, 92, 202, 25, 32, 246, 230, 153, 39];
-
+        let mut hash = vec![
+            218, 175, 98, 56, 136, 59, 157, 43, 178, 250, 66, 194, 50, 129, 87, 37, 147, 54, 157,
+            79, 238, 83, 118, 209, 92, 202, 25, 32, 246, 230, 153, 39,
+        ];
 
         db.set_meta(&hash, &meta_info).unwrap();
 
@@ -436,12 +488,18 @@ mod tests {
                 assert_eq!(meta.file_number.unwrap(), meta_info.file_number.unwrap());
                 assert_eq!(meta.length.unwrap(), meta_info.length.unwrap());
             }
-            Err(err) => panic!(format!("meta data should be same as the original one {:?}", err))
+            Err(err) => panic!(format!(
+                "meta data should be same as the original one {:?}",
+                err
+            )),
         }
 
         hash.insert(0, 't' as u8);
         match db.get_meta(&hash) {
-            Ok(meta) => panic!(format!("meta data with wrong hash should not be found from db {:?}", meta)),
+            Ok(meta) => panic!(format!(
+                "meta data with wrong hash should not be found from db {:?}",
+                meta
+            )),
             Err(DBError::NotFoundError) => (),
             Err(_err) => panic!(format!("ERROR OCCURED : {:?}", _err)),
         }
@@ -453,7 +511,9 @@ mod tests {
         let mut db = create_database(&db_keys);
         let meta_info = create_meta_without_file_info();
 
-        let mut hash = vec![218, 1, 2, 3, 4, 5, 175, 98, 56, 136, 59, 157, 43, 178, 250, 66, 194, 50, 129];
+        let mut hash = vec![
+            218, 1, 2, 3, 4, 5, 175, 98, 56, 136, 59, 157, 43, 178, 250, 66, 194, 50, 129,
+        ];
 
         assert_eq!(meta_info.file_number, None);
         assert_eq!(meta_info.offset, None);
@@ -467,17 +527,23 @@ mod tests {
                 assert_eq!(meta.p_ema, meta_info.p_ema);
                 assert_eq!(meta.next_difficulty, meta_info.next_difficulty);
                 assert_eq!(meta.total_work, meta_info.total_work);
-                // protobuf encoding for BlockDB gives 0 for () 
+                // protobuf encoding for BlockDB gives 0 for ()
                 assert_eq!(meta.file_number, Some(0));
                 assert_eq!(meta.offset, Some(0));
                 assert_eq!(meta.length, Some(0));
             }
-            Err(err) => panic!(format!("meta data should be same as the original one {:?}", err))
+            Err(err) => panic!(format!(
+                "meta data should be same as the original one {:?}",
+                err
+            )),
         }
 
         hash.insert(0, 't' as u8);
         match db.get_meta(&hash) {
-            Ok(meta) => panic!(format!("meta data with wrong hash should not be found from db {:?}", meta)),
+            Ok(meta) => panic!(format!(
+                "meta data with wrong hash should not be found from db {:?}",
+                meta
+            )),
             Err(DBError::NotFoundError) => (),
             Err(_err) => panic!(format!("ERROR OCCURED : {:?}", _err)),
         }
@@ -497,7 +563,16 @@ mod tests {
         let p_ema = 0.234;
         let next_difficulty = 0.01345;
         let total_work = 1e23;
-        Meta::new(height, t_ema, p_ema, next_difficulty, total_work, None, None, None)
+        Meta::new(
+            height,
+            t_ema,
+            p_ema,
+            next_difficulty,
+            total_work,
+            None,
+            None,
+            None,
+        )
     }
 
     fn create_meta() -> Meta {

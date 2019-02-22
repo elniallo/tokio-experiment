@@ -1,6 +1,6 @@
+use crate::util::hash::hash;
 use rust_base58::{FromBase58, ToBase58};
 use secp256k1::PublicKey;
-use crate::util::hash::hash;
 
 use std::result::Result;
 
@@ -16,7 +16,7 @@ pub trait ValidAddress {
     fn to_string(&self) -> String;
     fn from_string(string: &String) -> Result<Address, String>;
     fn from_pubkey(pubkey: PublicKey) -> Address;
-    fn from_bytes(bytes: &[u8;20]) -> Address;
+    fn from_bytes(bytes: &[u8; 20]) -> Address;
 }
 
 impl ValidAddress for Address {
@@ -76,12 +76,12 @@ impl ValidAddress for Address {
         }
         addr
     }
-    fn from_bytes(bytes: &[u8;20]) -> Address {
-        let mut addr = [0;20];
+    fn from_bytes(bytes: &[u8; 20]) -> Address {
+        let mut addr = [0; 20];
         for i in 0..20 {
             addr[i] = bytes[i]
         }
-    addr
+        addr
     }
 }
 

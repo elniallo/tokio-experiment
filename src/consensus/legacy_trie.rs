@@ -1,9 +1,21 @@
+use rocksdb::{Options, WriteBatch, DB};
+
 use crate::account::account::Account;
 use crate::account::state_node::StateNode;
 use crate::common::address::Address;
-pub struct LegacyTrie {}
+
+fn set_db_options() -> Options {
+    let mut options = Options::new();
+    options
+}
+pub struct LegacyTrie {
+    db: DB,
+}
 
 impl LegacyTrie {
+    pub fn new(db: DB) -> Self {
+        Self {}
+    }
     pub fn get_account(&self, address: Address, root: &[u8]) -> Account {
         Account {
             balance: 0,

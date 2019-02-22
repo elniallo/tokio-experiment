@@ -22,6 +22,7 @@ extern crate uuid;
 pub mod account;
 pub mod common;
 pub mod consensus;
+pub mod database;
 pub mod serialization;
 pub mod server;
 pub mod traits;
