@@ -5,7 +5,7 @@ sudo: true
 addons: 
   apt: 
     packages: libboost-all-dev
-
+env: CFLAGS='-std=c99'
 before_install:
   # C++14
   - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
