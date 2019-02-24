@@ -22,14 +22,16 @@ addons:
     - unzip
     
 install:
-  - mkdir -p $HOME/protobuf && pushd $HOME/protobuf
-  - curl -LO 'https://github.com/google/protobuf/releases/download/v3.4.0/protoc-3.4.0-linux-x86_64.zip'
-  - unzip protoc-3.4.0-linux-x86_64.zip
-  - popd
-  - curl -L 'https://github.com/google/protobuf/releases/download/v3.4.0/protobuf-python-3.4.0.tar.gz' | tar xzf -
-  - pushd protobuf-3.4.0/python
-  - python setup.py build && python setup.py install
-  - popd
+  - git clone https://github.com/protocolbuffers/protobuf.git
+  - cd protobuf
+  - git submodule update --init --recursive
+  - ./autogen.sh
+  - ./configure
+  - make
+  - make check
+  - sudo make install
+  - sudo ldconfig
+
   
 script:
   - cargo test --all
