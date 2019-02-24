@@ -5,8 +5,9 @@ sudo: true
 addons: 
   apt: 
     packages: libboost-all-dev
-env: CFLAGS='-std=c99'
+env:
   global:
+    - CFLAGS='-std=c99'
     - RUST_BACKTRACE=1
     - CC="clang"
 before_install:
