@@ -23,13 +23,13 @@ addons:
     
 install:
   - mkdir -p $HOME/protobuf && pushd $HOME/protobuf
-      && curl -LO 'https://github.com/google/protobuf/releases/download/v3.4.0/protoc-3.4.0-linux-x86_64.zip'
-      && unzip protoc-3.4.0-linux-x86_64.zip
-      && popd
+  - curl -LO 'https://github.com/google/protobuf/releases/download/v3.4.0/protoc-3.4.0-linux-x86_64.zip'
+  - unzip protoc-3.4.0-linux-x86_64.zip
+  - popd
   - curl -L 'https://github.com/google/protobuf/releases/download/v3.4.0/protobuf-python-3.4.0.tar.gz' | tar xzf -
-      && pushd protobuf-3.4.0/python
-      && python setup.py build && python setup.py install
-      && popd
+  - pushd protobuf-3.4.0/python
+  - python setup.py build && python setup.py install
+  - popd
   
 script:
   - cargo test --all
