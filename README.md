@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.com/Team-Hycon/hycon-rust.svg?branch=master)](https://travis-ci.com/Team-Hycon/hycon-rust)
 # TOKIO Networking Experiment
 Evaluating Tokio for use in the rust implementation of the Hycon-core client
 
