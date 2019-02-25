@@ -115,7 +115,8 @@ impl PartialOrd for Tx {
 mod tests {
     use super::*;
     use crate::common::address::ValidAddress;
-    use rand::{Rng, SeedableRng, StdRng};
+    use rand::prelude::*;
+    use rand::{Rng, SeedableRng};
 
     #[test]
     fn it_makes_a_transaction() {

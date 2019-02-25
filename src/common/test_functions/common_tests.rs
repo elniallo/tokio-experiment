@@ -41,7 +41,7 @@ pub fn create_random_tx<RngType>(from: Address, nonce: u32, rng: &mut RngType) -
 where
     RngType: Rng,
 {
-    let mut to = create_random_address(rng);
+    let to = create_random_address(rng);
 
     let amount = rng.gen();
     let fee = rng.gen();

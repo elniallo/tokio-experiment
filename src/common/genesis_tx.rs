@@ -10,7 +10,7 @@ use secp256k1::{RecoverableSignature, RecoveryId};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GenesisTx {
     to: Address,
-    amount: u64
+    amount: u64,
 }
 
 impl Transaction for GenesisTx {
@@ -73,7 +73,8 @@ impl Decode for GenesisTx {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{Rng, SeedableRng, StdRng};
+    use rand::prelude::*;
+    use rand::{Rng, SeedableRng};
 
     #[test]
     fn it_makes_a_genesis_transaction() {

@@ -54,9 +54,11 @@ impl ValidAddress for Address {
             return Err(Box::new(Exception::new("Failed to decode address string")));
         }
         if decoded_bytes.len() != 20 {
-            return Err(Box::new(Exception::new(
-                (&format!("{} is {} bytes long", address, decoded_bytes.len())),
-            )));
+            return Err(Box::new(Exception::new(&format!(
+                "{} is {} bytes long",
+                address,
+                decoded_bytes.len()
+            ))));
         }
 
         let mut address_bytes: [u8; 20] = [0; 20];

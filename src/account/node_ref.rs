@@ -1,6 +1,5 @@
 use std::error::Error;
 
-use crate::common::address::Address;
 use crate::serialization::state::NodeRef as ProtoNodeRef;
 use crate::traits::{Decode, Encode, Proto};
 

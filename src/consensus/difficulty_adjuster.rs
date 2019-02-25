@@ -140,7 +140,8 @@ mod tests {
     use crate::common::header::Header;
     use crate::common::meta::Meta;
     use crate::common::signed_tx::SignedTx;
-    use rand::{Rng, SeedableRng, StdRng};
+    use rand::prelude::*;
+    use rand::{Rng, SeedableRng};
 
     #[test]
     fn it_adjusts_difficulty() {
@@ -290,7 +291,7 @@ mod tests {
             for _ in (index..length).rev() {
                 scaled_difficulty *= 2f64.powf(8.0);
             }
-            let mut expected_value = 0xFFFF_FFFF_FFFF_FFFF_u64 as f64 * scaled_difficulty - 1.0;
+            let expected_value = 0xFFFF_FFFF_FFFF_FFFF_u64 as f64 * scaled_difficulty - 1.0;
             let value = LittleEndian::read_u64(&target[index - 8..index]);
             assert_eq!(value as f64, expected_value.ceil());
         }
@@ -310,14 +311,13 @@ mod tests {
                     let coefficient = rng.gen_range(1.0, coefficients).floor();
                     difficulty = coefficient / (base as f64).powf(exponent as f64);
                     let target = get_target(difficulty, length).unwrap();
-                    let mut index = length - (-1.0 * difficulty.log2() / 8.0) as usize;
+                    let index = length - (-1.0 * difficulty.log2() / 8.0) as usize;
 
                     let mut scaled_difficulty = difficulty;
                     for _ in (index..length).rev() {
                         scaled_difficulty *= 2f64.powf(8.0);
                     }
-                    let mut expected_value =
-                        0xFFFF_FFFF_FFFF_FFFF_u64 as f64 * scaled_difficulty - 1.0;
+                    let expected_value = 0xFFFF_FFFF_FFFF_FFFF_u64 as f64 * scaled_difficulty - 1.0;
                     let value = LittleEndian::read_u64(&target[index - 8..index]);
                     assert_eq!(value as f64, expected_value.ceil());
                 }

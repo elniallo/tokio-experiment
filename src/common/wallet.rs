@@ -5,7 +5,8 @@ use crate::common::tx::Tx;
 use crate::traits::Encode;
 use crate::util::hash::hash;
 
-use rand::{EntropyRng, Rng};
+use rand::rngs::EntropyRng;
+use rand::Rng;
 use secp256k1::key::{PublicKey, SecretKey};
 use secp256k1::{Message, RecoverableSignature, Secp256k1};
 
