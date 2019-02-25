@@ -275,7 +275,7 @@ impl WorldState {
     pub fn insert(
         &mut self,
         previous_root: Option<&Blake2bHashResult>,
-        keys: Vec<&[u8]>,
+        keys: Vec<Address>,
         values: &[&ProtoAccount],
     ) -> Result<Vec<u8>, Box<Error>> {
         Ok(self.tree.insert(previous_root, keys, values)?)

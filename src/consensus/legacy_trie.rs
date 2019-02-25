@@ -19,11 +19,8 @@ impl LegacyTrie {
     pub fn new(db: StateDB) -> Self {
         Self { db }
     }
-    pub fn get_account(&self, address: Address, root: &[u8]) -> Account {
-        Account {
-            balance: 0,
-            nonce: 0,
-        }
+    pub fn get_account(&self, address: Address, root: &[u8]) -> Option<ProtoAccount> {
+        None
     }
     pub fn get_multiple(
         &self,
@@ -31,9 +28,9 @@ impl LegacyTrie {
         modified_accounts: Vec<Address>,
     ) -> Result<Vec<Option<ProtoAccount>>, Box<Error>> {
         let mut accounts = Vec::with_capacity(modified_accounts.len());
-        // for address in modified_accounts {
-        //     accounts.push(self.get_account(address, root))
-        // }
+        for address in modified_accounts {
+            accounts.push(self.get_account(address, root))
+        }
         Ok(accounts)
     }
 
@@ -48,10 +45,5 @@ impl LegacyTrie {
 
     pub fn remove(&mut self, root: &[u8]) -> Result<(), Box<Error>> {
         Ok(())
-    }
-
-    pub fn transition(&mut self, modified_accounts: Vec<Account>, root: &[u8]) -> Vec<u8> {
-        let new_state = Vec::with_capacity(32);
-        new_state
     }
 }
