@@ -27,13 +27,13 @@ impl Decode for StateNode {
     fn decode(buffer: &[u8]) -> Result<StateNode, Box<Error>> {
         let mut data_node = ProtoStateNode::new();
         data_node.merge_from_bytes(buffer)?;
-        let mut refs: Vec<NodeRef> = vec![];
+        let mut refs: BTreeMap<Vec<u8>, NodeRef> = BTreeMap::new();
         for proto_node_ref in data_node.nodeRefs.into_iter() {
             let r = NodeRef::new(&proto_node_ref.address, &proto_node_ref.child);
-            refs.push(r);
+            refs.insert(vec![r.node_location[0]], r);
         }
 
-        Ok(StateNode::new(refs))
+        Ok(StateNode { node_refs: refs })
     }
 }
 
