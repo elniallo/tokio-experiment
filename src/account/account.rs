@@ -4,7 +4,7 @@ use crate::serialization::state::Account as ProtoAccount;
 use crate::traits::{Decode, Encode, Proto};
 use protobuf::Message as ProtoMessage;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Account {
     pub balance: u64,
     pub nonce: u32,
