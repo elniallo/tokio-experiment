@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::path::PathBuf;
 
+use crate::account::db_state::DBState;
 use crate::database::IDB;
 use crate::serialization::state::ProtoMerkleNode;
 use crate::traits::{Decode, Encode, Exception};
@@ -13,7 +14,7 @@ use rocksdb::{
 use starling::traits::Database as IDatabase;
 
 impl IDatabase for StateDB {
-    type NodeType = ProtoMerkleNode;
+    type NodeType = DBState;
     type EntryType = (Vec<u8>, Self::NodeType);
 
     fn open(_path: &PathBuf) -> Result<StateDB, Box<Error>> {
@@ -50,7 +51,7 @@ impl IDatabase for StateDB {
     }
 }
 
-pub struct StateDB<DatabaseType = RocksDB, EntryType = (Vec<u8>, ProtoMerkleNode)> {
+pub struct StateDB<DatabaseType = RocksDB, EntryType = (Vec<u8>, DBState)> {
     database: DatabaseType,
     pending_inserts: Vec<EntryType>,
 }

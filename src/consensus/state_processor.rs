@@ -106,7 +106,7 @@ impl<'a> StateProcessor<'a> {
 
         let mut address_keys = Vec::with_capacity(address_list.len());
         for i in 0..address_list.len() {
-            address_keys.push(address_list[i].as_ref())
+            address_keys.push(address_list[i])
         }
 
         // Insert existing balances into a map

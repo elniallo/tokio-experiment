@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 use std::error::Error;
 
+use crate::common::address::Address;
+use crate::consensus::legacy_trie::LegacyTrie;
 use crate::database::state_db::StateDB;
 use crate::serialization::state::{
     Account as ProtoAccount, Branch as ProtoBranch, Data as ProtoData, Leaf as ProtoLeaf,
@@ -253,30 +255,21 @@ impl Hasher for Blake2bHasher {
 }
 
 pub struct WorldState {
-    tree: MerkleBIT<
-        StateDB,
-        ProtoBranch,
-        ProtoLeaf,
-        ProtoData,
-        ProtoMerkleNode,
-        Blake2bHasher,
-        Blake2bHashResult,
-        ProtoAccount,
-    >,
+    tree: LegacyTrie,
 }
 
 impl WorldState {
     pub fn new(db: StateDB, max_depth: usize) -> Result<WorldState, Box<Error>> {
-        let tree = MerkleBIT::from_db(db, max_depth)?;
-        Ok(WorldState { tree })
+        let tree = LegacyTrie::new(db);
+        Ok(Self { tree })
     }
 
     pub fn get(
         &self,
         root: &Blake2bHashResult,
-        keys: Vec<&[u8]>,
+        keys: Vec<Address>,
     ) -> Result<Vec<Option<ProtoAccount>>, Box<Error>> {
-        Ok(self.tree.get(root.as_ref(), keys)?)
+        Ok(self.tree.get_multiple(root.as_ref(), keys)?)
     }
 
     pub fn insert(
