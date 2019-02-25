@@ -42,7 +42,6 @@ impl Proto for NodeRef {
 impl Encode for NodeRef {
     fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
         let proto_node_ref = self.to_proto()?;
-
         Ok(proto_node_ref.write_to_bytes()?)
     }
 }

@@ -53,3 +53,6 @@ include = [
     "/mnemonic/*.json"
 ]
 
+[lib]
+doctest = false
+

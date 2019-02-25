@@ -51,7 +51,7 @@ impl Decode for DBState {
                     let r = NodeRef::new(&proto_node_ref.address, &proto_node_ref.child);
                     refs.push(r);
                 }
-                db_state.node = Some(StateNode { node_refs: refs });
+                db_state.node = Some(StateNode::new(refs));
             }
         }
         db_state.ref_count = proto_db_state.refCount;
@@ -83,7 +83,7 @@ impl Proto for DBState {
                 match &self.node {
                     Some(data) => {
                         for tmp in &data.node_refs {
-                            proto_refs.push(tmp.to_proto().unwrap());
+                            proto_refs.push(tmp.1.to_proto().unwrap());
                         }
                     }
                     None => (),

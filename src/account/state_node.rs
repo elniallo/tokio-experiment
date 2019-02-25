@@ -6,15 +6,20 @@ use crate::serialization::state::StateNode as ProtoStateNode;
 use crate::traits::{Decode, Encode, Proto};
 
 use protobuf::{Message as ProtoMessage, RepeatedField};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StateNode {
-    pub node_refs: Vec<NodeRef>,
+    pub node_refs: BTreeMap<Vec<u8>, NodeRef>,
 }
 
 impl StateNode {
     pub fn new(node_refs: Vec<NodeRef>) -> StateNode {
-        StateNode { node_refs }
+        let mut ref_map = BTreeMap::new();
+        for node_ref in node_refs {
+            ref_map.insert(vec![node_ref.node_location[0]], node_ref);
+        }
+        StateNode { node_refs: ref_map }
     }
 }
 
@@ -38,7 +43,7 @@ impl Proto for StateNode {
         let mut proto_state_node = Self::ProtoType::new();
         let mut proto_node_refs: Vec<ProtoNodeRef> = Vec::with_capacity(self.node_refs.len());
         for node_ref in &self.node_refs {
-            match node_ref.to_proto() {
+            match node_ref.1.to_proto() {
                 Ok(proto_node_ref) => proto_node_refs.push(proto_node_ref),
                 Err(_) => {}
             }
