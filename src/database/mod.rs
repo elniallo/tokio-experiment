@@ -26,6 +26,8 @@ pub trait IDB {
         Self: Sized;
     fn _get(&self, key: &[u8]) -> DBResult<Vec<u8>>;
     fn set(&mut self, key: &[u8], value: &Vec<u8>) -> DBResult<()>;
+    fn delete(&mut self, key: &[u8]) -> DBResult<()>;
+    fn write(&mut self, batch: WriteBatch) -> DBResult<()>;
 }
 
 impl IDB for RocksDB {
@@ -77,6 +79,14 @@ impl IDB for RocksDB {
             Ok(()) => Ok(()),
             Err(err) => Err(Box::new(DBError::new(DBErrorType::RocksDBError(err)))),
         }
+    }
+
+    fn delete(&mut self, key: &[u8]) -> DBResult<()> {
+        Ok(())
+    }
+
+    fn write(&mut self, batch: WriteBatch) -> DBResult<()> {
+        self.write(batch)
     }
 }
 
@@ -187,6 +197,13 @@ pub mod mock {
 
         fn set(&mut self, key: &[u8], value: &Vec<u8>) -> DBResult<()> {
             self.db.insert(key.to_vec(), value.clone());
+            Ok(())
+        }
+
+        fn delete(&mut self, key: &[u8]) -> DBResult<()> {
+            Ok(())
+        }
+        fn write(&mut self, batch: WriteBatch) -> DBResult<()> {
             Ok(())
         }
     }

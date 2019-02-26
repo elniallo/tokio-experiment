@@ -11,20 +11,23 @@ use rocksdb::{
     DB as RocksDB,
 };
 
-use starling::traits::Database as IDatabase;
+use starling::traits::Database;
 
-impl IDatabase for StateDB {
+impl<DBType> Database for StateDB<DBType>
+where
+    DBType: IDB,
+{
     type NodeType = DBState;
     type EntryType = (Vec<u8>, Self::NodeType);
 
-    fn open(_path: &PathBuf) -> Result<StateDB, Box<Error>> {
+    fn open(_path: &PathBuf) -> Result<StateDB<DBType, Self::EntryType>, Box<Error>> {
         return Err(Box::new(Exception::new(
             "Open the database using new, not open",
         )));
     }
 
     fn get_node(&self, key: &[u8]) -> Result<Option<Self::NodeType>, Box<Error>> {
-        let bytes = self.database._get(key)?;
+        let bytes = self.database._get(&key)?;
         Ok(Some(Self::NodeType::decode(&bytes)?))
     }
 
@@ -70,6 +73,11 @@ where
             database,
             pending_inserts,
         })
+    }
+
+    pub fn set(&mut self, key: &[u8], value: &DBState) -> Result<(), Box<Error>> {
+        self.database.set(key, &value.encode()?.clone());
+        Ok(())
     }
 }
 

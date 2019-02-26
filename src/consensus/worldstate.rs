@@ -17,6 +17,11 @@ use starling::traits::{
     Branch, Data, Decode as TreeDecode, Encode as TreeEncode, Hasher, Leaf, Node,
 };
 
+use rocksdb::{
+    BlockBasedIndexType, BlockBasedOptions, Error as RocksdbError, Options as RocksDBOptions,
+    SliceTransform, WriteBatch, DB as RocksDB,
+};
+
 impl Branch for ProtoBranch {
     fn new() -> ProtoBranch {
         ProtoBranch::new()
@@ -255,7 +260,7 @@ impl Hasher for Blake2bHasher {
 }
 
 pub struct WorldState {
-    tree: LegacyTrie,
+    tree: LegacyTrie<RocksDB>,
 }
 
 impl WorldState {

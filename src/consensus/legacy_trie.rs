@@ -4,6 +4,7 @@ use crate::account::state_node::StateNode;
 use crate::common::address::Address;
 use crate::consensus::worldstate::Blake2bHashResult;
 use crate::database::state_db::StateDB;
+use crate::database::IDB;
 use crate::serialization::state::Account as ProtoAccount;
 use crate::traits::{Exception, Proto};
 
@@ -15,12 +16,15 @@ use std::error::Error;
 //     let mut options = Options::new();
 //     options
 // }
-pub struct LegacyTrie {
-    db: StateDB,
+pub struct LegacyTrie<DBType> {
+    db: StateDB<DBType, (Vec<u8>, DBState)>,
 }
 
-impl LegacyTrie {
-    pub fn new(db: StateDB) -> Self {
+impl<DBType> LegacyTrie<DBType>
+where
+    DBType: IDB,
+{
+    pub fn new(db: StateDB<DBType, (Vec<u8>, DBState)>) -> Self {
         Self { db }
     }
     pub fn get_account(&self, address: Address, root_node: &DBState) -> Option<ProtoAccount> {
@@ -32,6 +36,7 @@ impl LegacyTrie {
         modified_accounts: Vec<Address>,
     ) -> Result<Vec<Option<ProtoAccount>>, Box<Error>> {
         let mut accounts = Vec::with_capacity(modified_accounts.len());
+        println!("root node is: {:?}", &root);
         let root_node = self.db.get_node(root)?;
         let mut node_map: HashMap<Vec<u8>, DBState> = HashMap::new();
         match root_node {
@@ -123,9 +128,56 @@ impl LegacyTrie {
         Ok(None)
     }
 }
-
+#[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::account::node_ref::NodeRef;
+    use crate::database::mock::RocksDBMock;
+    use crate::traits::Encode;
+    use crate::util::hash::hash;
+    use std::path::PathBuf;
+    fn prepare_mock_tree(db: StateDB, keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) {}
+    #[test]
+    fn it_gets_items_from_a_tree_of_depth_1() {
+        let path = PathBuf::new();
+        let mut state_db: StateDB<RocksDBMock> = StateDB::new(path, None).unwrap();
+        let mut accounts: Vec<NodeRef> = Vec::with_capacity(256);
+        for i in 0..255 {
+            let db_state = DBState::new(
+                Some(Account {
+                    balance: i * 100,
+                    nonce: i as u32,
+                }),
+                None,
+                1,
+            );
+            let hash = hash(db_state.encode().unwrap().as_ref(), 32);
+            state_db.set(&hash, &db_state);
+            let location = vec![
+                i as u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ];
+            let node_ref = NodeRef::new(&location, &hash);
+            accounts.push(node_ref);
+        }
+        let state_node = StateNode::new(accounts);
+        let state_hash = hash(state_node.encode().unwrap().as_ref(), 32);
+        let db_state = DBState::new(None, Some(state_node), 1);
+        state_db.set(&state_hash, &db_state);
+        let legacy_trie = LegacyTrie::new(state_db);
+        let returned_accounts = legacy_trie.get_multiple(
+            &state_hash,
+            vec![[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+        );
+        match returned_accounts {
+            Ok(vec) => {
+                assert_eq!(vec.len(), 1);
+            }
+            Err(e) => {
+                println!("Error: {:?}", e);
+                unimplemented!()
+            }
+        }
+    }
     #[test]
     fn it_inserts_256_keys_with_different_first_bytes_into_empty_tree_and_retrieves_them() {
         unimplemented!();
