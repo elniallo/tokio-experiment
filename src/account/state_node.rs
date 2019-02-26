@@ -10,14 +10,14 @@ use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StateNode {
-    pub node_refs: BTreeMap<Vec<u8>, NodeRef>,
+    pub node_refs: BTreeMap<u8, NodeRef>,
 }
 
 impl StateNode {
     pub fn new(node_refs: Vec<NodeRef>) -> StateNode {
         let mut ref_map = BTreeMap::new();
         for node_ref in node_refs {
-            ref_map.insert(vec![node_ref.node_location[0]], node_ref);
+            ref_map.insert(node_ref.node_location[0], node_ref);
         }
         StateNode { node_refs: ref_map }
     }
@@ -27,10 +27,10 @@ impl Decode for StateNode {
     fn decode(buffer: &[u8]) -> Result<StateNode, Box<Error>> {
         let mut data_node = ProtoStateNode::new();
         data_node.merge_from_bytes(buffer)?;
-        let mut refs: BTreeMap<Vec<u8>, NodeRef> = BTreeMap::new();
+        let mut refs: BTreeMap<u8, NodeRef> = BTreeMap::new();
         for proto_node_ref in data_node.nodeRefs.into_iter() {
             let r = NodeRef::new(&proto_node_ref.address, &proto_node_ref.child);
-            refs.insert(vec![r.node_location[0]], r);
+            refs.insert(r.node_location[0], r);
         }
 
         Ok(StateNode { node_refs: refs })

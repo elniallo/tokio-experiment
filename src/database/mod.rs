@@ -157,7 +157,6 @@ impl From<io::Error> for DBError {
     }
 }
 
-#[cfg(test)]
 pub mod mock {
     use super::*;
     use std::collections::HashMap;
@@ -181,7 +180,7 @@ pub mod mock {
             ()
         }
         fn open(_db_path: PathBuf, _options: Option<Self::OptionType>) -> DBResult<Self> {
-            Ok(RocksDBMock::new(HashMap::new()))
+            Ok(RocksDBMock::new(HashMap::with_capacity(10000)))
         }
 
         fn destroy(_db_path: PathBuf) -> DBResult<()> {

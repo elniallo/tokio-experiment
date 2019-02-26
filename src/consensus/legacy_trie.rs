@@ -12,10 +12,7 @@ use starling::traits::Database;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::error::Error;
-// fn set_db_options() -> Options {
-//     let mut options = Options::new();
-//     options
-// }
+
 pub struct LegacyTrie<DBType> {
     db: StateDB<DBType, (Vec<u8>, DBState)>,
 }
@@ -79,33 +76,33 @@ where
             } else if let Some(node) = &db_state.node {
                 // we have a node
                 //insert node into seen map
-                let entry = map.entry(address[0..offset + 1].to_vec());
-                match entry {
-                    Entry::Vacant(_entry) => {
-                        map.insert(address[0..offset + 1].to_vec(), db_state.clone());
-                    }
-                    Entry::Occupied(entry) => {
-                        // get from map
-                        let next_state = entry.get().clone();
-                        // update offset
-                        if let Some(node) = &next_state.node {
-                            if let Some(node_ref) = node.node_refs.get(&vec![address[offset]]) {
-                                offset += node_ref.node_location.len();
-                                state = Some(next_state.clone());
-                                continue;
-                            }
-                        } else {
-                            return Err(Box::new(Exception::new(
-                                "Unable to find node, corrupted tree",
-                            )));
-                        }
-                    }
-                }
+                // let entry = map.entry(address[0..offset + 1].to_vec());
+                // match entry {
+                //     Entry::Vacant(_entry) => {
+                //         map.insert(address[0..offset + 1].to_vec(), db_state.clone());
+                //     }
+                //     Entry::Occupied(entry) => {
+                //         // get from map
+                //         let next_state = entry.get().clone();
+                //         // update offset
+                //         if let Some(node) = &next_state.node {
+                //             if let Some(node_ref) = node.node_refs.get(&address[offset]) {
+                //                 offset += node_ref.node_location.len();
+                //                 state = Some(next_state);
+                //                 continue;
+                //             }
+                //         } else {
+                //             return Err(Box::new(Exception::new(
+                //                 "Unable to find node, corrupted tree",
+                //             )));
+                //         }
+                //     }
+                // }
                 // find next node based on index and assign to state variable
-                if let Some(node_ref) = node.node_refs.get(&vec![address[offset]]) {
+                if let Some(node_ref) = node.node_refs.get(&address[offset]) {
                     if let Some(next_node) = self.db.get_node(&node_ref.child)? {
                         offset += node_ref.node_location.len();
-                        state = Some(next_node.clone());
+                        state = Some(next_node);
                         continue;
                     } else {
                         return Err(Box::new(Exception::new(
@@ -151,7 +148,7 @@ pub mod tests {
                 1,
             );
             let hash = hash(db_state.encode().unwrap().as_ref(), 32);
-            state_db.set(&hash, &db_state);
+            let _ = state_db.set(&hash, &db_state);
             let location = vec![
                 i as u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ];
