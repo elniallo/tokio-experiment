@@ -36,7 +36,6 @@ where
         modified_accounts: Vec<Address>,
     ) -> Result<Vec<Option<ProtoAccount>>, Box<Error>> {
         let mut accounts = Vec::with_capacity(modified_accounts.len());
-        println!("root node is: {:?}", &root);
         let root_node = self.db.get_node(root)?;
         let mut node_map: HashMap<Vec<u8>, DBState> = HashMap::new();
         match root_node {
@@ -166,11 +165,28 @@ pub mod tests {
         let legacy_trie = LegacyTrie::new(state_db);
         let returned_accounts = legacy_trie.get_multiple(
             &state_hash,
-            vec![[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+            vec![
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            ],
         );
         match returned_accounts {
             Ok(vec) => {
-                assert_eq!(vec.len(), 1);
+                assert_eq!(vec.len(), 2);
+                if let Some(account) = &vec[0] {
+                    assert_eq!(account.balance, 0);
+                    assert_eq!(account.nonce, 0);
+                } else {
+                    println!("Node not found");
+                    unimplemented!()
+                }
+                if let Some(account) = &vec[1] {
+                    assert_eq!(account.balance, 1200);
+                    assert_eq!(account.nonce, 12);
+                } else {
+                    println!("Node not found");
+                    unimplemented!()
+                }
             }
             Err(e) => {
                 println!("Error: {:?}", e);
