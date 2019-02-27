@@ -211,7 +211,7 @@ pub mod tests {
         let second_account = DBState::new(
             Some(Account {
                 balance: 200,
-                nonce: 1,
+                nonce: 2,
             }),
             None,
             1,
@@ -223,7 +223,7 @@ pub mod tests {
         let third_account = DBState::new(
             Some(Account {
                 balance: 300,
-                nonce: 2,
+                nonce: 3,
             }),
             None,
             1,
@@ -253,6 +253,16 @@ pub mod tests {
         match returned_accounts {
             Ok(vec) => {
                 assert_eq!(vec.len(), 3);
+                // check integrity of returned accounts
+                for i in 0..vec.len() {
+                    match &vec[i] {
+                        Some(account) => {
+                            assert_eq!(account.balance as usize, (i + 1) * 100);
+                            assert_eq!(account.nonce as usize, i + 1);
+                        }
+                        None => unimplemented!(),
+                    }
+                }
             }
             Err(e) => {
                 println!("Error: {:?}", e);
