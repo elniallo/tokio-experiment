@@ -70,7 +70,6 @@ fn db_state_encode_worst_case_benchmark(c: &mut Criterion) {
         accounts.push(node_ref);
     }
     let state_node = StateNode::new(accounts);
-    let state_hash = hash(state_node.encode().unwrap().as_ref(), 32);
     let db_state = DBState::new(None, Some(state_node), 1);
     c.bench_function("DB State Encode: Worst Case", move |b| {
         b.iter(|| db_state.encode().unwrap())
