@@ -42,14 +42,14 @@ where
     }
 
     fn batch_write(&mut self) -> Result<(), Box<Error>> {
-        let mut batch = WriteBatch::default();
+        let mut batch = Vec::with_capacity(self.pending_inserts.len());
         while self.pending_inserts.len() > 0 {
             let entry = self.pending_inserts.remove(0);
             let key = entry.0;
             let value = entry.1;
-            batch.put(key.as_ref(), value.encode()?.as_ref())?;
+            batch.push((key, value.encode().unwrap()));
         }
-        self.database.write(batch)?;
+        self.database.write_batch(batch)?;
         Ok(())
     }
 }
@@ -73,11 +73,6 @@ where
             database,
             pending_inserts,
         })
-    }
-
-    pub fn set(&mut self, key: &[u8], value: &DBState) -> Result<(), Box<Error>> {
-        self.database.set(key, &value.encode()?.clone());
-        Ok(())
     }
 }
 

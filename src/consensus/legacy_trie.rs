@@ -34,7 +34,7 @@ where
     ) -> Result<Vec<Option<ProtoAccount>>, Box<Error>> {
         let mut accounts = Vec::with_capacity(modified_accounts.len());
         let root_node = self.db.get_node(root)?;
-        let mut node_map: HashMap<Vec<u8>, DBState> = HashMap::new();
+        let mut node_map: HashMap<Vec<u8>, StateNode> = HashMap::new();
         match root_node {
             Some(node) => {
                 for address in modified_accounts {
@@ -54,6 +54,11 @@ where
         keys: Vec<Address>,
         values: &[&ProtoAccount],
     ) -> Result<Vec<u8>, Box<Error>> {
+        // encode accounts and insert to db
+        if let None = root {
+            // empty tree case
+        }
+        // get nodes to be changed
         Ok(Vec::new())
     }
 
@@ -65,7 +70,7 @@ where
         &self,
         root: &DBState,
         address: Address,
-        map: &mut HashMap<Vec<u8>, DBState>,
+        map: &mut HashMap<Vec<u8>, StateNode>,
     ) -> Result<Option<ProtoAccount>, Box<Error>> {
         let mut state: Option<DBState> = Some(root.clone());
         let mut offset = 0;
@@ -147,7 +152,7 @@ pub mod tests {
                 1,
             );
             let hash = hash(db_state.encode().unwrap().as_ref(), 32);
-            let _ = state_db.set(&hash, &db_state);
+            let _ = state_db.insert(&hash, &db_state);
             let location = vec![
                 i as u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ];
@@ -157,7 +162,8 @@ pub mod tests {
         let state_node = StateNode::new(accounts);
         let state_hash = hash(state_node.encode().unwrap().as_ref(), 32);
         let db_state = DBState::new(None, Some(state_node), 1);
-        state_db.set(&state_hash, &db_state);
+        state_db.insert(&state_hash, &db_state);
+        state_db.batch_write();
         let legacy_trie = LegacyTrie::new(state_db);
         let returned_accounts = legacy_trie.get_multiple(
             &state_hash,
@@ -205,7 +211,7 @@ pub mod tests {
             1,
         );
         let first_hash = hash(first_account.encode().unwrap().as_ref(), 32);
-        let _ = state_db.set(&first_hash, &first_account);
+        let _ = state_db.insert(&first_hash, &first_account);
         let first_location = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let first_node_ref = NodeRef::new(&first_location, &first_hash);
         let second_account = DBState::new(
@@ -217,7 +223,7 @@ pub mod tests {
             1,
         );
         let second_hash = hash(second_account.encode().unwrap().as_ref(), 32);
-        let _ = state_db.set(&second_hash, &second_account);
+        let _ = state_db.insert(&second_hash, &second_account);
         let second_location = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let second_node_ref = NodeRef::new(&second_location, &second_hash);
         let third_account = DBState::new(
@@ -229,24 +235,105 @@ pub mod tests {
             1,
         );
         let third_hash = hash(third_account.encode().unwrap().as_ref(), 32);
-        let _ = state_db.set(&third_hash, &third_account);
+        let _ = state_db.insert(&third_hash, &third_account);
         let third_location = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let third_node_ref = NodeRef::new(&third_location, &third_hash);
         let second_level_refs = vec![first_node_ref, second_node_ref];
         let second_state_node = StateNode::new(second_level_refs);
         let second_state_node_state = DBState::new(None, Some(second_state_node), 1);
         let second_state_node_hash = hash(&second_state_node_state.encode().unwrap(), 32);
-        let _ = state_db.set(&second_state_node_hash, &second_state_node_state);
+        let _ = state_db.insert(&second_state_node_hash, &second_state_node_state);
         let first_level_node = NodeRef::new(&vec![0], &second_state_node_hash);
         let root_node_refs = vec![first_level_node, third_node_ref];
         let root_state_node = StateNode::new(root_node_refs);
         let root_db_state = DBState::new(None, Some(root_state_node), 1);
         let root_hash = hash(&root_db_state.encode().unwrap(), 32);
-        let _ = state_db.set(&root_hash, &root_db_state);
+        let _ = state_db.insert(&root_hash, &root_db_state);
+        let _ = state_db.batch_write();
         let tree = LegacyTrie::new(state_db);
         let addresses = vec![
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        ];
+        let returned_accounts = tree.get_multiple(&root_hash, addresses);
+        match returned_accounts {
+            Ok(vec) => {
+                assert_eq!(vec.len(), 3);
+                // check integrity of returned accounts
+                for i in 0..vec.len() {
+                    match &vec[i] {
+                        Some(account) => {
+                            assert_eq!(account.balance as usize, (i + 1) * 100);
+                            assert_eq!(account.nonce as usize, i + 1);
+                        }
+                        None => unimplemented!(),
+                    }
+                }
+            }
+            Err(e) => {
+                println!("Error: {:?}", e);
+                unimplemented!()
+            }
+        }
+    }
+    #[test]
+    fn it_gets_from_a_tree_with_compressed_branches() {
+        let path = PathBuf::new();
+        let mut state_db: StateDB<RocksDBMock> = StateDB::new(path, None).unwrap();
+        let mut accounts: Vec<NodeRef> = Vec::with_capacity(256);
+        let first_account = DBState::new(
+            Some(Account {
+                balance: 100,
+                nonce: 1,
+            }),
+            None,
+            1,
+        );
+        let first_hash = hash(first_account.encode().unwrap().as_ref(), 32);
+        let _ = state_db.insert(&first_hash, &first_account);
+        let first_location = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let first_node_ref = NodeRef::new(&first_location, &first_hash);
+        let second_account = DBState::new(
+            Some(Account {
+                balance: 200,
+                nonce: 2,
+            }),
+            None,
+            1,
+        );
+        let second_hash = hash(second_account.encode().unwrap().as_ref(), 32);
+        let _ = state_db.insert(&second_hash, &second_account);
+        let second_location = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let second_node_ref = NodeRef::new(&second_location, &second_hash);
+        let third_account = DBState::new(
+            Some(Account {
+                balance: 300,
+                nonce: 3,
+            }),
+            None,
+            1,
+        );
+        let third_hash = hash(third_account.encode().unwrap().as_ref(), 32);
+        let _ = state_db.insert(&third_hash, &third_account);
+        let third_location = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let third_node_ref = NodeRef::new(&third_location, &third_hash);
+        let second_level_refs = vec![first_node_ref, second_node_ref];
+        let second_state_node = StateNode::new(second_level_refs);
+        let second_state_node_state = DBState::new(None, Some(second_state_node), 1);
+        let second_state_node_hash = hash(&second_state_node_state.encode().unwrap(), 32);
+        let _ = state_db.insert(&second_state_node_hash, &second_state_node_state);
+        let first_level_node = NodeRef::new(&vec![0, 0, 0, 0, 0], &second_state_node_hash);
+        let root_node_refs = vec![first_level_node, third_node_ref];
+        let root_state_node = StateNode::new(root_node_refs);
+        let root_db_state = DBState::new(None, Some(root_state_node), 1);
+        let root_hash = hash(&root_db_state.encode().unwrap(), 32);
+        let _ = state_db.insert(&root_hash, &root_db_state);
+        let _ = state_db.batch_write();
+        let tree = LegacyTrie::new(state_db);
+        let addresses = vec![
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ];
         let returned_accounts = tree.get_multiple(&root_hash, addresses);

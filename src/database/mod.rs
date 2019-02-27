@@ -27,7 +27,7 @@ pub trait IDB {
     fn _get(&self, key: &[u8]) -> DBResult<Vec<u8>>;
     fn set(&mut self, key: &[u8], value: &Vec<u8>) -> DBResult<()>;
     fn delete(&mut self, key: &[u8]) -> DBResult<()>;
-    fn write(&mut self, batch: WriteBatch) -> DBResult<()>;
+    fn write_batch(&mut self, key_pairs: Vec<(Vec<u8>, Vec<u8>)>) -> DBResult<()>;
 }
 
 impl IDB for RocksDB {
@@ -85,8 +85,20 @@ impl IDB for RocksDB {
         Ok(())
     }
 
-    fn write(&mut self, batch: WriteBatch) -> DBResult<()> {
-        self.write(batch)
+    fn write_batch(&mut self, key_pairs: Vec<(Vec<u8>, Vec<u8>)>) -> DBResult<()> {
+        let mut batch = WriteBatch::default();
+        for (k, v) in key_pairs {
+            match batch.put(&k, &v) {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(Box::new(DBError::new(DBErrorType::RocksDBError(e))));
+                }
+            }
+        }
+        match self.write(batch) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(Box::new(DBError::new(DBErrorType::RocksDBError(e)))),
+        }
     }
 }
 
@@ -202,7 +214,10 @@ pub mod mock {
         fn delete(&mut self, key: &[u8]) -> DBResult<()> {
             Ok(())
         }
-        fn write(&mut self, batch: WriteBatch) -> DBResult<()> {
+        fn write_batch(&mut self, key_pairs: Vec<(Vec<u8>, Vec<u8>)>) -> DBResult<()> {
+            for (k, v) in key_pairs {
+                self.db.insert(k.to_vec(), v.to_vec());
+            }
             Ok(())
         }
     }

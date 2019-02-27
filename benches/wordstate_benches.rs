@@ -11,6 +11,7 @@ use hycon_rust::database::mock::RocksDBMock;
 use hycon_rust::database::state_db::StateDB;
 use hycon_rust::traits::Encode;
 use hycon_rust::util::hash::hash;
+use starling::traits::Database;
 use std::path::PathBuf;
 
 fn get_from_trie_best_case(c: &mut Criterion) {
@@ -27,7 +28,7 @@ fn get_from_trie_best_case(c: &mut Criterion) {
             1,
         );
         let hash = hash(db_state.encode().unwrap().as_ref(), 32);
-        let _ = state_db.set(&hash, &db_state);
+        let _ = state_db.insert(&hash, &db_state);
         let location = vec![
             i as u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
@@ -37,12 +38,9 @@ fn get_from_trie_best_case(c: &mut Criterion) {
     let state_node = StateNode::new(accounts);
     let state_hash = hash(state_node.encode().unwrap().as_ref(), 32);
     let db_state = DBState::new(None, Some(state_node), 1);
-    state_db.set(&state_hash, &db_state);
+    let _ = state_db.insert(&state_hash, &db_state);
+    let _ = state_db.batch_write();
     let legacy_trie = LegacyTrie::new(state_db);
-    let returned_accounts = legacy_trie.get_multiple(
-        &state_hash,
-        vec![[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
-    );
     c.bench_function("Get from Trie: Best Case", move |b| {
         b.iter(|| {
             legacy_trie.get_multiple(

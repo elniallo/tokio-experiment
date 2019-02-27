@@ -41,6 +41,10 @@ criterion = "^0.2"
 double = "0.2.3"
 
 [[bench]]
+name = "common_benches"
+harness = false
+
+[[bench]]
 name = "proto_benches"
 harness = false
 
