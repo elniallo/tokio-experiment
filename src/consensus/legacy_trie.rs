@@ -132,7 +132,6 @@ pub mod tests {
     use crate::traits::Encode;
     use crate::util::hash::hash;
     use std::path::PathBuf;
-    fn prepare_mock_tree(db: StateDB, keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) {}
     #[test]
     fn it_gets_items_from_a_tree_of_depth_1() {
         let path = PathBuf::new();
@@ -184,6 +183,76 @@ pub mod tests {
                     println!("Node not found");
                     unimplemented!()
                 }
+            }
+            Err(e) => {
+                println!("Error: {:?}", e);
+                unimplemented!()
+            }
+        }
+    }
+
+    #[test]
+    fn it_gets_an_item_from_a_depth_greater_than_one() {
+        let path = PathBuf::new();
+        let mut state_db: StateDB<RocksDBMock> = StateDB::new(path, None).unwrap();
+        let mut accounts: Vec<NodeRef> = Vec::with_capacity(256);
+        let first_account = DBState::new(
+            Some(Account {
+                balance: 100,
+                nonce: 1,
+            }),
+            None,
+            1,
+        );
+        let first_hash = hash(first_account.encode().unwrap().as_ref(), 32);
+        let _ = state_db.set(&first_hash, &first_account);
+        let first_location = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let first_node_ref = NodeRef::new(&first_location, &first_hash);
+        let second_account = DBState::new(
+            Some(Account {
+                balance: 200,
+                nonce: 1,
+            }),
+            None,
+            1,
+        );
+        let second_hash = hash(second_account.encode().unwrap().as_ref(), 32);
+        let _ = state_db.set(&second_hash, &second_account);
+        let second_location = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let second_node_ref = NodeRef::new(&second_location, &second_hash);
+        let third_account = DBState::new(
+            Some(Account {
+                balance: 300,
+                nonce: 2,
+            }),
+            None,
+            1,
+        );
+        let third_hash = hash(third_account.encode().unwrap().as_ref(), 32);
+        let _ = state_db.set(&third_hash, &third_account);
+        let third_location = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let third_node_ref = NodeRef::new(&third_location, &third_hash);
+        let second_level_refs = vec![first_node_ref, second_node_ref];
+        let second_state_node = StateNode::new(second_level_refs);
+        let second_state_node_state = DBState::new(None, Some(second_state_node), 1);
+        let second_state_node_hash = hash(&second_state_node_state.encode().unwrap(), 32);
+        let _ = state_db.set(&second_state_node_hash, &second_state_node_state);
+        let first_level_node = NodeRef::new(&vec![0], &second_state_node_hash);
+        let root_node_refs = vec![first_level_node, third_node_ref];
+        let root_state_node = StateNode::new(root_node_refs);
+        let root_db_state = DBState::new(None, Some(root_state_node), 1);
+        let root_hash = hash(&root_db_state.encode().unwrap(), 32);
+        let _ = state_db.set(&root_hash, &root_db_state);
+        let tree = LegacyTrie::new(state_db);
+        let addresses = vec![
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        ];
+        let returned_accounts = tree.get_multiple(&root_hash, addresses);
+        match returned_accounts {
+            Ok(vec) => {
+                assert_eq!(vec.len(), 3);
             }
             Err(e) => {
                 println!("Error: {:?}", e);
