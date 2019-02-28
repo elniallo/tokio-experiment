@@ -60,9 +60,16 @@ where
         values: &[&ProtoAccount],
     ) -> Result<Vec<u8>, Box<Error>> {
         // encode accounts and insert to db
+        if keys.len() != values.len() {
+            return Err(Box::new(Exception::new(
+                "Keys and values have different lengths",
+            )));
+        }
         if let Some(root_hash) = root {
             let root_node = self.db.get_node(root_hash.as_ref())?;
             let mut tree_nodes: HashMap<Vec<u8>, TreeNode> = HashMap::new();
+            let mut offset = 0;
+            for (key, value) in keys.iter().zip(values.iter()) {}
         } else {
             // empty tree case
         }
