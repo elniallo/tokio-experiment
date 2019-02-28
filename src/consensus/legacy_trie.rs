@@ -55,10 +55,11 @@ where
         values: &[&ProtoAccount],
     ) -> Result<Vec<u8>, Box<Error>> {
         // encode accounts and insert to db
-        if let None = root {
+        if let Some(root_hash) = root {
+            let root_node = self.db.get_node(root_hash.as_ref())?;
+        } else {
             // empty tree case
         }
-        // get nodes to be changed
         Ok(Vec::new())
     }
 
