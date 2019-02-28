@@ -24,6 +24,10 @@ impl TreeNode {
             tx,
         }
     }
+
+    fn add_future(&mut self, tree_node: TreeNode) {
+        self.futures.push(tree_node);
+    }
 }
 
 impl Future for TreeNode {
