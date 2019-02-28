@@ -2,11 +2,13 @@ use crate::account::account::Account;
 use crate::account::db_state::DBState;
 use crate::account::state_node::StateNode;
 use crate::common::address::Address;
+use crate::consensus::tree_node::TreeNode;
 use crate::consensus::worldstate::Blake2bHashResult;
 use crate::database::state_db::StateDB;
 use crate::database::IDB;
 use crate::serialization::state::Account as ProtoAccount;
 use crate::traits::{Exception, Proto};
+use std::sync::mpsc::{channel, Receiver, Sender};
 
 use starling::traits::Database;
 use std::collections::hash_map::Entry;
@@ -15,6 +17,8 @@ use std::error::Error;
 
 pub struct LegacyTrie<DBType> {
     db: StateDB<DBType, (Vec<u8>, DBState)>,
+    tx: Sender<(Vec<u8>, DBState)>,
+    rx: Receiver<(Vec<u8>, DBState)>,
 }
 
 impl<DBType> LegacyTrie<DBType>
@@ -22,7 +26,8 @@ where
     DBType: IDB,
 {
     pub fn new(db: StateDB<DBType, (Vec<u8>, DBState)>) -> Self {
-        Self { db }
+        let (tx, rx) = channel::<(Vec<u8>, DBState)>();
+        Self { db, tx, rx }
     }
     pub fn get_account(&self, address: Address, root_node: &DBState) -> Option<ProtoAccount> {
         None
@@ -57,6 +62,7 @@ where
         // encode accounts and insert to db
         if let Some(root_hash) = root {
             let root_node = self.db.get_node(root_hash.as_ref())?;
+            let mut tree_nodes: HashMap<Vec<u8>, TreeNode> = HashMap::new();
         } else {
             // empty tree case
         }
