@@ -1,4 +1,3 @@
-use crate::account::account::Account;
 use crate::account::db_state::DBState;
 use crate::account::state_node::StateNode;
 use crate::common::address::Address;
@@ -11,7 +10,6 @@ use crate::traits::{Exception, Proto};
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use starling::traits::Database;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::error::Error;
 
@@ -69,7 +67,9 @@ where
             let root_node = self.db.get_node(root_hash.as_ref())?;
             let mut tree_nodes: HashMap<Vec<u8>, TreeNode> = HashMap::new();
             let mut offset = 0;
-            for (key, value) in keys.iter().zip(values.iter()) {}
+            for (key, value) in keys.iter().zip(values.iter()) {
+                let mut current_node = root_node;
+            }
         } else {
             // empty tree case
         }
@@ -146,6 +146,7 @@ where
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::account::account::Account;
     use crate::account::node_ref::NodeRef;
     use crate::database::mock::RocksDBMock;
     use crate::traits::Encode;
@@ -176,8 +177,8 @@ pub mod tests {
         let state_node = StateNode::new(accounts);
         let state_hash = hash(state_node.encode().unwrap().as_ref(), 32);
         let db_state = DBState::new(None, Some(state_node), 1);
-        state_db.insert(&state_hash, &db_state);
-        state_db.batch_write();
+        let _ = state_db.insert(&state_hash, &db_state);
+        let _ = state_db.batch_write();
         let legacy_trie = LegacyTrie::new(state_db);
         let returned_accounts = legacy_trie.get_multiple(
             &state_hash,
@@ -215,7 +216,6 @@ pub mod tests {
     fn it_gets_an_item_from_a_depth_greater_than_one() {
         let path = PathBuf::new();
         let mut state_db: StateDB<RocksDBMock> = StateDB::new(path, None).unwrap();
-        let mut accounts: Vec<NodeRef> = Vec::with_capacity(256);
         let first_account = DBState::new(
             Some(Account {
                 balance: 100,
@@ -295,7 +295,6 @@ pub mod tests {
     fn it_gets_from_a_tree_with_compressed_branches() {
         let path = PathBuf::new();
         let mut state_db: StateDB<RocksDBMock> = StateDB::new(path, None).unwrap();
-        let mut accounts: Vec<NodeRef> = Vec::with_capacity(256);
         let first_account = DBState::new(
             Some(Account {
                 balance: 100,

@@ -18,7 +18,7 @@ type Rx = mpsc::UnboundedReceiver<NotificationType<DBPeer>>;
 type IntervalStream = tokio::timer::Interval;
 fn get_current_time() -> usize {
     let start = SystemTime::now();
-    start.duration_since(UNIX_EPOCH).unwrap().as_secs() as usize
+    start.duration_since(UNIX_EPOCH).unwrap().as_millis() as usize
 }
 enum PeerConnectionType {
     Inbound,
