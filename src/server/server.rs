@@ -6,8 +6,7 @@ use slog::{Drain, Logger};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
-use std::time::{self, Duration};
-use tokio::io;
+use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 use tokio::timer::Interval;
@@ -51,7 +50,7 @@ impl PeerDBFuture {
 
 impl Future for PeerDBFuture {
     type Item = ();
-    type Error = io::Error;
+    type Error = Box<std::error::Error>;
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         while let Async::Ready(data) = self.db.poll()? {
             if let Some(addr) = data {
@@ -100,7 +99,7 @@ impl Future for PeerDBFuture {
                     match parsed {
                         Ok(message) => {
                             for tx in self.srv.lock().unwrap().get_peers_mut().values() {
-                                tx.unbounded_send(Bytes::from(message.clone()));
+                                tx.unbounded_send(Bytes::from(message.clone()))?;
                             }
                         }
                         Err(e) => {

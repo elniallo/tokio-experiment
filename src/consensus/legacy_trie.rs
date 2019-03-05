@@ -69,11 +69,12 @@ where
             let mut offset = 0;
             for (key, value) in keys.iter().zip(values.iter()) {
                 let mut current_node = &root_node;
-                let mut node_vec: Vec<TreeNode> = Vec::new();
+                let mut node_vec: Vec<&mut TreeNode> = Vec::new();
                 while offset < 20 {
                     // check if we already have a modified node at the current location
-                    if let Some(tree_node) = tree_nodes.get(&key[0..offset + 1]) {
-                        // find next node
+                    if let Some(tree_node) = tree_nodes.get_mut(&key[0..offset + 1]) {
+                        // node_vec.push(tree_node);
+                    // find next node
                     } else {
                         // check db for a node at the current location
                     }

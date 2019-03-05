@@ -59,3 +59,34 @@ impl Future for TreeNode {
         Ok(Async::NotReady)
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use crate::account::db_state::DBState;
+    use std::sync::mpsc::channel;
+    #[test]
+    fn it_awaits_on_an_inner_future() {
+        let (tx, rx) = channel::<(Vec<u8>, DBState)>();
+        let node_ref_location = vec![0];
+        let node_ref_child = vec![2];
+        let node_ref = NodeRef::new(&node_ref_location, &node_ref_child);
+        let state_node = StateNode::new(vec![node_ref]);
+        let mut root_tree_node = TreeNode::new(state_node.clone(), vec![0], tx.clone());
+        let second_tree_node = TreeNode::new(state_node.clone(), vec![1], tx.clone());
+        root_tree_node.add_future(second_tree_node);
+        let result = root_tree_node.wait();
+        match result {
+            Ok(_node) => {
+                let mut results = Vec::new();
+                results.push(rx.recv().unwrap());
+                results.push(rx.recv().unwrap());
+                assert_eq!(results.len(), 2);
+            }
+            Err(e) => {
+                println!("Error: {:?}", e);
+                unimplemented!()
+            }
+        }
+    }
+}
