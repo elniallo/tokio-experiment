@@ -274,7 +274,7 @@ impl WorldState {
         root: &Blake2bHashResult,
         keys: Vec<Address>,
     ) -> Result<Vec<Option<ProtoAccount>>, Box<Error>> {
-        Ok(self.tree.get_multiple(root.as_ref(), keys)?)
+        Ok(self.tree.get(root.as_ref(), keys)?)
     }
 
     pub fn insert(

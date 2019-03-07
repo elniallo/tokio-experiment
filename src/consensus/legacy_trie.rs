@@ -1,4 +1,5 @@
 use crate::account::db_state::DBState;
+use crate::account::node_ref::NodeRef;
 use crate::account::state_node::StateNode;
 use crate::common::address::Address;
 use crate::consensus::tree_node::TreeNode;
@@ -7,10 +8,12 @@ use crate::database::state_db::StateDB;
 use crate::database::IDB;
 use crate::serialization::state::Account as ProtoAccount;
 use crate::traits::{Exception, Proto};
+use crate::util::hash::hash;
+use protobuf::Message;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use starling::traits::Database;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 
 pub struct LegacyTrie<DBType> {
@@ -30,7 +33,7 @@ where
     pub fn get_account(&self, address: Address, root_node: &DBState) -> Option<ProtoAccount> {
         None
     }
-    pub fn get_multiple(
+    pub fn get(
         &self,
         root: &[u8],
         modified_accounts: Vec<Address>,
@@ -40,8 +43,9 @@ where
         let mut node_map: HashMap<Vec<u8>, StateNode> = HashMap::new();
         match root_node {
             Some(node) => {
-                for address in modified_accounts {
-                    accounts.push(self.traverse_nodes(&node, address, &mut node_map)?);
+                let account_split = self.split_keys(&modified_accounts)?;
+                for (index, address) in account_split {
+                    accounts.push(self.traverse_nodes(&node, address, &mut node_map, index)?);
                 }
             }
             None => {
@@ -49,6 +53,26 @@ where
             }
         }
         Ok(accounts)
+    }
+
+    fn split_keys(&self, keys: &Vec<Address>) -> Result<Vec<(usize, Address)>, Box<Error>> {
+        if keys.is_empty() {
+            return Err(Box::new(Exception::new("No keys provided")));
+        }
+        let mut splits: Vec<(usize, Address)> = Vec::with_capacity(keys.len());
+        for i in 0..keys.len() {
+            if i == 0 {
+                splits.push((0, keys[i].clone()))
+            } else {
+                for j in 0..19 {
+                    if keys[i - 1][j] != keys[i][j] {
+                        splits.push((j, keys[i].clone()));
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(splits)
     }
 
     pub fn insert(
@@ -64,21 +88,75 @@ where
             )));
         }
         if let Some(root_hash) = root {
-            let root_node = self.db.get_node(root_hash.as_ref())?;
-            let mut tree_nodes: HashMap<Vec<u8>, TreeNode> = HashMap::new();
-            let mut offset = 0;
-            for (key, value) in keys.iter().zip(values.iter()) {
-                let mut current_node = &root_node;
-                let mut node_vec: Vec<&mut TreeNode> = Vec::new();
-                while offset < 20 {
-                    // check if we already have a modified node at the current location
-                    if let Some(tree_node) = tree_nodes.get_mut(&key[0..offset + 1]) {
-                        // node_vec.push(tree_node);
-                    // find next node
-                    } else {
-                        // check db for a node at the current location
+            if let Some(root_node) = self.db.get_node(root_hash.as_ref())? {
+                if let Some(state_node) = root_node.node {
+                    let tree_root = TreeNode::new(state_node, Vec::new(), self.tx.clone());
+                    let mut tree_nodes: BTreeMap<Vec<u8>, TreeNode> = BTreeMap::new();
+                    let mut offset = 0;
+                    for (key, value) in keys.iter().zip(values.iter()) {
+                        let mut current_node = &tree_root.get_node().clone();
+                        let mut node_vec: Vec<&[u8]> = Vec::new();
+                        let mut split = 0;
+                        while offset < 20 {
+                            // check if we already have a modified node at the current location
+                            if let Some(tree_node) = tree_nodes.get(&key[0..offset + 1]) {
+                                current_node = &tree_node.get_node().clone();
+                                offset = offset + 1;
+                                if let Some(node_ref) =
+                                    tree_node.get_next_node_location(key[offset])
+                                {
+                                    let length = node_ref.node_location.len();
+                                    for i in offset..offset + length {
+                                        if key[i] != node_ref.node_location[i - offset] {
+                                            let node_ref_value = NodeRef::new(
+                                                &key[i..key.len()].to_vec(),
+                                                &hash(&value.write_to_bytes()?, 32),
+                                            );
+                                            let mut existing_ref = node_ref.clone();
+                                            existing_ref.node_location = existing_ref.node_location
+                                                [i - offset..existing_ref.node_location.len()]
+                                                .to_vec();
+                                            let state_node =
+                                                StateNode::new(vec![node_ref_value, existing_ref]);
+                                            let tree_node = TreeNode::new(
+                                                state_node,
+                                                key[offset..i].to_vec(),
+                                                self.tx.clone(),
+                                            );
+                                            tree_nodes.insert(key[0..i + 1].to_vec(), tree_node);
+                                            split = offset;
+                                            offset = 20;
+                                            break;
+                                        }
+                                    }
+                                    offset = offset + length;
+                                    split = offset;
+                                    continue;
+                                } else {
+                                    let node_ref_value = NodeRef::new(
+                                        &key[offset..key.len()].to_vec(),
+                                        &hash(&value.write_to_bytes()?, 32),
+                                    );
+                                    let state_node = StateNode::new(vec![node_ref_value]);
+                                    let tree_node = TreeNode::new(
+                                        state_node,
+                                        key[offset..key.len()].to_vec(),
+                                        self.tx.clone(),
+                                    );
+                                    tree_nodes.insert(key[0..offset + 1].to_vec(), tree_node);
+                                }
+                            // node_vec.push(tree_node);
+                            // find next node
+                            } else {
+                                // check db for a node at the current location
+                            }
+                        }
                     }
+                } else {
+
                 }
+            } else {
+
             }
         } else {
             // empty tree case
@@ -90,44 +168,44 @@ where
         Ok(())
     }
 
+    fn get_modified_nodes(
+        &self,
+        root: &TreeNode,
+        keys: Vec<&[u8]>,
+        values: &[&ProtoAccount],
+    ) -> BTreeMap<Vec<u8>, TreeNode> {
+        BTreeMap::new()
+    }
+
     fn traverse_nodes(
         &self,
         root: &DBState,
         address: Address,
         map: &mut HashMap<Vec<u8>, StateNode>,
+        split: usize,
     ) -> Result<Option<ProtoAccount>, Box<Error>> {
         let mut state: Option<DBState> = Some(root.clone());
-        let mut offset = 0;
+        let mut offset = split;
+        if offset > 0 {
+            if let Some(node) = map.get(&address[0..offset]) {
+                if let Some(node_ref) = node.node_refs.get(&address[offset]) {
+                    if let Some(next_node) = self.db.get_node(&node_ref.child)? {
+                        offset += node_ref.node_location.len();
+                        state = Some(next_node);
+                    } else {
+                        return Err(Box::new(Exception::new(
+                            "Unable to find node, corrupted tree",
+                        )));
+                    }
+                }
+            }
+        }
         while let Some(db_state) = &state {
             if let Some(account) = &db_state.account {
                 return Ok(Some(account.to_proto()?));
             //we have an account
             } else if let Some(node) = &db_state.node {
-                // we have a node
-                //insert node into seen map
-                // let entry = map.entry(address[0..offset + 1].to_vec());
-                // match entry {
-                //     Entry::Vacant(_entry) => {
-                //         map.insert(address[0..offset + 1].to_vec(), db_state.clone());
-                //     }
-                //     Entry::Occupied(entry) => {
-                //         // get from map
-                //         let next_state = entry.get().clone();
-                //         // update offset
-                //         if let Some(node) = &next_state.node {
-                //             if let Some(node_ref) = node.node_refs.get(&address[offset]) {
-                //                 offset += node_ref.node_location.len();
-                //                 state = Some(next_state);
-                //                 continue;
-                //             }
-                //         } else {
-                //             return Err(Box::new(Exception::new(
-                //                 "Unable to find node, corrupted tree",
-                //             )));
-                //         }
-                //     }
-                // }
-                // find next node based on index and assign to state variable
+                map.insert(address[0..offset].to_vec(), node.clone());
                 if let Some(node_ref) = node.node_refs.get(&address[offset]) {
                     if let Some(next_node) = self.db.get_node(&node_ref.child)? {
                         offset += node_ref.node_location.len();
@@ -158,6 +236,7 @@ pub mod tests {
     use super::*;
     use crate::account::account::Account;
     use crate::account::node_ref::NodeRef;
+    use crate::common::address::ValidAddress;
     use crate::database::mock::RocksDBMock;
     use crate::traits::Encode;
     use crate::util::hash::hash;
@@ -190,7 +269,7 @@ pub mod tests {
         let _ = state_db.insert(&state_hash, &db_state);
         let _ = state_db.batch_write();
         let legacy_trie = LegacyTrie::new(state_db);
-        let returned_accounts = legacy_trie.get_multiple(
+        let returned_accounts = legacy_trie.get(
             &state_hash,
             vec![
                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -280,7 +359,7 @@ pub mod tests {
             [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ];
-        let returned_accounts = tree.get_multiple(&root_hash, addresses);
+        let returned_accounts = tree.get(&root_hash, addresses);
         match returned_accounts {
             Ok(vec) => {
                 assert_eq!(vec.len(), 3);
@@ -359,10 +438,11 @@ pub mod tests {
             [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ];
-        let returned_accounts = tree.get_multiple(&root_hash, addresses);
+        let returned_accounts = tree.get(&root_hash, addresses);
         match returned_accounts {
             Ok(vec) => {
                 assert_eq!(vec.len(), 3);
+                println!("accounts: {:?}", vec);
                 // check integrity of returned accounts
                 for i in 0..vec.len() {
                     match &vec[i] {
@@ -379,6 +459,26 @@ pub mod tests {
                 unimplemented!()
             }
         }
+    }
+    #[test]
+    fn it_calculates_the_split_points_for_keys() {
+        let path = PathBuf::new();
+        let state_db: StateDB<RocksDBMock> = StateDB::new(path, None).unwrap();
+        let trie = LegacyTrie::new(state_db);
+        let address_bytes = vec![
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        ];
+        let mut addresses: Vec<Address> = Vec::new();
+        for address in address_bytes {
+            addresses.push(Address::from_bytes(&address));
+        }
+        let split_addresses = trie.split_keys(&addresses).unwrap();
+        assert_eq!(split_addresses.len(), 3);
+        assert_eq!(split_addresses[0].0, 0);
+        assert_eq!(split_addresses[1].0, 1);
+        assert_eq!(split_addresses[2].0, 0);
     }
     #[test]
     fn it_inserts_256_keys_with_different_first_bytes_into_empty_tree_and_retrieves_them() {

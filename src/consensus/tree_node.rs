@@ -8,6 +8,8 @@ use std::sync::mpsc::Sender;
 use futures::future::Future;
 use std::error::Error;
 use tokio::prelude::*;
+
+#[derive(Clone)]
 pub struct TreeNode {
     node: StateNode,
     location: Vec<u8>,
@@ -16,7 +18,7 @@ pub struct TreeNode {
 }
 
 impl TreeNode {
-    fn new(node: StateNode, location: Vec<u8>, tx: Sender<(Vec<u8>, DBState)>) -> Self {
+    pub fn new(node: StateNode, location: Vec<u8>, tx: Sender<(Vec<u8>, DBState)>) -> Self {
         Self {
             node,
             location,
@@ -27,6 +29,18 @@ impl TreeNode {
 
     fn add_future(&mut self, tree_node: TreeNode) {
         self.futures.push(tree_node);
+    }
+
+    pub fn get_next_node_location(&self, key: u8) -> Option<&NodeRef> {
+        if let Some(node_ref) = self.node.node_refs.get(&key) {
+            Some(&node_ref)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_node(&self) -> &StateNode {
+        &self.node
     }
 }
 

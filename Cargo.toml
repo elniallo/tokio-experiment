@@ -37,7 +37,7 @@ starling = "1.2.1"
 uuid = {version = "0.6.5", features= ["v4"]}
 
 [dev-dependencies]
-criterion = "^0.2"
+criterion = "^0.2.10"
 double = "0.2.3"
 
 [[bench]]

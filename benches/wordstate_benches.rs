@@ -43,7 +43,7 @@ fn get_from_trie_best_case(c: &mut Criterion) {
     let legacy_trie = LegacyTrie::new(state_db);
     c.bench_function("Get from Trie: Best Case", move |b| {
         b.iter(|| {
-            legacy_trie.get_multiple(
+            legacy_trie.get(
                 &state_hash,
                 vec![[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
             )
