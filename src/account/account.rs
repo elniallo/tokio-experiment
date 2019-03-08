@@ -11,8 +11,15 @@ pub struct Account {
 }
 
 impl Account {
-    pub fn new(balance: u64, nonce: u32) -> Account {
+    pub fn new(balance: u64, nonce: u32) -> Self {
         Account { balance, nonce }
+    }
+
+    pub fn from_proto(account: &ProtoAccount) -> Self {
+        Self {
+            balance: account.get_balance(),
+            nonce: account.get_nonce(),
+        }
     }
 }
 

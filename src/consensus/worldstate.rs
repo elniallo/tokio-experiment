@@ -279,7 +279,7 @@ impl WorldState {
 
     pub fn insert(
         &mut self,
-        previous_root: Option<&Blake2bHashResult>,
+        previous_root: Option<&[u8]>,
         keys: Vec<Address>,
         values: &[&ProtoAccount],
     ) -> Result<Vec<u8>, Box<Error>> {

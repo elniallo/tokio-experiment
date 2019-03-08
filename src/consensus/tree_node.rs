@@ -9,7 +9,7 @@ use futures::future::Future;
 use std::error::Error;
 use tokio::prelude::*;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TreeNode {
     node: StateNode,
     location: Vec<u8>,

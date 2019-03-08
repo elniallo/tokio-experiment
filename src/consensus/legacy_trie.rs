@@ -1,3 +1,4 @@
+use crate::account::account::Account;
 use crate::account::db_state::DBState;
 use crate::account::node_ref::NodeRef;
 use crate::account::state_node::StateNode;
@@ -7,7 +8,7 @@ use crate::consensus::worldstate::Blake2bHashResult;
 use crate::database::state_db::StateDB;
 use crate::database::IDB;
 use crate::serialization::state::Account as ProtoAccount;
-use crate::traits::{Exception, Proto};
+use crate::traits::{Encode, Exception, Proto};
 use crate::util::hash::hash;
 use protobuf::Message;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -77,7 +78,7 @@ where
 
     pub fn insert(
         &mut self,
-        root: Option<&Blake2bHashResult>,
+        root: Option<&[u8]>,
         keys: Vec<Address>,
         values: &[&ProtoAccount],
     ) -> Result<Vec<u8>, Box<Error>> {
@@ -87,80 +88,74 @@ where
                 "Keys and values have different lengths",
             )));
         }
-        if let Some(root_hash) = root {
-            if let Some(root_node) = self.db.get_node(root_hash.as_ref())? {
-                if let Some(state_node) = root_node.node {
-                    let tree_root = TreeNode::new(state_node, Vec::new(), self.tx.clone());
-                    let mut tree_nodes: BTreeMap<Vec<u8>, TreeNode> = BTreeMap::new();
-                    let mut offset = 0;
-                    for (key, value) in keys.iter().zip(values.iter()) {
-                        let mut current_node = &tree_root.get_node().clone();
-                        let mut node_vec: Vec<&[u8]> = Vec::new();
-                        let mut split = 0;
-                        while offset < 20 {
-                            // check if we already have a modified node at the current location
-                            if let Some(tree_node) = tree_nodes.get(&key[0..offset + 1]) {
-                                current_node = &tree_node.get_node().clone();
-                                offset = offset + 1;
-                                if let Some(node_ref) =
-                                    tree_node.get_next_node_location(key[offset])
-                                {
-                                    let length = node_ref.node_location.len();
-                                    for i in offset..offset + length {
-                                        if key[i] != node_ref.node_location[i - offset] {
-                                            let node_ref_value = NodeRef::new(
-                                                &key[i..key.len()].to_vec(),
-                                                &hash(&value.write_to_bytes()?, 32),
-                                            );
-                                            let mut existing_ref = node_ref.clone();
-                                            existing_ref.node_location = existing_ref.node_location
-                                                [i - offset..existing_ref.node_location.len()]
-                                                .to_vec();
-                                            let state_node =
-                                                StateNode::new(vec![node_ref_value, existing_ref]);
-                                            let tree_node = TreeNode::new(
-                                                state_node,
-                                                key[offset..i].to_vec(),
-                                                self.tx.clone(),
-                                            );
-                                            tree_nodes.insert(key[0..i + 1].to_vec(), tree_node);
-                                            split = offset;
-                                            offset = 20;
-                                            break;
-                                        }
-                                    }
-                                    offset = offset + length;
-                                    split = offset;
-                                    continue;
-                                } else {
-                                    let node_ref_value = NodeRef::new(
-                                        &key[offset..key.len()].to_vec(),
-                                        &hash(&value.write_to_bytes()?, 32),
-                                    );
-                                    let state_node = StateNode::new(vec![node_ref_value]);
-                                    let tree_node = TreeNode::new(
-                                        state_node,
-                                        key[offset..key.len()].to_vec(),
-                                        self.tx.clone(),
-                                    );
-                                    tree_nodes.insert(key[0..offset + 1].to_vec(), tree_node);
-                                }
-                            // node_vec.push(tree_node);
-                            // find next node
-                            } else {
-                                // check db for a node at the current location
-                            }
-                        }
+        let split_addresses = self.split_keys(&keys)?;
+        let mut node_map: BTreeMap<Vec<u8>, TreeNode> = BTreeMap::new();
+        // set root - empty or existing state and create base future
+        let mut root_node: TreeNode;
+        match root {
+            Some(root_hash) => {
+                if let Some(db_state) = self.db.get_node(root_hash)? {
+                    if let Some(state_node) = db_state.node {
+                        root_node = TreeNode::new(state_node, Vec::new(), self.tx.clone());
+                    } else {
+                        return Err(Box::new(Exception::new("DB State is not a state node")));
                     }
                 } else {
-
+                    return Err(Box::new(Exception::new("DB State not found")));
+                }
+            }
+            None => {
+                let state_node = StateNode::new(Vec::new());
+                root_node = TreeNode::new(state_node, Vec::new(), self.tx.clone());
+            }
+        }
+        // iterate inserts
+        for ((split, key), account) in split_addresses.iter().zip(values.iter()) {
+            let mut offset = *split;
+            let mut current_node: TreeNode;
+            if offset > 0 {
+                if let Some(node) = node_map.get(&key[0..offset]) {
+                    current_node = node.clone();
+                } else {
+                    current_node = root_node.clone();
                 }
             } else {
-
+                current_node = root_node.clone();
             }
-        } else {
-            // empty tree case
+            // set up to traverse states
+            let mut db_state: Option<DBState> = None;
+            if let Some(next_node) = current_node.get_next_node_location(key[offset]) {
+                let mut early_out = false;
+                for i in 0..next_node.node_location.len() {
+                    if &next_node.node_location[i] != &key[offset + i] {
+                        // early out if key matches entirely
+                        early_out = true;
+                        let new_account = Account::from_proto(account);
+                        let node_ref = NodeRef {
+                            node_location: key[i..key.len()].to_vec(),
+                            child: hash(&new_account.encode().unwrap(), 32),
+                        };
+                        let state_node = StateNode::new(vec![node_ref, next_node.clone()]);
+                        let tree_node = TreeNode::new(
+                            state_node,
+                            key[offset + i..key.len()].to_vec(),
+                            self.tx.clone(),
+                        );
+                        node_map.insert(key[0..offset + i].to_vec(), tree_node);
+                        break;
+                    }
+                }
+                if early_out {
+                    continue;
+                } else {
+                    db_state = self.db.get_node(&next_node.child)?;
+                }
+            }
+            //early out if we reach a dead end
         }
+
+        //  - store path in node map
+        //  - get next node or insert
         Ok(Vec::new())
     }
 
@@ -184,7 +179,7 @@ where
         map: &mut HashMap<Vec<u8>, StateNode>,
         split: usize,
     ) -> Result<Option<ProtoAccount>, Box<Error>> {
-        let mut state: Option<DBState> = Some(root.clone());
+        let mut state: Option<DBState> = None;
         let mut offset = split;
         if offset > 0 {
             if let Some(node) = map.get(&address[0..offset]) {
@@ -199,6 +194,8 @@ where
                     }
                 }
             }
+        } else {
+            state = Some(root.clone());
         }
         while let Some(db_state) = &state {
             if let Some(account) = &db_state.account {
@@ -486,7 +483,73 @@ pub mod tests {
     }
     #[test]
     fn it_inserts_and_retrieves_a_key_from_an_existing_tree() {
-        unimplemented!();
+        let path = PathBuf::new();
+        let mut state_db: StateDB<RocksDBMock> = StateDB::new(path, None).unwrap();
+        let first_account = DBState::new(
+            Some(Account {
+                balance: 100,
+                nonce: 1,
+            }),
+            None,
+            1,
+        );
+        let first_hash = hash(first_account.encode().unwrap().as_ref(), 32);
+        let _ = state_db.insert(&first_hash, &first_account);
+        let first_location = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let first_node_ref = NodeRef::new(&first_location, &first_hash);
+        let second_account = DBState::new(
+            Some(Account {
+                balance: 200,
+                nonce: 2,
+            }),
+            None,
+            1,
+        );
+        let second_hash = hash(second_account.encode().unwrap().as_ref(), 32);
+        let _ = state_db.insert(&second_hash, &second_account);
+        let second_location = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let second_node_ref = NodeRef::new(&second_location, &second_hash);
+        let third_account = DBState::new(
+            Some(Account {
+                balance: 300,
+                nonce: 3,
+            }),
+            None,
+            1,
+        );
+        let third_hash = hash(third_account.encode().unwrap().as_ref(), 32);
+        let _ = state_db.insert(&third_hash, &third_account);
+        let third_location = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let third_node_ref = NodeRef::new(&third_location, &third_hash);
+        let second_level_refs = vec![first_node_ref, second_node_ref];
+        let second_state_node = StateNode::new(second_level_refs);
+        let second_state_node_state = DBState::new(None, Some(second_state_node), 1);
+        let second_state_node_hash = hash(&second_state_node_state.encode().unwrap(), 32);
+        let _ = state_db.insert(&second_state_node_hash, &second_state_node_state);
+        let first_level_node = NodeRef::new(&vec![0], &second_state_node_hash);
+        let root_node_refs = vec![first_level_node, third_node_ref];
+        let root_state_node = StateNode::new(root_node_refs);
+        let root_db_state = DBState::new(None, Some(root_state_node), 1);
+        let root_hash = hash(&root_db_state.encode().unwrap(), 32);
+        let _ = state_db.insert(&root_hash, &root_db_state);
+        let _ = state_db.batch_write();
+        let mut tree = LegacyTrie::new(state_db);
+        let account = Account {
+            balance: 200,
+            nonce: 2,
+        };
+        let account_proto = account.to_proto().unwrap();
+        let address_bytes = vec![
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        ];
+        let mut addresses: Vec<Address> = Vec::new();
+        for address in address_bytes {
+            addresses.push(Address::from_bytes(&address));
+        }
+        let accounts = vec![&account_proto, &account_proto, &account_proto];
+        tree.insert(Some(&root_hash), addresses, &accounts.as_ref());
     }
     #[test]
     fn it_inserts_and_retrieves_two_keys_with_similar_paths() {
