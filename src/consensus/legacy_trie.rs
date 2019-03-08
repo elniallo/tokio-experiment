@@ -150,8 +150,48 @@ where
                 } else {
                     db_state = self.db.get_node(&next_node.child)?;
                 }
+            } else {
+                // Early out if branch is empty
+                let new_account = Account::from_proto(account);
+                let node_ref = NodeRef {
+                    node_location: key[offset..key.len()].to_vec(),
+                    child: hash(&new_account.encode().unwrap(), 32),
+                };
+                let state_node = StateNode::new(vec![node_ref]);
+                let tree_node =
+                    TreeNode::new(state_node, key[offset..key.len()].to_vec(), self.tx.clone());
+                node_map.insert(key[0..offset].to_vec(), tree_node);
+                continue;
             }
-            //early out if we reach a dead end
+
+            while let Some(state) = &db_state {
+                if let Some(account) = &state.account {
+                    return Ok(Some(account.to_proto()?));
+                //we have an account
+                } else if let Some(node) = &db_state.node {
+                    map.insert(address[0..offset].to_vec(), node.clone());
+                    if let Some(node_ref) = node.node_refs.get(&address[offset]) {
+                        if let Some(next_node) = self.db.get_node(&node_ref.child)? {
+                            offset += node_ref.node_location.len();
+                            state = Some(next_node);
+                            continue;
+                        } else {
+                            return Err(Box::new(Exception::new(
+                                "Unable to find node, corrupted tree",
+                            )));
+                        }
+                    } else {
+                        return Err(Box::new(Exception::new(
+                            "Unable to find node, corrupted tree",
+                        )));
+                    }
+                } else {
+                    return Err(Box::new(Exception::new(
+                        "Unable to find node, corrupted tree",
+                    )));
+                    // we got nothing
+                }
+            }
         }
 
         //  - store path in node map
