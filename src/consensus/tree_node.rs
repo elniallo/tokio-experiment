@@ -27,8 +27,8 @@ impl TreeNode {
         }
     }
 
-    fn add_future(&mut self, tree_node: TreeNode) {
-        self.futures.push(tree_node);
+    pub fn add_future(&mut self, tree_node: &TreeNode) {
+        self.futures.push(tree_node.clone());
     }
 
     pub fn get_next_node_location(&self, key: u8) -> Option<&NodeRef> {
@@ -88,7 +88,7 @@ pub mod tests {
         let state_node = StateNode::new(vec![node_ref]);
         let mut root_tree_node = TreeNode::new(state_node.clone(), vec![0], tx.clone());
         let second_tree_node = TreeNode::new(state_node.clone(), vec![1], tx.clone());
-        root_tree_node.add_future(second_tree_node);
+        root_tree_node.add_future(&second_tree_node);
         let result = root_tree_node.wait();
         match result {
             Ok(_node) => {

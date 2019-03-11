@@ -10,15 +10,18 @@ use crate::database::IDB;
 use crate::serialization::state::Account as ProtoAccount;
 use crate::traits::{Encode, Exception, Proto};
 use crate::util::hash::hash;
+use futures::Future;
 use protobuf::Message;
-use std::sync::mpsc::{channel, Receiver, Sender};
-
 use starling::traits::Database;
 use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
+use std::iter::FromIterator;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 
 pub struct LegacyTrie<DBType> {
     db: StateDB<DBType, (Vec<u8>, DBState)>,
+    write_queue: Arc<Mutex<Vec<(Vec<u8>, DBState)>>>,
     tx: Sender<(Vec<u8>, DBState)>,
     rx: Receiver<(Vec<u8>, DBState)>,
 }
@@ -29,7 +32,13 @@ where
 {
     pub fn new(db: StateDB<DBType, (Vec<u8>, DBState)>) -> Self {
         let (tx, rx) = channel::<(Vec<u8>, DBState)>();
-        Self { db, tx, rx }
+        let write_queue = Arc::new(Mutex::new(Vec::new()));
+        Self {
+            db,
+            write_queue,
+            tx,
+            rx,
+        }
     }
     pub fn get_account(&self, address: Address, root_node: &DBState) -> Option<ProtoAccount> {
         None
@@ -126,7 +135,7 @@ where
             let mut db_state: Option<DBState> = None;
             if let Some(next_node) = current_node.get_next_node_location(key[offset]) {
                 let mut early_out = false;
-                for i in 0..next_node.node_location.len() {
+                for i in 0..next_node.node_location.len() - 1 {
                     if &next_node.node_location[i] != &key[offset + i] {
                         // early out if key matches entirely
                         early_out = true;
@@ -160,30 +169,64 @@ where
                 let state_node = StateNode::new(vec![node_ref]);
                 let tree_node =
                     TreeNode::new(state_node, key[offset..key.len()].to_vec(), self.tx.clone());
-                node_map.insert(key[0..offset].to_vec(), tree_node);
+                node_map.insert(key[0..offset + 1].to_vec(), tree_node);
                 continue;
             }
 
             while let Some(state) = &db_state {
-                if let Some(account) = &state.account {
-                    return Ok(Some(account.to_proto()?));
+                if let Some(prev_account) = &state.account {
+                    let new_account = Account::from_proto(account);
+                    let node_ref = NodeRef {
+                        node_location: key[offset..key.len()].to_vec(),
+                        child: hash(&new_account.encode().unwrap(), 32),
+                    };
+                    let state_node = StateNode::new(vec![node_ref]);
+                    let tree_node =
+                        TreeNode::new(state_node, key[offset..key.len()].to_vec(), self.tx.clone());
+                    node_map.insert(key[0..offset + 1].to_vec(), tree_node);
+                    db_state = None;
+                    break;
                 //we have an account
-                } else if let Some(node) = &db_state.node {
-                    map.insert(address[0..offset].to_vec(), node.clone());
-                    if let Some(node_ref) = node.node_refs.get(&address[offset]) {
+                } else if let Some(node) = &state.node {
+                    let tree_node =
+                        TreeNode::new(node.clone(), key[0..offset].to_vec(), self.tx.clone());
+                    node_map.insert(key[0..offset + 1].to_vec(), tree_node);
+                    if let Some(node_ref) = node.node_refs.get(&key[offset]) {
                         if let Some(next_node) = self.db.get_node(&node_ref.child)? {
                             offset += node_ref.node_location.len();
-                            state = Some(next_node);
+                            db_state = Some(next_node);
                             continue;
                         } else {
-                            return Err(Box::new(Exception::new(
-                                "Unable to find node, corrupted tree",
-                            )));
+                            let new_account = Account::from_proto(account);
+                            let node_ref = NodeRef {
+                                node_location: key[offset..key.len()].to_vec(),
+                                child: hash(&new_account.encode().unwrap(), 32),
+                            };
+                            let state_node = StateNode::new(vec![node_ref]);
+                            let tree_node = TreeNode::new(
+                                state_node,
+                                key[offset..key.len()].to_vec(),
+                                self.tx.clone(),
+                            );
+                            node_map.insert(key[0..offset + 1].to_vec(), tree_node);
+                            db_state = None;
+                            continue;
                         }
                     } else {
-                        return Err(Box::new(Exception::new(
-                            "Unable to find node, corrupted tree",
-                        )));
+                        let new_account = Account::from_proto(account);
+                        let node_ref = NodeRef {
+                            node_location: key[offset..key.len()].to_vec(),
+                            child: hash(&new_account.encode().unwrap(), 32),
+                        };
+                        let state_node = StateNode::new(vec![node_ref]);
+                        let tree_node = TreeNode::new(
+                            state_node,
+                            key[offset..key.len()].to_vec(),
+                            self.tx.clone(),
+                        );
+                        node_map.insert(key[0..offset + 1].to_vec(), tree_node);
+                        db_state = None;
+                        continue;
                     }
                 } else {
                     return Err(Box::new(Exception::new(
@@ -193,10 +236,51 @@ where
                 }
             }
         }
-
-        //  - store path in node map
-        //  - get next node or insert
-        Ok(Vec::new())
+        let mut future_vec = Vec::from_iter(node_map.into_iter());
+        println!("Futures to be put: {:?}", &future_vec);
+        let mut branch_nodes: Vec<TreeNode> = Vec::new();
+        let mut current_node: Option<(Vec<u8>, TreeNode)> = future_vec.pop();
+        let mut current_length = 0;
+        while let Some(node) = &current_node {
+            let mut tree_node = node.clone();
+            if node.0.len() == 1 {
+                for b_node in &branch_nodes {
+                    tree_node.1.add_future(&b_node);
+                }
+                root_node.add_future(&tree_node.1);
+                branch_nodes.clear();
+                current_node = future_vec.pop();
+                continue;
+            } else {
+                branch_nodes.push(node.1.clone());
+                let next_node = future_vec.pop();
+                match next_node {
+                    Some(node) => {
+                        if node.0.len() == current_length || branch_nodes.len() == 0 {
+                            branch_nodes.push(node.1.clone());
+                            current_length = node.0.len();
+                            current_node = Some(node);
+                            continue;
+                        } else {
+                            for b_node in &branch_nodes {
+                                tree_node.1.add_future(&b_node);
+                            }
+                            branch_nodes.clear();
+                            current_node = future_vec.pop();
+                            continue;
+                        }
+                    }
+                    None => {
+                        // we are done
+                    }
+                }
+            }
+        }
+        let tree_root = root_node.wait();
+        match tree_root {
+            Ok(root) => Ok(root.child),
+            Err(e) => Err(Box::new(Exception::new("Error generating new root"))),
+        }
     }
 
     pub fn remove(&mut self, root: &[u8]) -> Result<(), Box<Error>> {
@@ -525,57 +609,57 @@ pub mod tests {
     fn it_inserts_and_retrieves_a_key_from_an_existing_tree() {
         let path = PathBuf::new();
         let mut state_db: StateDB<RocksDBMock> = StateDB::new(path, None).unwrap();
-        let first_account = DBState::new(
-            Some(Account {
-                balance: 100,
-                nonce: 1,
-            }),
-            None,
-            1,
-        );
-        let first_hash = hash(first_account.encode().unwrap().as_ref(), 32);
-        let _ = state_db.insert(&first_hash, &first_account);
-        let first_location = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        let first_node_ref = NodeRef::new(&first_location, &first_hash);
-        let second_account = DBState::new(
-            Some(Account {
-                balance: 200,
-                nonce: 2,
-            }),
-            None,
-            1,
-        );
-        let second_hash = hash(second_account.encode().unwrap().as_ref(), 32);
-        let _ = state_db.insert(&second_hash, &second_account);
-        let second_location = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        let second_node_ref = NodeRef::new(&second_location, &second_hash);
-        let third_account = DBState::new(
-            Some(Account {
-                balance: 300,
-                nonce: 3,
-            }),
-            None,
-            1,
-        );
-        let third_hash = hash(third_account.encode().unwrap().as_ref(), 32);
-        let _ = state_db.insert(&third_hash, &third_account);
-        let third_location = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        let third_node_ref = NodeRef::new(&third_location, &third_hash);
-        let second_level_refs = vec![first_node_ref, second_node_ref];
-        let second_state_node = StateNode::new(second_level_refs);
-        let second_state_node_state = DBState::new(None, Some(second_state_node), 1);
-        let second_state_node_hash = hash(&second_state_node_state.encode().unwrap(), 32);
-        let _ = state_db.insert(&second_state_node_hash, &second_state_node_state);
-        let first_level_node = NodeRef::new(&vec![0], &second_state_node_hash);
-        let root_node_refs = vec![first_level_node, third_node_ref];
-        let root_state_node = StateNode::new(root_node_refs);
-        let root_db_state = DBState::new(None, Some(root_state_node), 1);
-        let root_hash = hash(&root_db_state.encode().unwrap(), 32);
-        let _ = state_db.insert(&root_hash, &root_db_state);
-        let _ = state_db.batch_write();
+        // let first_account = DBState::new(
+        //     Some(Account {
+        //         balance: 100,
+        //         nonce: 1,
+        //     }),
+        //     None,
+        //     1,
+        // );
+        // let first_hash = hash(first_account.encode().unwrap().as_ref(), 32);
+        // let _ = state_db.insert(&first_hash, &first_account);
+        // let first_location = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        // let first_node_ref = NodeRef::new(&first_location, &first_hash);
+        // let second_account = DBState::new(
+        //     Some(Account {
+        //         balance: 200,
+        //         nonce: 2,
+        //     }),
+        //     None,
+        //     1,
+        // );
+        // let second_hash = hash(second_account.encode().unwrap().as_ref(), 32);
+        // let _ = state_db.insert(&second_hash, &second_account);
+        // let second_location = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        // let second_node_ref = NodeRef::new(&second_location, &second_hash);
+        // let third_account = DBState::new(
+        //     Some(Account {
+        //         balance: 300,
+        //         nonce: 3,
+        //     }),
+        //     None,
+        //     1,
+        // );
+        // let third_hash = hash(third_account.encode().unwrap().as_ref(), 32);
+        // let _ = state_db.insert(&third_hash, &third_account);
+        // let third_location = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        // let third_node_ref = NodeRef::new(&third_location, &third_hash);
+        // let second_level_refs = vec![first_node_ref, second_node_ref];
+        // let second_state_node = StateNode::new(second_level_refs);
+        // let second_state_node_state = DBState::new(None, Some(second_state_node), 1);
+        // let second_state_node_hash = hash(&second_state_node_state.encode().unwrap(), 32);
+        // let _ = state_db.insert(&second_state_node_hash, &second_state_node_state);
+        // let first_level_node = NodeRef::new(&vec![0], &second_state_node_hash);
+        // let root_node_refs = vec![first_level_node, third_node_ref];
+        // let root_state_node = StateNode::new(root_node_refs);
+        // let root_db_state = DBState::new(None, Some(root_state_node), 1);
+        // let root_hash = hash(&root_db_state.encode().unwrap(), 32);
+        // let _ = state_db.insert(&root_hash, &root_db_state);
+        // let _ = state_db.batch_write();
         let mut tree = LegacyTrie::new(state_db);
         let account = Account {
-            balance: 200,
+            balance: 500,
             nonce: 2,
         };
         let account_proto = account.to_proto().unwrap();
@@ -589,7 +673,30 @@ pub mod tests {
             addresses.push(Address::from_bytes(&address));
         }
         let accounts = vec![&account_proto, &account_proto, &account_proto];
-        tree.insert(Some(&root_hash), addresses, &accounts.as_ref());
+        let result = tree.insert(None, addresses.clone(), &accounts.as_ref());
+        let new_root = result.unwrap();
+        //assert_ne!(&new_root, &root_hash);
+        let returned_accounts = tree.get(&new_root, addresses);
+        match returned_accounts {
+            Ok(vec) => {
+                assert_eq!(vec.len(), 3);
+                println!("accounts: {:?}", vec);
+                // check integrity of returned accounts
+                for i in 0..vec.len() {
+                    match &vec[i] {
+                        Some(account) => {
+                            assert_eq!(account.balance as usize, 500);
+                            assert_eq!(account.nonce as usize, 2);
+                        }
+                        None => unimplemented!(),
+                    }
+                }
+            }
+            Err(e) => {
+                println!("Error: {:?}", e);
+                unimplemented!()
+            }
+        }
     }
     #[test]
     fn it_inserts_and_retrieves_two_keys_with_similar_paths() {
