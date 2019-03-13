@@ -175,6 +175,7 @@ where
                 if early_out {
                     continue;
                 } else {
+                    offset = offset + next_node.node_location.len();
                     db_state = self.db.get_node(&next_node.child)?;
                 }
             } else {
@@ -230,12 +231,15 @@ where
                                 let state_node = StateNode::new(vec![new_node, new_node_ref]);
                                 let tree_node = TreeNode::new(
                                     NodeType::Branch(state_node),
-                                    key[offset..offset + i].to_vec(),
+                                    node_ref.node_location[0..i].to_vec(),
                                     self.write_queue.clone(),
                                 );
-                                node_map.insert(key[0..offset].to_vec(), tree_node);
+                                node_map.insert(key[0..offset + i].to_vec(), tree_node);
                                 break;
                             }
+                        }
+                        if early_out {
+                            break;
                         }
                         if let Some(next_node) = self.db.get_node(&node_ref.child)? {
                             if next_node.account.is_none() {
@@ -284,6 +288,7 @@ where
             }
         }
         let mut future_vec = Vec::from_iter(node_map.into_iter());
+        println!("Futures: {:?}", future_vec);
         let mut branch_nodes: Vec<TreeNode> = Vec::new();
         let mut current_node: Option<(Vec<u8>, TreeNode)> = future_vec.pop();
         let mut current_length = 0;
