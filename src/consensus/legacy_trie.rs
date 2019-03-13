@@ -13,6 +13,7 @@ use crate::util::hash::hash;
 use futures::Future;
 use protobuf::Message;
 use starling::traits::Database;
+use std::cmp::min;
 use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::iter::FromIterator;
@@ -128,11 +129,13 @@ where
             let mut offset = *split;
             let mut current_node: TreeNode;
             if offset > 0 {
-                if let Some(node) = node_map.get(&key[0..prev_split]) {
+                let n = min(prev_split, offset);
+                if let Some(node) = node_map.get(&key[0..n]) {
                     current_node = node.clone();
                     if current_node.is_leaf() {
                         current_node.upgrade_to_branch()?;
-                        node_map.insert(key[0..prev_split].to_vec(), current_node.clone());
+                        node_map.insert(key[0..n].to_vec(), current_node.clone());
+                        offset = n;
                     }
                 } else {
                     current_node = root_node.clone();
@@ -140,7 +143,6 @@ where
             } else {
                 current_node = root_node.clone();
             }
-            prev_split = *split;
             // set up to traverse states
             let mut db_state: Option<DBState> = None;
             if let Some(next_node) = current_node.get_next_node_location(key[offset]) {
@@ -153,7 +155,7 @@ where
                         self.db
                             .insert(&node_hash, &DBState::new(Some(new_account), None, 1));
                         let node_ref = NodeRef {
-                            node_location: key[i..key.len()].to_vec(),
+                            node_location: key[offset + i..key.len()].to_vec(),
                             child: node_hash,
                         };
                         let mut new_node = next_node.clone();
@@ -162,10 +164,11 @@ where
                         let state_node = StateNode::new(vec![node_ref, new_node]);
                         let tree_node = TreeNode::new(
                             NodeType::Branch(state_node),
-                            key[offset + i..key.len()].to_vec(),
+                            next_node.node_location[0..i].to_vec(),
                             self.write_queue.clone(),
                         );
                         node_map.insert(key[0..offset + i].to_vec(), tree_node);
+                        prev_split = offset + i;
                         break;
                     }
                 }
@@ -183,6 +186,7 @@ where
                     self.write_queue.clone(),
                 );
                 node_map.insert(key[0..offset + 1].to_vec(), tree_node);
+                prev_split = offset + 1;
                 continue;
             }
 
@@ -216,21 +220,20 @@ where
                                 self.db
                                     .insert(&node_hash, &DBState::new(Some(new_account), None, 1));
                                 let new_node_ref = NodeRef {
-                                    node_location: key[i..key.len()].to_vec(),
+                                    node_location: key[offset + i..key.len()].to_vec(),
                                     child: node_hash,
                                 };
                                 let mut new_node = node_ref.clone();
                                 new_node.node_location = node_ref.node_location
                                     [i..node_ref.node_location.len()]
                                     .to_vec();
-                                let state_node =
-                                    StateNode::new(vec![node_ref.clone(), new_node_ref]);
+                                let state_node = StateNode::new(vec![new_node, new_node_ref]);
                                 let tree_node = TreeNode::new(
                                     NodeType::Branch(state_node),
-                                    key[offset + i..key.len()].to_vec(),
+                                    key[offset..offset + i].to_vec(),
                                     self.write_queue.clone(),
                                 );
-                                node_map.insert(key[0..offset + i].to_vec(), tree_node);
+                                node_map.insert(key[0..offset].to_vec(), tree_node);
                                 break;
                             }
                         }
@@ -281,7 +284,6 @@ where
             }
         }
         let mut future_vec = Vec::from_iter(node_map.into_iter());
-        println!("Futures: {:?}", future_vec);
         let mut branch_nodes: Vec<TreeNode> = Vec::new();
         let mut current_node: Option<(Vec<u8>, TreeNode)> = future_vec.pop();
         let mut current_length = 0;
@@ -301,6 +303,7 @@ where
                 let next_node = future_vec.pop();
                 match next_node {
                     Some(node) => {
+                        tree_node = node.clone();
                         if node.0.len() == 1 {
                             for b_node in &branch_nodes {
                                 tree_node.1.add_future(&b_node);
@@ -330,7 +333,6 @@ where
                 }
             }
         }
-
         let tree_root = root_node.wait();
         match tree_root {
             Ok(root) => {

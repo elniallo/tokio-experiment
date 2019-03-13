@@ -1,15 +1,15 @@
 use crate::account::db_state::DBState;
 use crate::account::node_ref::NodeRef;
 use crate::account::state_node::StateNode;
+use crate::consensus::legacy_trie::NodeType;
 use crate::traits::{Encode, Exception};
 use crate::util::hash::hash;
 use futures::future::Future;
 use std::error::Error;
+use std::fmt::{Debug, Formatter, Result as FormatResult};
 use std::sync::{Arc, Mutex};
 use tokio::prelude::*;
-
-use crate::consensus::legacy_trie::NodeType;
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TreeNode {
     node: NodeType,
     location: Vec<u8>,
@@ -52,6 +52,10 @@ impl TreeNode {
         &self.node
     }
 
+    pub fn get_location(&self) -> &Vec<u8> {
+        &self.location
+    }
+
     pub fn is_leaf(&self) -> bool {
         match self.node {
             NodeType::Leaf(_) => true,
@@ -64,9 +68,20 @@ impl TreeNode {
             NodeType::Leaf(account) => {
                 let value = account.encode()?;
                 let hash = hash(&value, 32);
-                let node_ref = NodeRef::new(&self.location, &hash);
+                let node_ref = NodeRef::new(&self.location[1..self.location.len()].to_vec(), &hash);
                 let state_node = StateNode::new(vec![node_ref]);
+                let db_state = DBState::new(Some(account.clone()), None, 1);
+                let guard = self.write_queue.lock();
+                match guard {
+                    Ok(mut vec) => {
+                        vec.push((hash, db_state));
+                    }
+                    Err(_e) => {
+                        return Err(Box::new(Exception::new("Poison error")));
+                    }
+                }
                 self.node = NodeType::Branch(state_node);
+                self.location = self.location[0..1].to_vec();
             }
             NodeType::Branch(_) => {
                 return Err(Box::new(Exception::new("Node is already a branch")));
@@ -132,6 +147,16 @@ impl Future for TreeNode {
                 Ok(Async::NotReady)
             }
         }
+    }
+}
+
+impl Debug for TreeNode {
+    fn fmt(&self, f: &mut Formatter) -> FormatResult {
+        write!(
+            f,
+            "TreeNode: {{Node: {:?},Location: {:?}, Futures: {:?}}}",
+            &self.node, &self.location, &self.futures
+        )
     }
 }
 
