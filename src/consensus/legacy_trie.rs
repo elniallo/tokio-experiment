@@ -642,7 +642,38 @@ pub mod tests {
     }
     #[test]
     fn it_inserts_256_keys_with_different_first_bytes_into_empty_tree_and_retrieves_them() {
-        unimplemented!();
+        let path = PathBuf::new();
+        let state_db: StateDB<RocksDBMock> = StateDB::new(path, None).unwrap();
+        let mut tree = LegacyTrie::new(state_db);
+        let mut accounts = Vec::with_capacity(256);
+        let mut addresses = Vec::with_capacity(256);
+        for i in 0..256 {
+            let account = Account {
+                balance: i * 100,
+                nonce: i as u32,
+            };
+            let address = Address::from([
+                i as u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ]);
+            accounts.push(account.to_proto().unwrap());
+            addresses.push(address);
+        }
+        let root_hash = tree.insert(None, addresses.clone(), &accounts).unwrap();
+        let retrieved_accounts = tree.get(&root_hash, addresses.clone()).unwrap();
+        assert_eq!(retrieved_accounts.len(), 256);
+        for (i, (opt, original_address)) in
+            retrieved_accounts.iter().zip(addresses.iter()).enumerate()
+        {
+            assert!(opt.is_some());
+            match opt {
+                Some((add, account)) => {
+                    assert_eq!(add, original_address);
+                    assert_eq!(account.balance, (i * 100) as u64);
+                    assert_eq!(account.nonce, i as u32);
+                }
+                None => {}
+            }
+        }
     }
     #[test]
     fn it_inserts_and_retrieves_a_key_from_an_existing_tree() {
