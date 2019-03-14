@@ -106,6 +106,7 @@ where
                             NodeType::Branch(state_node),
                             Vec::new(),
                             self.write_queue.clone(),
+                            0,
                         );
                     } else {
                         return Err(Box::new(Exception::new("DB State is not a state node")));
@@ -120,10 +121,12 @@ where
                     NodeType::Branch(state_node),
                     Vec::new(),
                     self.write_queue.clone(),
+                    0,
                 );
             }
         }
         let mut prev_split = 0;
+
         // iterate inserts
         for ((split, key), account) in split_addresses.iter().zip(values.iter()) {
             let mut offset = *split;
@@ -166,6 +169,7 @@ where
                             NodeType::Branch(state_node),
                             next_node.node_location[0..i].to_vec(),
                             self.write_queue.clone(),
+                            offset,
                         );
                         node_map.insert(key[0..offset + i].to_vec(), tree_node);
                         prev_split = offset + i;
@@ -185,6 +189,7 @@ where
                     NodeType::Leaf(new_account),
                     key[offset..key.len()].to_vec(),
                     self.write_queue.clone(),
+                    offset,
                 );
                 node_map.insert(key[0..offset + 1].to_vec(), tree_node);
                 prev_split = offset + 1;
@@ -199,6 +204,7 @@ where
                         NodeType::Leaf(new_account),
                         key[offset..key.len()].to_vec(),
                         self.write_queue.clone(),
+                        offset,
                     );
                     node_map.insert(key[0..offset + 1].to_vec(), tree_node);
                     db_state = None;
@@ -208,6 +214,7 @@ where
                         NodeType::Branch(node.clone()),
                         key[0..offset + 1].to_vec(),
                         self.write_queue.clone(),
+                        offset,
                     );
                     node_map.insert(key[0..offset + 1].to_vec(), tree_node);
                     if let Some(node_ref) = node.node_refs.get(&key[offset]) {
@@ -233,6 +240,7 @@ where
                                     NodeType::Branch(state_node),
                                     node_ref.node_location[0..i].to_vec(),
                                     self.write_queue.clone(),
+                                    offset,
                                 );
                                 node_map.insert(key[0..offset + i].to_vec(), tree_node);
                                 break;
@@ -252,6 +260,7 @@ where
                                     NodeType::Leaf(new_account),
                                     key[offset..key.len()].to_vec(),
                                     self.write_queue.clone(),
+                                    offset,
                                 );
                                 node_map.insert(key[0..offset + 2].to_vec(), tree_node);
                                 db_state = None;
@@ -263,6 +272,7 @@ where
                                 NodeType::Leaf(new_account),
                                 key[offset..key.len()].to_vec(),
                                 self.write_queue.clone(),
+                                offset,
                             );
                             node_map.insert(key[0..offset + 1].to_vec(), tree_node);
                             db_state = None;
@@ -274,6 +284,7 @@ where
                             NodeType::Leaf(new_account),
                             key[offset..key.len()].to_vec(),
                             self.write_queue.clone(),
+                            offset,
                         );
                         node_map.insert(key[0..offset + 1].to_vec(), tree_node);
                         db_state = None;
@@ -287,57 +298,74 @@ where
                 }
             }
         }
-        let mut future_vec = Vec::from_iter(node_map.into_iter());
-        println!("Futures: {:?}", future_vec);
-        let mut branch_nodes: Vec<TreeNode> = Vec::new();
-        let mut current_node: Option<(Vec<u8>, TreeNode)> = future_vec.pop();
-        let mut current_length = 0;
-        while let Some(node) = &current_node {
-            let mut tree_node = node.clone();
-            if node.0.len() == 1 {
-                for b_node in &branch_nodes {
-                    tree_node.1.add_future(&b_node);
+        let cln = node_map.clone();
+        let mut futures = Vec::from_iter(cln.iter());
+        let mut curr_node: Option<(&Vec<u8>, &TreeNode)> = futures.pop();
+        while let Some(node) = &curr_node {
+            if let Some(removed_node) = node_map.remove(node.0) {
+                if removed_node.parent == 0 {
+                    root_node.add_future(&removed_node);
+                } else if let Some(tree_node) = node_map.get_mut(&node.0[0..node.1.parent]) {
+                    tree_node.add_future(&removed_node);
                 }
-                root_node.add_future(&tree_node.1);
-                branch_nodes.clear();
-                current_node = future_vec.pop();
-                continue;
+                curr_node = futures.pop();
             } else {
-                current_length = node.0.len();
-                branch_nodes.push(node.1.clone());
-                let next_node = future_vec.pop();
-                match next_node {
-                    Some(node) => {
-                        tree_node = node.clone();
-                        if node.0.len() == 1 {
-                            for b_node in &branch_nodes {
-                                tree_node.1.add_future(&b_node);
-                            }
-                            root_node.add_future(&tree_node.1);
-                            branch_nodes.clear();
-                            current_length = 0;
-                            current_node = future_vec.pop();
-                            continue;
-                        } else if node.0.len() == current_length || branch_nodes.len() == 0 {
-                            branch_nodes.push(node.1.clone());
-                            current_length = node.0.len();
-                            current_node = future_vec.pop();
-                            continue;
-                        } else {
-                            for b_node in &branch_nodes {
-                                tree_node.1.add_future(&b_node);
-                            }
-                            branch_nodes.clear();
-                            current_node = Some(tree_node);
-                            continue;
-                        }
-                    }
-                    None => {
-                        break;
-                    }
-                }
+                return Err(Box::new(Exception::new(
+                    "Error constructing tree, cannot resolve futures",
+                )));
             }
         }
+        // let mut future_vec = Vec::from_iter(node_map.into_iter());
+        // println!("Futures: {:?}", future_vec);
+        // let mut branch_nodes: Vec<TreeNode> = Vec::new();
+        // let mut current_node: Option<(Vec<u8>, TreeNode)> = future_vec.pop();
+        // let mut current_length = 0;
+        // while let Some(node) = &current_node {
+        //     let mut tree_node = node.clone();
+        //     if node.0.len() == 1 {
+        //         for b_node in &branch_nodes {
+        //             tree_node.1.add_future(&b_node);
+        //         }
+        //         root_node.add_future(&tree_node.1);
+        //         branch_nodes.clear();
+        //         current_node = future_vec.pop();
+        //         continue;
+        //     } else {
+        //         current_length = node.0.len();
+        //         branch_nodes.push(node.1.clone());
+        //         let next_node = future_vec.pop();
+        //         match next_node {
+        //             Some(node) => {
+        //                 tree_node = node.clone();
+        //                 if node.0.len() == 1 {
+        //                     for b_node in &branch_nodes {
+        //                         tree_node.1.add_future(&b_node);
+        //                     }
+        //                     root_node.add_future(&tree_node.1);
+        //                     branch_nodes.clear();
+        //                     current_length = 0;
+        //                     current_node = future_vec.pop();
+        //                     continue;
+        //                 } else if node.0.len() == current_length || branch_nodes.len() == 0 {
+        //                     branch_nodes.push(node.1.clone());
+        //                     current_length = node.0.len();
+        //                     current_node = future_vec.pop();
+        //                     continue;
+        //                 } else {
+        //                     for b_node in &branch_nodes {
+        //                         tree_node.1.add_future(&b_node);
+        //                     }
+        //                     branch_nodes.clear();
+        //                     current_node = Some(tree_node);
+        //                     continue;
+        //                 }
+        //             }
+        //             None => {
+        //                 break;
+        //             }
+        //         }
+        //     }
+        // }
         let tree_root = root_node.wait();
         match tree_root {
             Ok(root) => {
@@ -362,7 +390,7 @@ where
         map: &mut HashMap<Vec<u8>, StateNode>,
         split: usize,
     ) -> Result<Option<(Address, ProtoAccount)>, Box<Error>> {
-        let mut state: Option<DBState> = None;
+        let mut state: Option<DBState> = Some(root.clone());;
         let mut offset = split;
         if offset > 0 {
             if let Some(node) = map.get(&address[0..offset]) {
@@ -377,8 +405,6 @@ where
                     }
                 }
             }
-        } else {
-            state = Some(root.clone());
         }
         while let Some(db_state) = &state {
             if let Some(account) = &db_state.account {
@@ -388,7 +414,7 @@ where
                 map.insert(address[0..offset + 1].to_vec(), node.clone());
                 if let Some(node_ref) = node.node_refs.get(&address[offset]) {
                     if let Some(next_node) = self.db.get_node(&node_ref.child)? {
-                        offset += node_ref.node_location.len() - 1;
+                        offset += node_ref.node_location.len();
                         state = Some(next_node);
                         continue;
                     } else {
@@ -778,6 +804,7 @@ pub mod tests {
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 1, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ];
         let mut addresses: Vec<Address> = Vec::new();
@@ -786,7 +813,7 @@ pub mod tests {
         }
         addresses.sort();
         let mut account_vec = Vec::with_capacity(4);
-        for i in 1..5 {
+        for i in 1..6 {
             let account = Account {
                 balance: i * 100,
                 nonce: i as u32,
@@ -797,7 +824,7 @@ pub mod tests {
         let result = tree.insert(None, addresses.clone(), &account_vec);
         let new_root = result.unwrap();
         let accounts = tree.get(&new_root, addresses.clone()).unwrap();
-        assert_eq!(accounts.len(), 4);
+        assert_eq!(accounts.len(), 5);
         println!("Accounts: {:?}", accounts);
         let new_address =
             Address::from_bytes(&[0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
@@ -809,7 +836,7 @@ pub mod tests {
         addresses.push(new_address);
         addresses.sort();
         let accounts = tree.get(&new_result, addresses).unwrap();
-        assert_eq!(accounts.len(), 5);
+        assert_eq!(accounts.len(), 6);
         println!("Accounts: {:?}", accounts);
         unimplemented!();
     }

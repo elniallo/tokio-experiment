@@ -13,6 +13,7 @@ use tokio::prelude::*;
 pub struct TreeNode {
     node: NodeType,
     location: Vec<u8>,
+    pub parent: usize,
     futures: Vec<TreeNode>,
     write_queue: Arc<Mutex<Vec<(Vec<u8>, DBState)>>>,
 }
@@ -22,10 +23,12 @@ impl TreeNode {
         node: NodeType,
         location: Vec<u8>,
         write_queue: Arc<Mutex<Vec<(Vec<u8>, DBState)>>>,
+        parent: usize,
     ) -> Self {
         Self {
             node,
             location,
+            parent,
             futures: Vec::new(),
             write_queue,
         }
@@ -154,8 +157,8 @@ impl Debug for TreeNode {
     fn fmt(&self, f: &mut Formatter) -> FormatResult {
         write!(
             f,
-            "TreeNode: {{Node: {:?},Location: {:?}, Futures: {:?}}}",
-            &self.node, &self.location, &self.futures
+            "TreeNode: {{Node: {:?},Location: {:?}, Futures: {:?}, Parent: {:?}}}",
+            &self.node, &self.location, &self.futures, &self.parent
         )
     }
 }
@@ -174,11 +177,13 @@ pub mod tests {
             NodeType::Branch(state_node.clone()),
             vec![0],
             write_queue.clone(),
+            0,
         );
         let second_tree_node = TreeNode::new(
             NodeType::Branch(state_node.clone()),
             vec![1],
             write_queue.clone(),
+            0,
         );
         root_tree_node.add_future(&second_tree_node);
         let result = root_tree_node.wait();
