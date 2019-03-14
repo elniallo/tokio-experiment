@@ -150,8 +150,8 @@ where
             let mut db_state: Option<DBState> = None;
             if let Some(next_node) = current_node.get_next_node_location(key[offset]) {
                 let mut early_out = false;
-                for i in 0..next_node.node_location.len() - 1 {
-                    if &next_node.node_location[i] != &key[offset + i] {
+                for (i, loc) in next_node.node_location.iter().enumerate() {
+                    if loc != &key[offset + i] {
                         early_out = true;
                         let new_account = Account::from_proto(account);
                         let node_hash = hash(&new_account.encode().unwrap(), 32);
@@ -195,33 +195,33 @@ where
                 prev_split = offset + 1;
                 continue;
             }
-
+            let mut prev_offset = 0;
             while let Some(state) = &db_state {
                 if let Some(_prev_account) = &state.account {
                     let new_account = Account::from_proto(account);
 
                     let tree_node = TreeNode::new(
                         NodeType::Leaf(new_account),
-                        key[offset..key.len()].to_vec(),
+                        key[prev_offset..key.len()].to_vec(),
                         self.write_queue.clone(),
-                        offset,
+                        prev_offset,
                     );
-                    node_map.insert(key[0..offset + 1].to_vec(), tree_node);
+                    node_map.insert(key[0..prev_offset + 1].to_vec(), tree_node);
                     db_state = None;
                     break;
                 } else if let Some(node) = &state.node {
                     let tree_node = TreeNode::new(
                         NodeType::Branch(node.clone()),
-                        key[0..offset + 1].to_vec(),
+                        key[prev_offset..offset].to_vec(),
                         self.write_queue.clone(),
-                        offset,
+                        offset - 1,
                     );
-                    node_map.insert(key[0..offset + 1].to_vec(), tree_node);
+                    node_map.insert(key[0..offset].to_vec(), tree_node);
                     if let Some(node_ref) = node.node_refs.get(&key[offset]) {
                         // check key compression
                         let mut early_out = false;
-                        for i in 0..node_ref.node_location.len() {
-                            if key[offset + i] != node_ref.node_location[i] {
+                        for (i, loc) in node_ref.node_location.iter().enumerate() {
+                            if loc != &key[offset + i] {
                                 early_out = true;
                                 let new_account = Account::from_proto(account);
                                 let node_hash = hash(&new_account.encode().unwrap(), 32);
@@ -251,6 +251,7 @@ where
                         }
                         if let Some(next_node) = self.db.get_node(&node_ref.child)? {
                             if next_node.account.is_none() {
+                                prev_offset = offset;
                                 offset += node_ref.node_location.len();
                                 db_state = Some(next_node);
                                 continue;
@@ -260,9 +261,10 @@ where
                                     NodeType::Leaf(new_account),
                                     key[offset..key.len()].to_vec(),
                                     self.write_queue.clone(),
-                                    offset,
+                                    prev_offset,
                                 );
-                                node_map.insert(key[0..offset + 2].to_vec(), tree_node);
+                                node_map.insert(key[0..offset].to_vec(), tree_node);
+                                prev_split = offset + 1;
                                 db_state = None;
                                 continue;
                             }
@@ -272,9 +274,10 @@ where
                                 NodeType::Leaf(new_account),
                                 key[offset..key.len()].to_vec(),
                                 self.write_queue.clone(),
-                                offset,
+                                prev_offset,
                             );
-                            node_map.insert(key[0..offset + 1].to_vec(), tree_node);
+                            node_map.insert(key[0..offset].to_vec(), tree_node);
+                            prev_split = offset;
                             db_state = None;
                             continue;
                         }
@@ -284,9 +287,10 @@ where
                             NodeType::Leaf(new_account),
                             key[offset..key.len()].to_vec(),
                             self.write_queue.clone(),
-                            offset,
+                            prev_offset,
                         );
-                        node_map.insert(key[0..offset + 1].to_vec(), tree_node);
+                        node_map.insert(key[0..offset].to_vec(), tree_node);
+                        prev_split = offset;
                         db_state = None;
                         continue;
                     }
@@ -300,6 +304,7 @@ where
         }
         let cln = node_map.clone();
         let mut futures = Vec::from_iter(cln.iter());
+        // println!("futures: {:?}", futures);
         let mut curr_node: Option<(&Vec<u8>, &TreeNode)> = futures.pop();
         while let Some(node) = &curr_node {
             if let Some(removed_node) = node_map.remove(node.0) {
@@ -315,57 +320,6 @@ where
                 )));
             }
         }
-        // let mut future_vec = Vec::from_iter(node_map.into_iter());
-        // println!("Futures: {:?}", future_vec);
-        // let mut branch_nodes: Vec<TreeNode> = Vec::new();
-        // let mut current_node: Option<(Vec<u8>, TreeNode)> = future_vec.pop();
-        // let mut current_length = 0;
-        // while let Some(node) = &current_node {
-        //     let mut tree_node = node.clone();
-        //     if node.0.len() == 1 {
-        //         for b_node in &branch_nodes {
-        //             tree_node.1.add_future(&b_node);
-        //         }
-        //         root_node.add_future(&tree_node.1);
-        //         branch_nodes.clear();
-        //         current_node = future_vec.pop();
-        //         continue;
-        //     } else {
-        //         current_length = node.0.len();
-        //         branch_nodes.push(node.1.clone());
-        //         let next_node = future_vec.pop();
-        //         match next_node {
-        //             Some(node) => {
-        //                 tree_node = node.clone();
-        //                 if node.0.len() == 1 {
-        //                     for b_node in &branch_nodes {
-        //                         tree_node.1.add_future(&b_node);
-        //                     }
-        //                     root_node.add_future(&tree_node.1);
-        //                     branch_nodes.clear();
-        //                     current_length = 0;
-        //                     current_node = future_vec.pop();
-        //                     continue;
-        //                 } else if node.0.len() == current_length || branch_nodes.len() == 0 {
-        //                     branch_nodes.push(node.1.clone());
-        //                     current_length = node.0.len();
-        //                     current_node = future_vec.pop();
-        //                     continue;
-        //                 } else {
-        //                     for b_node in &branch_nodes {
-        //                         tree_node.1.add_future(&b_node);
-        //                     }
-        //                     branch_nodes.clear();
-        //                     current_node = Some(tree_node);
-        //                     continue;
-        //                 }
-        //             }
-        //             None => {
-        //                 break;
-        //             }
-        //         }
-        //     }
-        // }
         let tree_root = root_node.wait();
         match tree_root {
             Ok(root) => {
@@ -411,7 +365,7 @@ where
                 return Ok(Some((address, account.to_proto()?)));
             //we have an account
             } else if let Some(node) = &db_state.node {
-                map.insert(address[0..offset + 1].to_vec(), node.clone());
+                map.insert(address[0..offset].to_vec(), node.clone());
                 if let Some(node_ref) = node.node_refs.get(&address[offset]) {
                     if let Some(next_node) = self.db.get_node(&node_ref.child)? {
                         offset += node_ref.node_location.len();
@@ -806,6 +760,8 @@ pub mod tests {
             [0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [0, 1, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 1, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 2, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ];
         let mut addresses: Vec<Address> = Vec::new();
         for address in address_bytes {
@@ -813,7 +769,7 @@ pub mod tests {
         }
         addresses.sort();
         let mut account_vec = Vec::with_capacity(4);
-        for i in 1..6 {
+        for i in 1..8 {
             let account = Account {
                 balance: i * 100,
                 nonce: i as u32,
@@ -824,8 +780,18 @@ pub mod tests {
         let result = tree.insert(None, addresses.clone(), &account_vec);
         let new_root = result.unwrap();
         let accounts = tree.get(&new_root, addresses.clone()).unwrap();
-        assert_eq!(accounts.len(), 5);
-        println!("Accounts: {:?}", accounts);
+        assert_eq!(accounts.len(), 7);
+        for (i, (opt, original_address)) in accounts.iter().zip(addresses.iter()).enumerate() {
+            assert!(opt.is_some());
+            match opt {
+                Some((add, account)) => {
+                    assert_eq!(add, original_address);
+                    assert_eq!(account.balance, ((i + 1) * 100) as u64);
+                    assert_eq!(account.nonce, (i + 1) as u32);
+                }
+                None => {}
+            }
+        }
         let new_address =
             Address::from_bytes(&[0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
         let new_account = Account::new(1100, 1);
@@ -835,10 +801,21 @@ pub mod tests {
             .unwrap();
         addresses.push(new_address);
         addresses.sort();
-        let accounts = tree.get(&new_result, addresses).unwrap();
-        assert_eq!(accounts.len(), 6);
-        println!("Accounts: {:?}", accounts);
-        unimplemented!();
+        let accounts = tree.get(&new_result, addresses.clone()).unwrap();
+        assert_eq!(accounts.len(), 8);
+        for (i, (opt, original_address)) in accounts.iter().zip(addresses.iter()).enumerate() {
+            assert!(opt.is_some());
+            match opt {
+                Some((add, account)) => {
+                    assert_eq!(add, original_address);
+                    if i == 3 {
+                        assert_eq!(account.balance, 1100);
+                        assert_eq!(account.nonce, 1);
+                    }
+                }
+                None => {}
+            }
+        }
     }
     #[test]
     fn it_matches_typescript_world_state_for_exodus_block() {
