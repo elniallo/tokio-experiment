@@ -4,6 +4,7 @@ use crate::common::genesis_header::GenesisHeader;
 use crate::common::header::{BlockHeader, Header};
 use crate::common::meta::Meta;
 use crate::common::signed_genesis_tx::SignedGenesisTx;
+use crate::common::exodus_tx::ExodusTx;
 use crate::common::signed_tx::SignedTx;
 use crate::traits::{Decode, Encode, Exception, Proto};
 
@@ -94,9 +95,7 @@ impl Decode for Block<Header, SignedTx> {
 impl Decode for Block<GenesisHeader, SignedGenesisTx> {
     fn decode(bytes: &[u8]) -> Result<Block<GenesisHeader, SignedGenesisTx>, Box<Error>> {
         let mut serialised = ProtoGenesisBlock::new();
-        if let Err(_) = serialised.merge_from(&mut CodedInputStream::from_bytes(bytes)) {
-            return Err(Box::new(Exception::new("Decoding fail")));
-        }
+        serialised.merge_from(&mut CodedInputStream::from_bytes(bytes))?;
 
         let serial_header = serialised.get_header();
         let header = GenesisHeader::new(
@@ -110,6 +109,31 @@ impl Decode for Block<GenesisHeader, SignedGenesisTx> {
             let mut bytes = Vec::new();
             tx.write_to_vec(&mut bytes)?;
             txs.push(match SignedGenesisTx::decode(&bytes) {
+                Ok(good_result) => good_result,
+                Err(_) => return Err(Box::new(Exception::new("Decoding fail"))),
+            });
+        }
+        Ok(Block::new(header, Some(txs.to_vec()), None))
+    }
+}
+
+impl Decode for Block<GenesisHeader, ExodusTx> {
+    fn decode(bytes: &[u8]) -> Result<Block<GenesisHeader, ExodusTx>, Box<Error>> {
+        let mut serialised = ProtoGenesisBlock::new();
+        serialised.merge_from(&mut CodedInputStream::from_bytes(bytes))?;
+
+        let serial_header = serialised.get_header();
+        let header = GenesisHeader::new(
+            serial_header.merkleRoot.clone(),
+            serial_header.timeStamp,
+            serial_header.difficulty,
+            serial_header.stateRoot.clone(),
+        );
+        let mut txs: Vec<ExodusTx> = Vec::new();
+        for tx in serialised.get_txs().to_vec() {
+            let mut bytes = Vec::new();
+            tx.write_to_vec(&mut bytes)?;
+            txs.push(match ExodusTx::decode(&bytes) {
                 Ok(good_result) => good_result,
                 Err(_) => return Err(Box::new(Exception::new("Decoding fail"))),
             });

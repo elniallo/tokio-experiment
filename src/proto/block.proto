@@ -9,7 +9,11 @@ message Block {
 
 message GenesisBlock {
     GenesisHeader header = 1;
-    repeated GenesisSignedTx txs = 2;
+    repeated GenesisSignedTx txs = 3;
+}
+message ExodusBlock {
+    GenesisHeader header =1;
+    repeated ExodusTx txs = 3;
 }
 
 message BlockDB {

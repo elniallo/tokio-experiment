@@ -264,7 +264,7 @@ where
                                     prev_offset,
                                 );
                                 node_map.insert(key[0..offset].to_vec(), tree_node);
-                                prev_split = offset + 1;
+                                prev_split = offset;
                                 db_state = None;
                                 continue;
                             }
@@ -276,7 +276,7 @@ where
                                 self.write_queue.clone(),
                                 prev_offset,
                             );
-                            node_map.insert(key[0..offset].to_vec(), tree_node);
+                            node_map.insert(key[0..prev_offset + 1].to_vec(), tree_node);
                             prev_split = offset;
                             db_state = None;
                             continue;
@@ -289,7 +289,7 @@ where
                             self.write_queue.clone(),
                             prev_offset,
                         );
-                        node_map.insert(key[0..offset].to_vec(), tree_node);
+                        node_map.insert(key[0..prev_offset + 1].to_vec(), tree_node);
                         prev_split = offset;
                         db_state = None;
                         continue;
@@ -304,7 +304,6 @@ where
         }
         let cln = node_map.clone();
         let mut futures = Vec::from_iter(cln.iter());
-        // println!("futures: {:?}", futures);
         let mut curr_node: Option<(&Vec<u8>, &TreeNode)> = futures.pop();
         while let Some(node) = &curr_node {
             if let Some(removed_node) = node_map.remove(node.0) {
@@ -397,9 +396,16 @@ pub mod tests {
     use crate::account::account::Account;
     use crate::account::node_ref::NodeRef;
     use crate::common::address::ValidAddress;
+    use crate::common::exodus_block::ExodusBlock;
+    use crate::common::transaction::Transaction;
     use crate::database::mock::RocksDBMock;
-    use crate::traits::Encode;
+    use crate::traits::{Decode, Encode};
     use crate::util::hash::hash;
+    use std::env;
+    use std::fs::File;
+    use std::io;
+    use std::io::prelude::*;
+    use std::io::Read;
     use std::path::PathBuf;
     #[test]
     fn it_gets_items_from_a_tree_of_depth_1() {
@@ -771,14 +777,6 @@ pub mod tests {
             }
         }
     }
-    #[test]
-    fn it_inserts_and_retrieves_two_keys_with_similar_paths() {
-        unimplemented!();
-    }
-    #[test]
-    fn it_inserts_and_retrieves_multiple_keys_from_existing_tree() {
-        unimplemented!();
-    }
 
     #[test]
     fn it_inserts_a_node_into_a_compressed_branch() {
@@ -848,8 +846,60 @@ pub mod tests {
             }
         }
     }
+
     #[test]
     fn it_matches_typescript_world_state_for_exodus_block() {
-        unimplemented!();
+        //let path_to_exodus = PathBuf::from("./../../data/exodusBlock.dat");
+        let mut path = env::current_dir().unwrap();
+        path.push("data/exodusBlock.dat");
+        let mut exodus_file = File::open(path).unwrap();
+        let mut exodus_buf = Vec::new();
+        exodus_file.read_to_end(&mut exodus_buf).unwrap();
+        let exodus = ExodusBlock::decode(&exodus_buf).unwrap();
+        let mut keypairs: Vec<(Address, ProtoAccount)> = Vec::with_capacity(12000);
+        let mut addresses: Vec<Address> = Vec::with_capacity(12000);
+        let mut accounts: Vec<ProtoAccount> = Vec::with_capacity(12000);
+        match &exodus.txs {
+            Some(tx_vec) => {
+                for tx in tx_vec {
+                    let mut amount: u64 = tx.get_amount();
+                    let mut nonce: u32 = 0;
+                    if let Some(tx_nonce) = tx.get_nonce() {
+                        nonce = tx_nonce;
+                    } else {
+                        break;
+                    }
+                    if let Some(add) = tx.get_to() {
+                        keypairs.push((add, Account::new(amount, nonce).to_proto().unwrap()));
+                    } else {
+                        break;
+                    }
+                }
+            }
+            None => {}
+        }
+        keypairs.sort_by(|a, b| a.0.cmp(&b.0));
+        for (key, value) in keypairs.clone() {
+            addresses.push(key);
+            accounts.push(value);
+        }
+        let db_path = PathBuf::new();
+        let mut state_db: StateDB<RocksDBMock> = StateDB::new(db_path, None).unwrap();
+        let mut tree = LegacyTrie::new(state_db);
+        addresses.sort();
+        let root = tree.insert(None, addresses.clone(), &accounts).unwrap();
+        println!("New Root: {:?}", root);
+        let retrieved = tree.get(&root, addresses).unwrap();
+        for (ret, keypair) in retrieved.iter().zip(keypairs.iter()) {
+            assert!(ret.is_some());
+            match ret {
+                Some((add, account)) => {
+                    assert_eq!(add, &keypair.0);
+                    assert_eq!(account.balance, keypair.1.balance);
+                    assert_eq!(account.nonce, keypair.1.nonce);
+                }
+                None => {}
+            }
+        }
     }
 }
