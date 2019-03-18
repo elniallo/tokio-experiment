@@ -62,7 +62,8 @@ include = [
     "/Cargo.toml",
     "/README.md",
     "/LICENSE",
-    "/mnemonic/*.json"
+    "/mnemonic/*.json",
+    "/data/*.dat"
 ]
 
 [lib]

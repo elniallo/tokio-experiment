@@ -47,6 +47,7 @@ where
             let entry = self.pending_inserts.remove(0);
             let key = entry.0;
             let value = entry.1;
+            println!("Key: {:?}, Value: {:?}", key, value);
             batch.push((key, value.encode().unwrap()));
         }
         self.database.write_batch(batch)?;

@@ -5,6 +5,7 @@ use crate::consensus::legacy_trie::NodeType;
 use crate::traits::{Encode, Exception};
 use crate::util::hash::hash;
 use futures::future::Future;
+use std::cmp::{max, min};
 use std::error::Error;
 use std::fmt::{Debug, Formatter, Result as FormatResult};
 use std::sync::{Arc, Mutex};
@@ -66,12 +67,19 @@ impl TreeNode {
         }
     }
 
-    pub fn upgrade_to_branch(&mut self) -> Result<(), Box<Error>> {
+    pub fn upgrade_to_branch(
+        &mut self,
+        offset: usize,
+        prev_offset: usize,
+    ) -> Result<(), Box<Error>> {
         match self.node {
             NodeType::Leaf(account) => {
                 let value = account.encode()?;
                 let hash = hash(&value, 32);
-                let node_ref = NodeRef::new(&self.location[1..self.location.len()].to_vec(), &hash);
+                let node_ref = NodeRef::new(
+                    &self.location[max(1 + offset - prev_offset, 1)..self.location.len()].to_vec(),
+                    &hash,
+                );
                 let state_node = StateNode::new(vec![node_ref]);
                 let db_state = DBState::new(Some(account.clone()), None, 1);
                 let guard = self.write_queue.lock();
@@ -84,7 +92,7 @@ impl TreeNode {
                     }
                 }
                 self.node = NodeType::Branch(state_node);
-                self.location = self.location[0..1].to_vec();
+                self.location = self.location[0..max(1 + offset - prev_offset, 1)].to_vec();
             }
             NodeType::Branch(_) => {
                 return Err(Box::new(Exception::new("Node is already a branch")));
