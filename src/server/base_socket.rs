@@ -2,7 +2,7 @@ use crate::server::socket_parser::SocketParser;
 
 use bytes::{BufMut, BytesMut};
 use futures::stream::Stream;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio::io;
 use tokio::net::TcpStream;
 use tokio::prelude::*;

@@ -15,6 +15,12 @@ message GenesisSignedTx {
   uint32 recovery = 7;
 }
 
+message ExodusTx {
+  bytes to = 2;
+  uint64 amount = 3;
+  uint32 nonce = 5;
+}
+
 message Tx {
   // Consensus Critical
   bytes from = 1; //Address

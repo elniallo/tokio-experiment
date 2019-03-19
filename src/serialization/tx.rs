@@ -665,6 +665,239 @@ impl ::protobuf::reflect::ProtobufValue for GenesisSignedTx {
 }
 
 #[derive(PartialEq,Clone,Default)]
+pub struct ExodusTx {
+    // message fields
+    pub to: ::std::vec::Vec<u8>,
+    pub amount: u64,
+    pub nonce: u32,
+    // special fields
+    unknown_fields: ::protobuf::UnknownFields,
+    cached_size: ::protobuf::CachedSize,
+}
+
+impl ExodusTx {
+    pub fn new() -> ExodusTx {
+        ::std::default::Default::default()
+    }
+
+    // bytes to = 2;
+
+    pub fn clear_to(&mut self) {
+        self.to.clear();
+    }
+
+    // Param is passed by value, moved
+    pub fn set_to(&mut self, v: ::std::vec::Vec<u8>) {
+        self.to = v;
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_to(&mut self) -> &mut ::std::vec::Vec<u8> {
+        &mut self.to
+    }
+
+    // Take field
+    pub fn take_to(&mut self) -> ::std::vec::Vec<u8> {
+        ::std::mem::replace(&mut self.to, ::std::vec::Vec::new())
+    }
+
+    pub fn get_to(&self) -> &[u8] {
+        &self.to
+    }
+
+    // uint64 amount = 3;
+
+    pub fn clear_amount(&mut self) {
+        self.amount = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_amount(&mut self, v: u64) {
+        self.amount = v;
+    }
+
+    pub fn get_amount(&self) -> u64 {
+        self.amount
+    }
+
+    // uint32 nonce = 5;
+
+    pub fn clear_nonce(&mut self) {
+        self.nonce = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_nonce(&mut self, v: u32) {
+        self.nonce = v;
+    }
+
+    pub fn get_nonce(&self) -> u32 {
+        self.nonce
+    }
+}
+
+impl ::protobuf::Message for ExodusTx {
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream) -> ::protobuf::ProtobufResult<()> {
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
+            match field_number {
+                2 => {
+                    ::protobuf::rt::read_singular_proto3_bytes_into(wire_type, is, &mut self.to)?;
+                },
+                3 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_uint64()?;
+                    self.amount = tmp;
+                },
+                5 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_uint32()?;
+                    self.nonce = tmp;
+                },
+                _ => {
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u32 {
+        let mut my_size = 0;
+        if !self.to.is_empty() {
+            my_size += ::protobuf::rt::bytes_size(2, &self.to);
+        }
+        if true {
+            my_size += ::protobuf::rt::value_size(3, self.amount, ::protobuf::wire_format::WireTypeVarint);
+        }
+        if true {
+            my_size += ::protobuf::rt::value_size(5, self.nonce, ::protobuf::wire_format::WireTypeVarint);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
+        self.cached_size.set(my_size);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
+        if !self.to.is_empty() {
+            os.write_bytes(2, &self.to)?;
+        }
+        if true {
+            os.write_uint64(3, self.amount)?;
+        }
+        if true {
+            os.write_uint32(5, self.nonce)?;
+        }
+        os.write_unknown_fields(self.get_unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn get_cached_size(&self) -> u32 {
+        self.cached_size.get()
+    }
+
+    fn get_unknown_fields(&self) -> &::protobuf::UnknownFields {
+        &self.unknown_fields
+    }
+
+    fn mut_unknown_fields(&mut self) -> &mut ::protobuf::UnknownFields {
+        &mut self.unknown_fields
+    }
+
+    fn as_any(&self) -> &::std::any::Any {
+        self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
+    }
+
+    fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
+        Self::descriptor_static()
+    }
+
+    fn new() -> ExodusTx {
+        ExodusTx::new()
+    }
+
+    fn descriptor_static() -> &'static ::protobuf::reflect::MessageDescriptor {
+        static mut descriptor: ::protobuf::lazy::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::lazy::Lazy {
+            lock: ::protobuf::lazy::ONCE_INIT,
+            ptr: 0 as *const ::protobuf::reflect::MessageDescriptor,
+        };
+        unsafe {
+            descriptor.get(|| {
+                let mut fields = ::std::vec::Vec::new();
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeBytes>(
+                    "to",
+                    |m: &ExodusTx| { &m.to },
+                    |m: &mut ExodusTx| { &mut m.to },
+                ));
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeUint64>(
+                    "amount",
+                    |m: &ExodusTx| { &m.amount },
+                    |m: &mut ExodusTx| { &mut m.amount },
+                ));
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeUint32>(
+                    "nonce",
+                    |m: &ExodusTx| { &m.nonce },
+                    |m: &mut ExodusTx| { &mut m.nonce },
+                ));
+                ::protobuf::reflect::MessageDescriptor::new::<ExodusTx>(
+                    "ExodusTx",
+                    fields,
+                    file_descriptor_proto()
+                )
+            })
+        }
+    }
+
+    fn default_instance() -> &'static ExodusTx {
+        static mut instance: ::protobuf::lazy::Lazy<ExodusTx> = ::protobuf::lazy::Lazy {
+            lock: ::protobuf::lazy::ONCE_INIT,
+            ptr: 0 as *const ExodusTx,
+        };
+        unsafe {
+            instance.get(ExodusTx::new)
+        }
+    }
+}
+
+impl ::protobuf::Clear for ExodusTx {
+    fn clear(&mut self) {
+        self.clear_to();
+        self.clear_amount();
+        self.clear_nonce();
+        self.unknown_fields.clear();
+    }
+}
+
+impl ::std::fmt::Debug for ExodusTx {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for ExodusTx {
+    fn as_ref(&self) -> ::protobuf::reflect::ProtobufValueRef {
+        ::protobuf::reflect::ProtobufValueRef::Message(self)
+    }
+}
+
+#[derive(PartialEq,Clone,Default)]
 pub struct Tx {
     // message fields
     pub from: ::std::vec::Vec<u8>,
@@ -1643,19 +1876,21 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     nedTx\x12\x0e\n\x02to\x18\x02\x20\x01(\x0cR\x02to\x12\x16\n\x06amount\
     \x18\x03\x20\x01(\x04R\x06amount\x12\x1c\n\tsignature\x18\x06\x20\x01(\
     \x0cR\tsignature\x12\x1a\n\x08recovery\x18\x07\x20\x01(\rR\x08recovery\"\
-    h\n\x02Tx\x12\x12\n\x04from\x18\x01\x20\x01(\x0cR\x04from\x12\x0e\n\x02t\
-    o\x18\x02\x20\x01(\x0cR\x02to\x12\x16\n\x06amount\x18\x03\x20\x01(\x04R\
+    H\n\x08ExodusTx\x12\x0e\n\x02to\x18\x02\x20\x01(\x0cR\x02to\x12\x16\n\
+    \x06amount\x18\x03\x20\x01(\x04R\x06amount\x12\x14\n\x05nonce\x18\x05\
+    \x20\x01(\rR\x05nonce\"h\n\x02Tx\x12\x12\n\x04from\x18\x01\x20\x01(\x0cR\
+    \x04from\x12\x0e\n\x02to\x18\x02\x20\x01(\x0cR\x02to\x12\x16\n\x06amount\
+    \x18\x03\x20\x01(\x04R\x06amount\x12\x10\n\x03fee\x18\x04\x20\x01(\x04R\
+    \x03fee\x12\x14\n\x05nonce\x18\x05\x20\x01(\rR\x05nonce\"\xa8\x01\n\x08S\
+    ignedTx\x12\x12\n\x04from\x18\x01\x20\x01(\x0cR\x04from\x12\x0e\n\x02to\
+    \x18\x02\x20\x01(\x0cR\x02to\x12\x16\n\x06amount\x18\x03\x20\x01(\x04R\
     \x06amount\x12\x10\n\x03fee\x18\x04\x20\x01(\x04R\x03fee\x12\x14\n\x05no\
-    nce\x18\x05\x20\x01(\rR\x05nonce\"\xa8\x01\n\x08SignedTx\x12\x12\n\x04fr\
-    om\x18\x01\x20\x01(\x0cR\x04from\x12\x0e\n\x02to\x18\x02\x20\x01(\x0cR\
-    \x02to\x12\x16\n\x06amount\x18\x03\x20\x01(\x04R\x06amount\x12\x10\n\x03\
-    fee\x18\x04\x20\x01(\x04R\x03fee\x12\x14\n\x05nonce\x18\x05\x20\x01(\rR\
-    \x05nonce\x12\x1c\n\tsignature\x18\x06\x20\x01(\x0cR\tsignature\x12\x1a\
-    \n\x08recovery\x18\x07\x20\x01(\rR\x08recovery\"v\n\x04TxDB\x12\x12\n\
-    \x04hash\x18\x01\x20\x01(\x0cR\x04hash\x12\x1c\n\tblockHash\x18\x02\x20\
-    \x01(\x0cR\tblockHash\x12\x20\n\x0bblockHeight\x18\x03\x20\x01(\rR\x0bbl\
-    ockHeight\x12\x1a\n\x08txNumber\x18\x04\x20\x01(\rR\x08txNumberb\x06prot\
-    o3\
+    nce\x18\x05\x20\x01(\rR\x05nonce\x12\x1c\n\tsignature\x18\x06\x20\x01(\
+    \x0cR\tsignature\x12\x1a\n\x08recovery\x18\x07\x20\x01(\rR\x08recovery\"\
+    v\n\x04TxDB\x12\x12\n\x04hash\x18\x01\x20\x01(\x0cR\x04hash\x12\x1c\n\tb\
+    lockHash\x18\x02\x20\x01(\x0cR\tblockHash\x12\x20\n\x0bblockHeight\x18\
+    \x03\x20\x01(\rR\x0bblockHeight\x12\x1a\n\x08txNumber\x18\x04\x20\x01(\r\
+    R\x08txNumberb\x06proto3\
 ";
 
 static mut file_descriptor_proto_lazy: ::protobuf::lazy::Lazy<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::lazy::Lazy {

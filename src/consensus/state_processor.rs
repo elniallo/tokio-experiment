@@ -118,7 +118,7 @@ impl<'a> StateProcessor<'a> {
                 .get(&self.state_cache[self.state_cache.len() - 1], address_keys)?;
             for i in (0..accounts.len()).rev() {
                 if let Some(account) = accounts.remove(i) {
-                    account_map.insert(address_list[i], account);
+                    account_map.insert(address_list[i], account.1);
                 }
             }
         }

@@ -37,8 +37,12 @@ starling = "1.2.1"
 uuid = {version = "0.6.5", features= ["v4"]}
 
 [dev-dependencies]
-criterion = "^0.2"
+criterion = "^0.2.10"
 double = "0.2.3"
+
+[[bench]]
+name = "common_benches"
+harness = false
 
 [[bench]]
 name = "proto_benches"
@@ -48,13 +52,18 @@ harness = false
 name = "wordstate_benches"
 harness = false
 
+# [[bench]]
+# name = "util_benches"
+# harness = false
+
 include = [
     "/src/**/*.rs",
     "/benches/*.rs",
     "/Cargo.toml",
     "/README.md",
     "/LICENSE",
-    "/mnemonic/*.json"
+    "/mnemonic/*.json",
+    "/data/*.dat"
 ]
 
 [lib]

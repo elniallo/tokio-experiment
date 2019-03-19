@@ -18,7 +18,7 @@ type Rx = mpsc::UnboundedReceiver<NotificationType<DBPeer>>;
 type IntervalStream = tokio::timer::Interval;
 fn get_current_time() -> usize {
     let start = SystemTime::now();
-    start.duration_since(UNIX_EPOCH).unwrap().as_secs() as usize
+    start.duration_since(UNIX_EPOCH).unwrap().as_millis() as usize
 }
 enum PeerConnectionType {
     Inbound,
@@ -301,12 +301,12 @@ impl PeerDB<SocketAddr, DBPeer> for PeerDatabase<SocketAddr, DBPeer> {
 
 impl Stream for PeerDatabase<SocketAddr, DBPeer> {
     type Item = SocketAddr;
-    type Error = io::Error;
+    type Error = Box<std::error::Error>;
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         match self.receiver.poll().unwrap() {
             Async::Ready(Some(notification)) => match notification {
                 NotificationType::Inbound(v) => {
-                    self.inbound_connection(v.get_addr().clone(), v);
+                    self.inbound_connection(v.get_addr().clone(), v)?;
                     task::current().notify();
                     return Ok(Async::NotReady);
                 }
@@ -320,7 +320,7 @@ impl Stream for PeerDatabase<SocketAddr, DBPeer> {
                     for peer in v {
                         vec.push((peer.get_addr().clone(), peer));
                     }
-                    self.put_multiple(vec);
+                    self.put_multiple(vec)?;
                 }
             },
             _ => {}

@@ -230,9 +230,9 @@ pub mod tests {
             117, 85, 69, 104, 116, 117, 53, 120, 65, 110, 87, 122, 72, 122, 75, 76, 67, 55, 78, 72,
             86, 86, 85, 87, 97, 57, 70, 83, 77, 69, 54, 69, 88, 97, 104, 97, 103, 113, 52, 122,
         ];
-        parser.parse(&bytes1);
+        let _ = parser.parse(&bytes1);
         assert_eq!(parser.state, ParseState::Body);
-        let (parsed, bytes) = parser.parse(&bytes2).unwrap();
+        let (parsed, _bytes) = parser.parse(&bytes2).unwrap();
         match parsed {
             Some(vec) => {
                 let (buf, _route) = &vec[0];
@@ -252,13 +252,13 @@ pub mod tests {
         let res = parser.parse(&bytes1);
         match res {
             Ok(_) => assert_eq!(1, 2),
-            Err(e) => assert_eq!(1, 1),
+            Err(_e) => assert_eq!(1, 1),
         }
     }
     #[test]
     fn it_should_parse_messages_stuck_together() {
         let mut parser = SocketParser::new();
-        let mut bytes = BytesMut::from(vec![
+        let bytes = BytesMut::from(vec![
             137, 136, 143, 254, 1, 0, 0, 64, 5, 0, 0, 0, 154, 1, 2, 16, 100, 137, 136, 143, 254, 2,
             0, 0, 64, 5, 0, 0, 0, 170, 1, 2, 16, 0,
         ]);
@@ -274,7 +274,7 @@ pub mod tests {
                     None => {}
                 }
             }
-            Err(e) => {}
+            Err(_e) => {}
         }
     }
 }

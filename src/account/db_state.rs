@@ -75,18 +75,11 @@ impl Proto for DBState {
         }
 
         match &self.node {
-            Some(_node) => {
+            Some(node) => {
                 let mut proto_state_node = ProtoStateNode::new();
-
-                let mut proto_refs: Vec<ProtoNodeRef> = vec![];
-                // fill the data
-                match &self.node {
-                    Some(data) => {
-                        for tmp in &data.node_refs {
-                            proto_refs.push(tmp.1.to_proto().unwrap());
-                        }
-                    }
-                    None => (),
+                let mut proto_refs: Vec<ProtoNodeRef> = Vec::with_capacity(node.node_refs.len());
+                for tmp in &node.node_refs {
+                    proto_refs.push(tmp.1.to_proto().unwrap());
                 }
                 let refs = RepeatedField::from(proto_refs);
                 proto_state_node.set_nodeRefs(refs);
@@ -104,7 +97,6 @@ impl Proto for DBState {
 impl Encode for DBState {
     fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
         let proto_db_state = self.to_proto()?;
-
         Ok(proto_db_state.write_to_bytes()?)
     }
 }

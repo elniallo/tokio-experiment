@@ -273,15 +273,15 @@ impl WorldState {
         &self,
         root: &Blake2bHashResult,
         keys: Vec<Address>,
-    ) -> Result<Vec<Option<ProtoAccount>>, Box<Error>> {
-        Ok(self.tree.get_multiple(root.as_ref(), keys)?)
+    ) -> Result<Vec<Option<(Address, ProtoAccount)>>, Box<Error>> {
+        Ok(self.tree.get(root.as_ref(), keys)?)
     }
 
     pub fn insert(
         &mut self,
-        previous_root: Option<&Blake2bHashResult>,
+        previous_root: Option<&[u8]>,
         keys: Vec<Address>,
-        values: &[&ProtoAccount],
+        values: &[ProtoAccount],
     ) -> Result<Vec<u8>, Box<Error>> {
         Ok(self.tree.insert(previous_root, keys, values)?)
     }
