@@ -52,9 +52,9 @@ harness = false
 name = "wordstate_benches"
 harness = false
 
-[[bench]]
-name = "util_benches"
-harness = false
+# [[bench]]
+# name = "util_benches"
+# harness = false
 
 include = [
     "/src/**/*.rs",

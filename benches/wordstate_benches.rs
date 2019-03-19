@@ -6,12 +6,19 @@ use hycon_rust::account::account::Account;
 use hycon_rust::account::db_state::DBState;
 use hycon_rust::account::node_ref::NodeRef;
 use hycon_rust::account::state_node::StateNode;
+use hycon_rust::common::address::Address;
+use hycon_rust::common::exodus_block::ExodusBlock;
+use hycon_rust::common::transaction::Transaction;
 use hycon_rust::consensus::legacy_trie::LegacyTrie;
 use hycon_rust::database::mock::RocksDBMock;
 use hycon_rust::database::state_db::StateDB;
-use hycon_rust::traits::Encode;
+use hycon_rust::serialization::state::Account as ProtoAccount;
+use hycon_rust::traits::{Decode, Encode, Proto};
 use hycon_rust::util::hash::hash;
 use starling::traits::Database;
+use std::env;
+use std::fs::File;
+use std::io::prelude::*;
 use std::path::PathBuf;
 
 fn get_from_trie_best_case(c: &mut Criterion) {
@@ -50,5 +57,52 @@ fn get_from_trie_best_case(c: &mut Criterion) {
         })
     });
 }
-criterion_group!(benches, get_from_trie_best_case);
+
+fn exodus(c: &mut Criterion) {
+    let mut path = env::current_dir().unwrap();
+    path.push("data/exodusBlock.dat");
+    let mut exodus_file = File::open(path).unwrap();
+    let mut exodus_buf = Vec::new();
+    exodus_file.read_to_end(&mut exodus_buf).unwrap();
+    let exodus = ExodusBlock::decode(&exodus_buf).unwrap();
+    let mut keypairs: Vec<(Address, ProtoAccount)> = Vec::with_capacity(12000);
+    let mut addresses: Vec<Address> = Vec::with_capacity(12000);
+    let mut accounts: Vec<ProtoAccount> = Vec::with_capacity(12000);
+    match &exodus.txs {
+        Some(tx_vec) => {
+            for tx in tx_vec {
+                let mut amount: u64 = tx.get_amount();
+                let mut nonce: u32 = 0;
+                if let Some(tx_nonce) = tx.get_nonce() {
+                    nonce = tx_nonce;
+                } else {
+                    break;
+                }
+                if let Some(add) = tx.get_to() {
+                    keypairs.push((add, Account::new(amount, nonce).to_proto().unwrap()));
+                } else {
+                    break;
+                }
+            }
+        }
+        None => {}
+    }
+    keypairs.sort_by(|a, b| a.0.cmp(&b.0));
+    for (key, value) in keypairs.clone() {
+        addresses.push(key);
+        accounts.push(value);
+    }
+    let db_path = PathBuf::new();
+    addresses.sort();
+    c.bench_function("Exodus Block", move |b| {
+        let add = addresses.clone();
+        let acc = accounts.clone();
+        b.iter(|| {
+            let mut state_db: StateDB<RocksDBMock> = StateDB::new(db_path.clone(), None).unwrap();
+            let mut tree = LegacyTrie::new(state_db);
+            let root = tree.insert(None, add.clone(), &acc).unwrap();
+        });
+    });
+}
+criterion_group!(benches, get_from_trie_best_case, exodus);
 criterion_main!(benches);
