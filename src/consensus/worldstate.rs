@@ -272,7 +272,7 @@ impl WorldState {
     pub fn get(
         &self,
         root: &Blake2bHashResult,
-        keys: Vec<Address>,
+        keys: &Vec<Address>,
     ) -> Result<Vec<Option<(Address, ProtoAccount)>>, Box<Error>> {
         Ok(self.tree.get(root.as_ref(), keys)?)
     }

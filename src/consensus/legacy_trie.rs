@@ -4,14 +4,12 @@ use crate::account::node_ref::NodeRef;
 use crate::account::state_node::StateNode;
 use crate::common::address::Address;
 use crate::consensus::tree_node::TreeNode;
-use crate::consensus::worldstate::Blake2bHashResult;
 use crate::database::state_db::StateDB;
 use crate::database::IDB;
 use crate::serialization::state::Account as ProtoAccount;
 use crate::traits::{Encode, Exception, Proto};
 use crate::util::hash::hash;
 use futures::Future;
-use protobuf::Message;
 use starling::traits::Database;
 use std::cmp::min;
 use std::collections::{BTreeMap, HashMap};
@@ -37,13 +35,13 @@ where
         let write_queue = Arc::new(Mutex::new(Vec::new()));
         Self { db, write_queue }
     }
-    pub fn get_account(&self, address: Address, root_node: &DBState) -> Option<ProtoAccount> {
+    pub fn get_account(&self, _address: Address, _root_node: &DBState) -> Option<ProtoAccount> {
         None
     }
     pub fn get(
         &self,
         root: &[u8],
-        modified_accounts: Vec<Address>,
+        modified_accounts: &Vec<Address>,
     ) -> Result<Vec<Option<(Address, ProtoAccount)>>, Box<Error>> {
         let mut accounts = Vec::with_capacity(modified_accounts.len());
         let root_node = self.db.get_node(root)?;
@@ -136,7 +134,7 @@ where
                 if let Some(node) = node_map.get(&key[0..n]) {
                     current_node = node.clone();
                     if current_node.is_leaf() {
-                        current_node.upgrade_to_branch(offset, n)?;
+                        current_node.upgrade_to_branch()?;
                         node_map.insert(key[0..n].to_vec(), current_node.clone());
                         offset = n;
                     }
@@ -147,7 +145,7 @@ where
                 current_node = root_node.clone();
             }
             // set up to traverse states
-            let mut db_state: Option<DBState> = None;
+            let mut db_state: Option<DBState>;
             if let Some(next_node) = current_node.get_next_node_location(key[offset]) {
                 let mut early_out = false;
                 for (i, loc) in next_node.node_location.iter().enumerate() {
@@ -156,7 +154,7 @@ where
                         let new_account = Account::from_proto(account);
                         let node_hash = hash(&new_account.encode().unwrap(), 32);
                         self.db
-                            .insert(&node_hash, &DBState::new(Some(new_account), None, 1));
+                            .insert(&node_hash, &DBState::new(Some(new_account), None, 1))?;
                         let node_ref = NodeRef {
                             node_location: key[offset + i..key.len()].to_vec(),
                             child: node_hash,
@@ -207,7 +205,6 @@ where
                         prev_offset,
                     );
                     node_map.insert(key[0..prev_offset + 1].to_vec(), tree_node);
-                    db_state = None;
                     break;
                 } else if let Some(node) = &state.node {
                     let tree_node = TreeNode::new(
@@ -225,8 +222,10 @@ where
                                 early_out = true;
                                 let new_account = Account::from_proto(account);
                                 let node_hash = hash(&new_account.encode().unwrap(), 32);
-                                self.db
-                                    .insert(&node_hash, &DBState::new(Some(new_account), None, 1));
+                                self.db.insert(
+                                    &node_hash,
+                                    &DBState::new(Some(new_account), None, 1),
+                                )?;
                                 let new_node_ref = NodeRef {
                                     node_location: key[offset + i..key.len()].to_vec(),
                                     child: node_hash,
@@ -329,13 +328,14 @@ where
                 self.db.batch_write()?;
                 Ok(root.child)
             }
-            Err(e) => Err(Box::new(Exception::new("Error generating new root"))),
+            Err(_e) => Err(Box::new(Exception::new("Error generating new root"))),
         }
     }
 
-    pub fn remove(&mut self, root: &[u8]) -> Result<(), Box<Error>> {
+    pub fn remove(&mut self, _root: &[u8]) -> Result<(), Box<Error>> {
         Ok(())
     }
+
     fn traverse_nodes(
         &self,
         root: &DBState,
@@ -403,8 +403,6 @@ pub mod tests {
     use crate::util::hash::hash;
     use std::env;
     use std::fs::File;
-    use std::io;
-    use std::io::prelude::*;
     use std::io::Read;
     use std::path::PathBuf;
     #[test]
@@ -437,7 +435,7 @@ pub mod tests {
         let legacy_trie = LegacyTrie::new(state_db);
         let returned_accounts = legacy_trie.get(
             &state_hash,
-            vec![
+            &vec![
                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                 [12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             ],
@@ -525,7 +523,7 @@ pub mod tests {
             [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ];
-        let returned_accounts = tree.get(&root_hash, addresses);
+        let returned_accounts = tree.get(&root_hash, &addresses);
         match returned_accounts {
             Ok(vec) => {
                 assert_eq!(vec.len(), 3);
@@ -604,7 +602,7 @@ pub mod tests {
             [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ];
-        let returned_accounts = tree.get(&root_hash, addresses);
+        let returned_accounts = tree.get(&root_hash, &addresses);
         match returned_accounts {
             Ok(vec) => {
                 assert_eq!(vec.len(), 3);
@@ -665,7 +663,7 @@ pub mod tests {
             addresses.push(address);
         }
         let root_hash = tree.insert(None, addresses.clone(), &accounts).unwrap();
-        let retrieved_accounts = tree.get(&root_hash, addresses.clone()).unwrap();
+        let retrieved_accounts = tree.get(&root_hash, &addresses).unwrap();
         assert_eq!(retrieved_accounts.len(), 256);
         for (i, (opt, original_address)) in
             retrieved_accounts.iter().zip(addresses.iter()).enumerate()
@@ -756,7 +754,7 @@ pub mod tests {
         let result = tree.insert(Some(&root_hash), addresses.clone(), &accounts);
         let new_root = result.unwrap();
         assert_ne!(&new_root, &root_hash);
-        let returned_accounts = tree.get(&new_root, addresses);
+        let returned_accounts = tree.get(&new_root, &addresses);
         match returned_accounts {
             Ok(vec) => {
                 assert_eq!(vec.len(), 3);
@@ -781,7 +779,7 @@ pub mod tests {
     #[test]
     fn it_inserts_a_node_into_a_compressed_branch() {
         let path = PathBuf::new();
-        let mut state_db: StateDB<RocksDBMock> = StateDB::new(path, None).unwrap();
+        let state_db: StateDB<RocksDBMock> = StateDB::new(path, None).unwrap();
         let mut tree = LegacyTrie::new(state_db);
         let address_bytes = vec![
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -808,7 +806,7 @@ pub mod tests {
 
         let result = tree.insert(None, addresses.clone(), &account_vec);
         let new_root = result.unwrap();
-        let accounts = tree.get(&new_root, addresses.clone()).unwrap();
+        let accounts = tree.get(&new_root, &addresses).unwrap();
         assert_eq!(accounts.len(), 7);
         for (i, (opt, original_address)) in accounts.iter().zip(addresses.iter()).enumerate() {
             assert!(opt.is_some());
@@ -830,7 +828,7 @@ pub mod tests {
             .unwrap();
         addresses.push(new_address);
         addresses.sort();
-        let accounts = tree.get(&new_result, addresses.clone()).unwrap();
+        let accounts = tree.get(&new_result, &addresses).unwrap();
         assert_eq!(accounts.len(), 8);
         for (i, (opt, original_address)) in accounts.iter().zip(addresses.iter()).enumerate() {
             assert!(opt.is_some());
@@ -862,8 +860,8 @@ pub mod tests {
         match &exodus.txs {
             Some(tx_vec) => {
                 for tx in tx_vec {
-                    let mut amount: u64 = tx.get_amount();
-                    let mut nonce: u32 = 0;
+                    let amount: u64 = tx.get_amount();
+                    let nonce: u32;
                     if let Some(tx_nonce) = tx.get_nonce() {
                         nonce = tx_nonce;
                     } else {
@@ -884,7 +882,7 @@ pub mod tests {
             accounts.push(value);
         }
         let db_path = PathBuf::new();
-        let mut state_db: StateDB<RocksDBMock> = StateDB::new(db_path, None).unwrap();
+        let state_db: StateDB<RocksDBMock> = StateDB::new(db_path, None).unwrap();
         let mut tree = LegacyTrie::new(state_db);
         addresses.sort();
         let root = tree.insert(None, addresses.clone(), &accounts).unwrap();
@@ -893,8 +891,7 @@ pub mod tests {
             143, 83, 11, 147, 238, 198, 92, 130, 35, 27, 188, 134,
         ];
         assert_eq!(root, expected_root);
-        println!("New Root: {:?}", root);
-        let retrieved = tree.get(&root, addresses).unwrap();
+        let retrieved = tree.get(&root, &addresses).unwrap();
         for (ret, keypair) in retrieved.iter().zip(keypairs.iter()) {
             assert!(ret.is_some());
             match ret {

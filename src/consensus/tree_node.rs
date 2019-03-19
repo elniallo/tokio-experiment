@@ -5,7 +5,6 @@ use crate::consensus::legacy_trie::NodeType;
 use crate::traits::{Encode, Exception};
 use crate::util::hash::hash;
 use futures::future::Future;
-use std::cmp::{max, min};
 use std::error::Error;
 use std::fmt::{Debug, Formatter, Result as FormatResult};
 use std::sync::{Arc, Mutex};
@@ -67,11 +66,7 @@ impl TreeNode {
         }
     }
 
-    pub fn upgrade_to_branch(
-        &mut self,
-        offset: usize,
-        prev_offset: usize,
-    ) -> Result<(), Box<Error>> {
+    pub fn upgrade_to_branch(&mut self) -> Result<(), Box<Error>> {
         match self.node {
             NodeType::Leaf(account) => {
                 let value = account.encode()?;
@@ -103,7 +98,7 @@ impl Future for TreeNode {
     type Item = NodeRef;
     type Error = Box<Error>;
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        let mut curr_node = self.node.clone();
+        let curr_node = self.node.clone();
         match curr_node {
             NodeType::Leaf(node) => {
                 let node_hash = hash(&node.encode()?, 32);
@@ -140,7 +135,7 @@ impl Future for TreeNode {
                     if next_node.node_refs.len() == 1 {
                         let mut iter = next_node.node_refs.iter_mut();
                         match iter.next() {
-                            Some((key, node_ref)) => {
+                            Some((_key, node_ref)) => {
                                 self.location.append(&mut node_ref.node_location);
                                 let node_ref = NodeRef::new(&self.location, &node_ref.child);
                                 return Ok(Async::Ready(node_ref));
