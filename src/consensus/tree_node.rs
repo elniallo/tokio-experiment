@@ -76,10 +76,7 @@ impl TreeNode {
             NodeType::Leaf(account) => {
                 let value = account.encode()?;
                 let hash = hash(&value, 32);
-                let node_ref = NodeRef::new(
-                    &self.location[max(1 + offset - prev_offset, 1)..self.location.len()].to_vec(),
-                    &hash,
-                );
+                let node_ref = NodeRef::new(&self.location[1..self.location.len()].to_vec(), &hash);
                 let state_node = StateNode::new(vec![node_ref]);
                 let db_state = DBState::new(Some(account.clone()), None, 1);
                 let guard = self.write_queue.lock();
@@ -92,7 +89,7 @@ impl TreeNode {
                     }
                 }
                 self.node = NodeType::Branch(state_node);
-                self.location = self.location[0..max(1 + offset - prev_offset, 1)].to_vec();
+                self.location = self.location[0..1].to_vec();
             }
             NodeType::Branch(_) => {
                 return Err(Box::new(Exception::new("Node is already a branch")));
@@ -140,6 +137,21 @@ impl Future for TreeNode {
                     }
                 }
                 if self.futures.len() == 0 {
+                    if next_node.node_refs.len() == 1 {
+                        let mut iter = next_node.node_refs.iter_mut();
+                        match iter.next() {
+                            Some((key, node_ref)) => {
+                                self.location.append(&mut node_ref.node_location);
+                                let node_ref = NodeRef::new(&self.location, &node_ref.child);
+                                return Ok(Async::Ready(node_ref));
+                            }
+                            None => {
+                                return Err(Box::new(Exception::new(
+                                    "Couldn't resolve future, node error",
+                                )));
+                            }
+                        }
+                    }
                     let node_hash = hash(&next_node.encode()?, 32);
                     let db_state = DBState::new(None, Some(next_node.clone()), 1);
                     let node_ref = NodeRef::new(&self.location, &node_hash);
@@ -198,7 +210,7 @@ pub mod tests {
         match result {
             Ok(_node) => {
                 let len = write_queue.lock().unwrap().len();
-                assert_eq!(len, 2);
+                assert_eq!(len, 1);
             }
             Err(e) => {
                 println!("Error: {:?}", e);

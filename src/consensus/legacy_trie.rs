@@ -304,7 +304,6 @@ where
         }
         let cln = node_map.clone();
         let mut futures = Vec::from_iter(cln.iter());
-        println!("futures: {:?}", futures);
         let mut curr_node: Option<(&Vec<u8>, &TreeNode)> = futures.pop();
         while let Some(node) = &curr_node {
             if let Some(removed_node) = node_map.remove(node.0) {
@@ -849,44 +848,6 @@ pub mod tests {
     }
 
     #[test]
-    fn it_inserts_correctly_to_compressed_branch_with_real_data() {
-        let path = PathBuf::new();
-        let mut state_db: StateDB<RocksDBMock> = StateDB::new(path, None).unwrap();
-        let mut tree = LegacyTrie::new(state_db);
-        let address_bytes = vec![
-            [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [
-                44, 138, 163, 109, 237, 224, 250, 25, 72, 148, 226, 38, 0, 144, 20, 247, 51, 45,
-                138, 65,
-            ],
-            [
-                44, 147, 41, 95, 23, 216, 210, 14, 86, 123, 225, 191, 76, 174, 145, 7, 3, 202, 175,
-                146,
-            ],
-            [
-                44, 147, 41, 245, 37, 149, 157, 51, 127, 206, 207, 91, 247, 246, 30, 174, 222, 141,
-                67, 142,
-            ],
-        ];
-        let mut addresses: Vec<Address> = Vec::new();
-        for address in address_bytes {
-            addresses.push(Address::from_bytes(&address));
-        }
-        addresses.sort();
-        let mut account_vec = Vec::with_capacity(4);
-        for i in 1..5 {
-            let account = Account {
-                balance: i * 100,
-                nonce: i as u32,
-            };
-            account_vec.push(account.to_proto().unwrap());
-        }
-        let x = 0;
-        let result = tree.insert(None, addresses.clone(), &account_vec);
-        unimplemented!();
-    }
-
-    #[test]
     fn it_matches_typescript_world_state_for_exodus_block() {
         //let path_to_exodus = PathBuf::from("./../../data/exodusBlock.dat");
         let mut path = env::current_dir().unwrap();
@@ -927,6 +888,11 @@ pub mod tests {
         let mut tree = LegacyTrie::new(state_db);
         addresses.sort();
         let root = tree.insert(None, addresses.clone(), &accounts).unwrap();
+        let expected_root = vec![
+            57, 92, 11, 69, 43, 154, 183, 169, 122, 56, 191, 8, 12, 60, 185, 124, 155, 185, 54, 47,
+            143, 83, 11, 147, 238, 198, 92, 130, 35, 27, 188, 134,
+        ];
+        assert_eq!(root, expected_root);
         println!("New Root: {:?}", root);
         let retrieved = tree.get(&root, addresses).unwrap();
         for (ret, keypair) in retrieved.iter().zip(keypairs.iter()) {
@@ -940,28 +906,5 @@ pub mod tests {
                 None => {}
             }
         }
-        let root_node = tree.db.get_node(&[
-            10, 85, 34, 60, 24, 117, 97, 5, 121, 133, 148, 2, 44, 145, 217, 149, 71, 177, 161, 90,
-            211, 19, 18, 73, 248, 201, 83, 197, 15, 154, 189, 226,
-        ]);
-        let node_44 = [
-            255, 101, 108, 202, 90, 124, 112, 191, 14, 49, 69, 253, 117, 230, 215, 242, 12, 105,
-            23, 57, 136, 21, 75, 184, 73, 68, 106, 202, 105, 174, 123, 26,
-        ];
-        let node_44_problem = [
-            148, 100, 88, 75, 74, 246, 1, 206, 22, 119, 244, 228, 231, 4, 38, 42, 9, 36, 99, 190,
-            13, 198, 100, 141, 57, 119, 238, 224, 241, 254, 202, 1,
-        ];
-        let node_173 = [
-            145, 206, 197, 30, 35, 231, 226, 212, 112, 80, 239, 196, 141, 169, 163, 97, 106, 68,
-            171, 49, 10, 59, 122, 189, 151, 18, 49, 14, 19, 207, 111, 216,
-        ];
-        let node_204 = [
-            132, 178, 237, 70, 99, 85, 138, 137, 22, 119, 81, 37, 0, 238, 10, 16, 75, 113, 225, 90,
-            28, 254, 17, 181, 219, 215, 83, 121, 142, 5, 147, 127,
-        ];
-        // // let node = tree.db.get_node(&node_44_problem);
-        // println!("Root Node: {:?}", node);
-        unimplemented!();
     }
 }
