@@ -71,8 +71,8 @@ fn exodus(c: &mut Criterion) {
     match &exodus.txs {
         Some(tx_vec) => {
             for tx in tx_vec {
-                let mut amount: u64 = tx.get_amount();
-                let mut nonce: u32 = 0;
+                let amount: u64 = tx.get_amount();
+                let nonce: u32;
                 if let Some(tx_nonce) = tx.get_nonce() {
                     nonce = tx_nonce;
                 } else {
@@ -117,8 +117,8 @@ fn get_from_exodus_state(c: &mut Criterion) {
     match &exodus.txs {
         Some(tx_vec) => {
             for tx in tx_vec {
-                let mut amount: u64 = tx.get_amount();
-                let mut nonce: u32 = 0;
+                let amount: u64 = tx.get_amount();
+                let nonce: u32;
                 if let Some(tx_nonce) = tx.get_nonce() {
                     nonce = tx_nonce;
                 } else {

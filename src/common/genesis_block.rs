@@ -301,19 +301,4 @@ pub mod tests {
             genesis_signed_tx_6,
         ]
     }
-
-    #[test]
-    fn it_decodes_a_genesis_block() {
-        let mut path = env::current_dir().unwrap();
-        path.push("data/genesis.dat");
-        println!("Path: {:?}", path);
-        let mut genesis_file = File::open(path).unwrap();
-        let mut genesis_buf = Vec::new();
-        genesis_file.read_to_end(&mut genesis_buf).unwrap();
-        println!("Genesis Read: {:?}", genesis_buf.len());
-        println!("Genesis Encoded: {:?}", genesis_buf);
-        let genesis = GenesisBlock::decode(&genesis_buf);
-        println!("Genesis: {:?}", genesis);
-        unimplemented!();
-    }
 }
