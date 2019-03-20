@@ -48,7 +48,7 @@ where
         let mut node_map: HashMap<Vec<u8>, StateNode> = HashMap::new();
         match root_node {
             Some(node) => {
-                let account_split = self.split_keys(&modified_accounts)?;
+                let account_split = self.split_keys(modified_accounts)?;
                 for (index, address) in account_split {
                     accounts.push(self.traverse_nodes(&node, address, &mut node_map, index)?);
                 }
@@ -60,18 +60,21 @@ where
         Ok(accounts)
     }
 
-    fn split_keys(&self, keys: &Vec<Address>) -> Result<Vec<(usize, Address)>, Box<Error>> {
+    fn split_keys<'a>(
+        &self,
+        keys: &'a Vec<Address>,
+    ) -> Result<Vec<(usize, &'a Address)>, Box<Error>> {
         if keys.is_empty() {
             return Err(Box::new(Exception::new("No keys provided")));
         }
-        let mut splits: Vec<(usize, Address)> = Vec::with_capacity(keys.len());
+        let mut splits: Vec<(usize, &Address)> = Vec::with_capacity(keys.len());
         for i in 0..keys.len() {
             if i == 0 {
-                splits.push((0, keys[i].clone()))
+                splits.push((0, &keys[i]))
             } else {
                 for j in 0..19 {
                     if keys[i - 1][j] != keys[i][j] {
-                        splits.push((j, keys[i].clone()));
+                        splits.push((j, &keys[i]));
                         break;
                     }
                 }
@@ -339,7 +342,7 @@ where
     fn traverse_nodes(
         &self,
         root: &DBState,
-        address: Address,
+        address: &Address,
         map: &mut HashMap<Vec<u8>, StateNode>,
         split: usize,
     ) -> Result<Option<(Address, ProtoAccount)>, Box<Error>> {
@@ -361,7 +364,7 @@ where
         }
         while let Some(db_state) = &state {
             if let Some(account) = &db_state.account {
-                return Ok(Some((address, account.to_proto()?)));
+                return Ok(Some((*address, account.to_proto()?)));
             //we have an account
             } else if let Some(node) = &db_state.node {
                 map.insert(address[0..offset].to_vec(), node.clone());
