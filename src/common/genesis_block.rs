@@ -63,10 +63,6 @@ pub mod tests {
     use crate::common::address::{Address, ValidAddress};
 
     use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
-    use std::env;
-    use std::fs::File;
-    use std::io;
-    use std::io::prelude::*;
 
     #[test]
     fn it_makes_a_genesis_block_with_no_txs() {

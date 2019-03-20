@@ -2,7 +2,6 @@ use bytes::Bytes;
 use futures::sync::mpsc;
 use futures::Future;
 use slog::Logger;
-use std::error::Error;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use tokio::io;

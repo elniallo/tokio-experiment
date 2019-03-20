@@ -81,7 +81,7 @@ impl IDB for RocksDB {
         }
     }
 
-    fn delete(&mut self, key: &[u8]) -> DBResult<()> {
+    fn delete(&mut self, _key: &[u8]) -> DBResult<()> {
         Ok(())
     }
 
@@ -173,8 +173,6 @@ pub mod mock {
     use super::*;
     use std::collections::HashMap;
 
-    use crate::serialization::state::ProtoMerkleNode;
-
     pub struct RocksDBMock {
         db: HashMap<Vec<u8>, Vec<u8>>,
     }
@@ -211,7 +209,7 @@ pub mod mock {
             Ok(())
         }
 
-        fn delete(&mut self, key: &[u8]) -> DBResult<()> {
+        fn delete(&mut self, _key: &[u8]) -> DBResult<()> {
             Ok(())
         }
         fn write_batch(&mut self, key_pairs: Vec<(Vec<u8>, Vec<u8>)>) -> DBResult<()> {

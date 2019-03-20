@@ -1,13 +1,12 @@
 use std::error::Error;
 
 use crate::common::address::Address;
-use crate::common::genesis_tx::GenesisTx;
-use crate::common::transaction::{verify_tx, Transaction, Valid};
+use crate::common::transaction::{Transaction, Valid};
 use crate::serialization::tx::ExodusTx as ProtoExodusTx;
 use crate::traits::{Decode, Encode, Proto};
 
 use protobuf::Message as ProtoMessage;
-use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
+use secp256k1::{RecoverableSignature, RecoveryId};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExodusTx {
@@ -66,7 +65,6 @@ impl Encode for ExodusTx {
 
 impl Decode for ExodusTx {
     fn decode(buffer: &[u8]) -> Result<Self, Box<Error>> {
-        let secp = Secp256k1::without_caps();
         let mut proto_exodus_tx = ProtoExodusTx::new();
         proto_exodus_tx.merge_from_bytes(&buffer)?;
         let mut to = [0u8; 20];
