@@ -12,7 +12,7 @@ use crate::util::hash::hash;
 use futures::Future;
 use starling::traits::Database;
 use std::cmp::min;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::iter::FromIterator;
 use std::sync::{Arc, Mutex};
@@ -97,6 +97,7 @@ where
         }
         let split_addresses = self.split_keys(&keys)?;
         let mut node_map: BTreeMap<Vec<u8>, TreeNode> = BTreeMap::new();
+        let mut ref_map: HashSet<&[u8]> = HashSet::new();
         // set root - empty or existing state and create base future
         let mut root_node: TreeNode;
         match root {
