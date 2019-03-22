@@ -5,7 +5,7 @@ use crate::account::db_state::DBState;
 use crate::database::IDB;
 use crate::traits::{Decode, Encode, Exception};
 
-use rocksdb::DB as RocksDB;
+use rocksdb::{MergeOperands, DB as RocksDB};
 
 use starling::traits::Database;
 

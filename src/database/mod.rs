@@ -81,7 +81,7 @@ impl IDB for RocksDB {
         }
     }
 
-    fn delete(&mut self, _key: &[u8]) -> DBResult<()> {
+    fn delete(&mut self, key: &[u8]) -> DBResult<()> {
         Ok(())
     }
 
@@ -209,7 +209,8 @@ pub mod mock {
             Ok(())
         }
 
-        fn delete(&mut self, _key: &[u8]) -> DBResult<()> {
+        fn delete(&mut self, key: &[u8]) -> DBResult<()> {
+            self.db.remove(key);
             Ok(())
         }
         fn write_batch(&mut self, key_pairs: Vec<(Vec<u8>, Vec<u8>)>) -> DBResult<()> {

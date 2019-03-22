@@ -97,13 +97,16 @@ where
         }
         let split_addresses = self.split_keys(&keys)?;
         let mut node_map: BTreeMap<Vec<u8>, TreeNode> = BTreeMap::new();
-        let mut ref_map: HashSet<&[u8]> = HashSet::new();
+        let mut ref_map: HashSet<Vec<u8>> = HashSet::new();
         // set root - empty or existing state and create base future
         let mut root_node: TreeNode;
         match root {
             Some(root_hash) => {
                 if let Some(db_state) = self.db.get_node(root_hash)? {
                     if let Some(state_node) = db_state.node {
+                        for child in state_node.node_refs.iter() {
+                            ref_map.insert(child.1.child.clone());
+                        }
                         root_node = TreeNode::new(
                             NodeType::Branch(state_node),
                             Vec::new(),
@@ -182,6 +185,7 @@ where
                     continue;
                 } else {
                     offset = offset + next_node.node_location.len();
+                    ref_map.remove(&next_node.child);
                     db_state = self.db.get_node(&next_node.child)?;
                 }
             } else {
@@ -211,6 +215,9 @@ where
                     node_map.insert(key[0..prev_offset + 1].to_vec(), tree_node);
                     break;
                 } else if let Some(node) = &state.node {
+                    for child in node.node_refs.iter() {
+                        ref_map.insert(child.1.child.clone());
+                    }
                     let tree_node = TreeNode::new(
                         NodeType::Branch(node.clone()),
                         key[prev_offset..offset].to_vec(),
@@ -253,6 +260,7 @@ where
                             break;
                         }
                         if let Some(next_node) = self.db.get_node(&node_ref.child)? {
+                            ref_map.remove(&node_ref.child);
                             if next_node.account.is_none() {
                                 prev_offset = offset;
                                 offset += node_ref.node_location.len();
@@ -329,6 +337,7 @@ where
                     self.db.insert(&key, &value)?;
                 }
                 self.write_queue.lock().unwrap().clear();
+                self.update_refs(ref_map)?;
                 self.db.batch_write()?;
                 Ok(root.child)
             }
@@ -336,7 +345,34 @@ where
         }
     }
 
-    pub fn remove(&mut self, _root: &[u8]) -> Result<(), Box<Error>> {
+    pub fn remove(&mut self, root: &[u8]) -> Result<(), Box<Error>> {
+        let mut pending_keys: Vec<Vec<u8>> = Vec::new();
+        let mut db_state = self.db.get_node(root)?;
+        let mut key = root.to_vec();
+        while let Some(state) = &db_state {
+            if state.ref_count == 1 {
+                self.db.remove(&key)?;
+                match &state.node {
+                    Some(node) => {
+                        for node_ref in &node.node_refs {
+                            pending_keys.push(node_ref.1.child.clone());
+                        }
+                    }
+                    None => {}
+                }
+            } else {
+                let mut new_state = state.clone();
+                new_state.ref_count -= 1;
+                self.db.insert(&key, &new_state)?;
+            }
+            if let Some(next_key) = pending_keys.pop() {
+                key = next_key;
+                db_state = self.db.get_node(&key)?;
+            } else {
+                break;
+            }
+        }
+        self.db.batch_write()?;
         Ok(())
     }
 
@@ -392,6 +428,21 @@ where
             }
         }
         Ok(None)
+    }
+    //Naive Implementation to test key identification logic
+    fn update_refs(&mut self, nodes: HashSet<Vec<u8>>) -> Result<(), Box<Error>> {
+        let refs: Vec<Vec<u8>> = nodes.iter().cloned().collect();
+        for node in refs {
+            if let Some(mut db_state) = self.db.get_node(&node)? {
+                db_state.ref_count = db_state.ref_count + 1;
+                self.db.insert(&node, &db_state)?;
+            } else {
+                return Err(Box::new(Exception::new(
+                    "Could not increment reference count",
+                )));
+            }
+        }
+        Ok(())
     }
 }
 #[cfg(test)]
@@ -903,6 +954,63 @@ pub mod tests {
                     assert_eq!(add, &keypair.0);
                     assert_eq!(account.balance, keypair.1.balance);
                     assert_eq!(account.nonce, keypair.1.nonce);
+                }
+                None => {}
+            }
+        }
+    }
+    #[test]
+    fn it_increments_the_reference_count_for_untraversed_branches_and_prunes() {
+        let db_path = PathBuf::new();
+        let state_db: StateDB<RocksDBMock> = StateDB::new(db_path, None).unwrap();
+        let mut tree = LegacyTrie::new(state_db);
+        let address_bytes = vec![
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 1, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 1, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 2, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        ];
+        let mut addresses: Vec<Address> = Vec::new();
+        for address in address_bytes {
+            addresses.push(Address::from_bytes(&address));
+        }
+        addresses.sort();
+        let mut account_vec = Vec::with_capacity(4);
+        for i in 1..8 {
+            let account = Account {
+                balance: i * 100,
+                nonce: i as u32,
+            };
+            account_vec.push(account.to_proto().unwrap());
+        }
+
+        let result = tree.insert(None, addresses.clone(), &account_vec);
+        let new_root = result.unwrap();
+        let new_address =
+            Address::from_bytes(&[0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        let new_account = Account::new(1100, 1);
+        let vec = vec![new_account.to_proto().unwrap()];
+        let new_result = tree
+            .insert(Some(&new_root), vec![new_address], &vec)
+            .unwrap();
+        addresses.push(new_address);
+        addresses.sort();
+        let _ = tree.remove(&new_root);
+        assert!(tree.db.get_node(&new_root).is_err());
+        let accounts = tree.get(&new_result, &addresses).unwrap();
+        assert_eq!(accounts.len(), 8);
+        for (i, (opt, original_address)) in accounts.iter().zip(addresses.iter()).enumerate() {
+            assert!(opt.is_some());
+            match opt {
+                Some((add, account)) => {
+                    assert_eq!(add, original_address);
+                    if i == 3 {
+                        assert_eq!(account.balance, 1100);
+                        assert_eq!(account.nonce, 1);
+                    }
                 }
                 None => {}
             }
