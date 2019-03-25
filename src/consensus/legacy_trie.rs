@@ -50,7 +50,15 @@ where
             Some(node) => {
                 let account_split = self.split_keys(modified_accounts)?;
                 for (index, address) in account_split {
-                    accounts.push(self.traverse_nodes(&node, address, &mut node_map, index)?);
+                    let node = self.traverse_nodes(&node, address, &mut node_map, index);
+                    match node {
+                        Ok(account) => {
+                            accounts.push(account);
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    }
                 }
             }
             None => {
@@ -272,9 +280,9 @@ where
                                     NodeType::Leaf(new_account),
                                     key[offset..key.len()].to_vec(),
                                     self.write_queue.clone(),
-                                    prev_offset,
+                                    offset,
                                 );
-                                node_map.insert(key[0..offset].to_vec(), tree_node);
+                                node_map.insert(key[0..offset+1].to_vec(), tree_node);
                                 prev_split = offset;
                                 db_state = None;
                                 continue;
@@ -460,6 +468,8 @@ pub mod tests {
     use std::fs::File;
     use std::io::Read;
     use std::path::PathBuf;
+    use rand::{Rng,thread_rng};
+
     #[test]
     fn it_gets_items_from_a_tree_of_depth_1() {
         let path = PathBuf::new();
@@ -939,7 +949,6 @@ pub mod tests {
         let db_path = PathBuf::new();
         let state_db: StateDB<RocksDBMock> = StateDB::new(db_path, None).unwrap();
         let mut tree = LegacyTrie::new(state_db);
-        addresses.sort();
         let root = tree.insert(None, addresses.clone(), &accounts).unwrap();
         let expected_root = vec![
             57, 92, 11, 69, 43, 154, 183, 169, 122, 56, 191, 8, 12, 60, 185, 124, 155, 185, 54, 47,
@@ -1015,5 +1024,122 @@ pub mod tests {
                 None => {}
             }
         }
+    }
+
+    #[test]
+    fn it_can_prune_a_real_tree_after_numerous_inserts() {
+        let db_path = PathBuf::new();
+        let state_db: StateDB<RocksDBMock> = StateDB::new(db_path, None).unwrap();
+        let mut tree = LegacyTrie::new(state_db);
+        let (root,addresses) = initiate_exodus_state(&mut tree);
+        let mut rng = thread_rng();
+        let mut current_root = root;
+        let mut roots = vec![current_root.clone()];
+            let mut changed_addresses = select_random_accounts(&mut rng, &addresses, 25);
+            changed_addresses.sort();
+            let changed_accounts = tree.get(&current_root,&changed_addresses).unwrap();
+            let mut updated_accounts = Vec::with_capacity(changed_accounts.len());
+            for modified in changed_accounts {
+                if let Some(modified_account) = modified {
+                let mut new_account = modified_account.1;
+                new_account.balance += 100;
+                new_account.nonce +=1;
+                updated_accounts.push(new_account);
+                } 
+            }
+            let new_root = tree.insert(Some(&current_root), changed_addresses.clone(), &updated_accounts).unwrap();
+            let retrieved = tree.get(&new_root,&addresses);
+            match retrieved {
+                Ok(_) => {
+
+                }
+                Err(e) => {
+                    println!("Changed Addresses: {:?}",changed_addresses);
+                    println!("Error: {}",e);
+                }
+            }
+            roots.push(new_root.clone());
+            current_root = new_root;
+            println!("Updated Root: {:?}",current_root);
+        
+        unimplemented!();
+    }
+
+    #[test]
+    fn it_can_update_accounts_correctly_in_real_tree() {
+        let address_bytes = vec![[0, 184, 45, 82, 76, 76, 245, 63, 56, 195, 39, 82, 177, 210, 89, 69, 92, 228, 154, 180], [4, 202, 92, 91, 92, 23, 108, 236, 249, 159, 71, 113, 1, 152, 195, 240, 110, 23, 160, 110], [9, 118, 136, 113, 189, 135, 84, 215, 3, 184, 12, 46, 239, 216, 52, 53, 222, 227, 195, 220], [25, 8, 48, 4, 188, 150, 120, 105, 88, 199, 220, 50, 253, 143, 241, 100, 229, 188, 8, 112], [44, 145, 42, 145, 209, 34, 118, 224, 204, 77, 85, 90, 249, 11, 239, 74, 44, 200, 144, 9], [56, 196, 213, 249, 206, 148, 250, 50, 161, 52, 165, 157, 98, 191, 230, 56, 52, 107, 18, 139], [62, 185, 33, 237, 70, 140, 178, 215, 224, 176, 42, 225, 227, 0, 98, 119, 74, 9, 120, 252], [63, 86, 219, 226, 161, 32, 122, 181, 254, 227, 42, 47, 135, 17, 0, 253, 164, 1, 99, 0], [63, 183, 251, 131, 137, 192, 126, 94, 45, 127, 39, 169, 31, 162, 233, 122, 239, 52, 103, 115], [67, 70, 229, 239, 103, 112, 35, 243, 228, 118, 71, 63, 151, 213, 147, 50, 55, 89, 209, 63], [108, 158, 174, 104, 242, 89, 239, 32, 143, 191, 194, 138, 252, 100, 19, 213, 223, 87, 53, 48], [129, 165, 238, 87, 79, 108, 189, 29, 42, 81, 80, 232, 120, 171, 25, 118, 64, 126, 213, 146], [131, 255, 82, 147, 112, 87, 197, 56, 225, 27, 30, 108, 233, 121, 109, 214, 190, 92, 56, 8], [132, 103, 151, 195, 214, 130, 244, 164, 37, 2, 69, 140, 5, 147, 11, 43, 98, 132, 163, 44], [136, 197, 141, 75, 34, 168, 185, 128, 21, 147, 51, 42, 91, 216, 77, 68, 216, 80, 20, 236], [139, 130, 218, 106, 46, 221, 103, 113, 145, 61, 143, 69, 112, 16, 213, 217, 92, 229, 240, 61], [151, 152, 0, 10, 65, 100, 118, 241, 81, 181, 216, 17, 106, 138, 87, 14, 221, 88, 249, 34], [158, 74, 97, 253, 98, 14, 44, 65, 80, 115, 183, 31, 95, 204, 163, 71, 247, 173, 44, 33], [169, 79, 124, 116, 142, 150, 242, 176, 150, 207, 205, 166, 243, 181, 188, 97, 5, 51, 177, 63], [196, 45, 34, 70, 209, 31, 153, 190, 236, 126, 230, 238, 218, 34, 9, 2, 16, 60, 19, 171], [201, 73, 63, 7, 121, 164, 32, 70, 54, 107, 114, 67, 180, 5, 200, 249, 30, 46, 28, 43], [204, 103, 211, 92, 186, 80, 52, 51, 242, 20, 172, 205, 154, 33, 226, 226, 50, 83, 244, 181], [207, 226, 50, 111, 243, 225, 57, 190, 79, 38, 62, 168, 89, 238, 56, 204, 25, 124, 194, 19], [251, 89, 230, 192, 154, 85, 91, 111, 230, 209, 27, 205, 83, 35, 238, 48, 233, 4, 136, 168], [255, 237, 6, 60, 87, 23, 97, 249, 138, 248, 127, 149, 40, 191, 2, 123, 54, 129, 2, 198]];
+        let mut addresses: Vec<Address> = Vec::new();
+        for address in address_bytes {
+            addresses.push(Address::from_bytes(&address));
+        }
+        addresses.sort();
+        let mut account_vec = Vec::with_capacity(4);
+        for i in 1..addresses.len()+1 {
+            let account = Account {
+                balance: i as u64 * 100,
+                nonce: i as u32,
+            };
+            account_vec.push(account.to_proto().unwrap());
+        }
+        let db_path = PathBuf::new();
+        let state_db: StateDB<RocksDBMock> = StateDB::new(db_path, None).unwrap();
+        let mut tree = LegacyTrie::new(state_db);
+        let root = initiate_exodus_state(&mut tree);
+        println!("Root: {:?}",root);
+        unimplemented!();
+    }
+
+
+    // Helper Functions for easier construction of tests
+    fn select_random_accounts(rng: &mut rand::prelude::ThreadRng, accounts: &Vec<Address>, number: usize) ->  Vec<Address> {
+        assert!(number<=accounts.len());
+        let mut add_set: BTreeMap<Address,()> = BTreeMap::new();
+        let mut address_vec = Vec::with_capacity(number);
+        for _ in 0..number {
+            let index = rng.gen_range(0, accounts.len());
+            add_set.insert(accounts[index].clone(),());
+        }
+        for add in add_set {
+            address_vec.push(add.0);
+        }
+        address_vec
+    }
+
+    fn initiate_exodus_state(tree: &mut LegacyTrie<RocksDBMock>) -> (Vec<u8>,Vec<Address>) {
+        let mut path = env::current_dir().unwrap();
+        path.push("data/exodusBlock.dat");
+        let mut exodus_file = File::open(path).unwrap();
+        let mut exodus_buf = Vec::new();
+        exodus_file.read_to_end(&mut exodus_buf).unwrap();
+        let exodus = ExodusBlock::decode(&exodus_buf).unwrap();
+        let mut keypairs: Vec<(Address, ProtoAccount)> = Vec::with_capacity(12000);
+        let mut addresses: Vec<Address> = Vec::with_capacity(12000);
+        let mut accounts: Vec<ProtoAccount> = Vec::with_capacity(12000);
+        match &exodus.txs {
+            Some(tx_vec) => {
+                for tx in tx_vec {
+                    let amount: u64 = tx.get_amount();
+                    let nonce: u32;
+                    if let Some(tx_nonce) = tx.get_nonce() {
+                        nonce = tx_nonce;
+                    } else {
+                        break;
+                    }
+                    if let Some(add) = tx.get_to() {
+                        keypairs.push((add, Account::new(amount, nonce).to_proto().unwrap()));
+                    } else {
+                        break;
+                    }
+                }
+            }
+            None => {}
+        }
+        keypairs.sort_by(|a, b| a.0.cmp(&b.0));
+        for (key, value) in keypairs.clone() {
+            addresses.push(key);
+            accounts.push(value);
+        }
+        addresses.sort();
+        (tree.insert(None, addresses.clone(), &accounts).unwrap(),addresses)
     }
 }
