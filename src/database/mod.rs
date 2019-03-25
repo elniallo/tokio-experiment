@@ -173,8 +173,6 @@ pub mod mock {
     use super::*;
     use std::collections::HashMap;
 
-    use crate::serialization::state::ProtoMerkleNode;
-
     pub struct RocksDBMock {
         db: HashMap<Vec<u8>, Vec<u8>>,
     }
@@ -212,6 +210,7 @@ pub mod mock {
         }
 
         fn delete(&mut self, key: &[u8]) -> DBResult<()> {
+            self.db.remove(key);
             Ok(())
         }
         fn write_batch(&mut self, key_pairs: Vec<(Vec<u8>, Vec<u8>)>) -> DBResult<()> {

@@ -1,15 +1,16 @@
 use std::error::Error;
 
+use crate::common::exodus_tx::ExodusTx;
 use crate::common::genesis_header::GenesisHeader;
 use crate::common::header::{BlockHeader, Header};
 use crate::common::meta::Meta;
 use crate::common::signed_genesis_tx::SignedGenesisTx;
-use crate::common::exodus_tx::ExodusTx;
 use crate::common::signed_tx::SignedTx;
 use crate::traits::{Decode, Encode, Exception, Proto};
 
 use crate::serialization::block::{
-    Block as ProtoBlock, BlockDB as ProtoBlockDB, GenesisBlock as ProtoGenesisBlock,
+    Block as ProtoBlock, BlockDB as ProtoBlockDB, ExodusBlock as ProtoExodusBlock,
+    GenesisBlock as ProtoGenesisBlock,
 };
 use crate::serialization::tx::SignedTx as ProtoTx;
 use protobuf::{CodedInputStream, Message as ProtoMessage, RepeatedField};
@@ -119,7 +120,7 @@ impl Decode for Block<GenesisHeader, SignedGenesisTx> {
 
 impl Decode for Block<GenesisHeader, ExodusTx> {
     fn decode(bytes: &[u8]) -> Result<Block<GenesisHeader, ExodusTx>, Box<Error>> {
-        let mut serialised = ProtoGenesisBlock::new();
+        let mut serialised = ProtoExodusBlock::new();
         serialised.merge_from(&mut CodedInputStream::from_bytes(bytes))?;
 
         let serial_header = serialised.get_header();

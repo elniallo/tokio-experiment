@@ -3,13 +3,9 @@ use std::path::PathBuf;
 
 use crate::account::db_state::DBState;
 use crate::database::IDB;
-use crate::serialization::state::ProtoMerkleNode;
 use crate::traits::{Decode, Encode, Exception};
 
-use rocksdb::{
-    BlockBasedIndexType, BlockBasedOptions, Options as RocksDBOptions, SliceTransform, WriteBatch,
-    DB as RocksDB,
-};
+use rocksdb::{MergeOperands, DB as RocksDB};
 
 use starling::traits::Database;
 
@@ -80,13 +76,10 @@ where
 mod tests {
     use super::*;
     use crate::database::mock::RocksDBMock;
-    use std::collections::HashMap;
-
-    use crate::serialization::state::Data as ProtoData;
 
     #[test]
     fn it_opens_a_state_db() {
         let path = PathBuf::new();
-        let state_db: StateDB<RocksDBMock> = StateDB::new(path, None).unwrap();
+        let _state_db: StateDB<RocksDBMock> = StateDB::new(path, None).unwrap();
     }
 }

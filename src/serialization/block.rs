@@ -296,7 +296,7 @@ impl GenesisBlock {
         self.header.as_ref().unwrap_or_else(|| super::blockHeader::GenesisHeader::default_instance())
     }
 
-    // repeated .GenesisSignedTx txs = 3;
+    // repeated .GenesisSignedTx txs = 2;
 
     pub fn clear_txs(&mut self) {
         self.txs.clear();
@@ -344,7 +344,7 @@ impl ::protobuf::Message for GenesisBlock {
                 1 => {
                     ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.header)?;
                 },
-                3 => {
+                2 => {
                     ::protobuf::rt::read_repeated_message_into(wire_type, is, &mut self.txs)?;
                 },
                 _ => {
@@ -379,7 +379,7 @@ impl ::protobuf::Message for GenesisBlock {
             v.write_to_with_cached_sizes(os)?;
         }
         for v in &self.txs {
-            os.write_tag(3, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_tag(2, ::protobuf::wire_format::WireTypeLengthDelimited)?;
             os.write_raw_varint32(v.get_cached_size())?;
             v.write_to_with_cached_sizes(os)?;
         };
@@ -1165,7 +1165,7 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x12$\n\x06header\x18\x01\x20\x01(\x0b2\x0c.BlockHeaderR\x06header\x12\
     \x1b\n\x03txs\x18\x02\x20\x03(\x0b2\t.SignedTxR\x03txs\"Z\n\x0cGenesisBl\
     ock\x12&\n\x06header\x18\x01\x20\x01(\x0b2\x0e.GenesisHeaderR\x06header\
-    \x12\"\n\x03txs\x18\x03\x20\x03(\x0b2\x10.GenesisSignedTxR\x03txs\"R\n\
+    \x12\"\n\x03txs\x18\x02\x20\x03(\x0b2\x10.GenesisSignedTxR\x03txs\"R\n\
     \x0bExodusBlock\x12&\n\x06header\x18\x01\x20\x01(\x0b2\x0e.GenesisHeader\
     R\x06header\x12\x1b\n\x03txs\x18\x03\x20\x03(\x0b2\t.ExodusTxR\x03txs\"\
     \x85\x02\n\x07BlockDB\x12\x16\n\x06height\x18\x01\x20\x01(\rR\x06height\

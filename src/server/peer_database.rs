@@ -10,7 +10,6 @@ use std::error::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::io;
 use tokio::prelude::*;
 use tokio::timer::Interval;
 
@@ -398,7 +397,7 @@ pub mod tests {
                 IpAddr::V4(Ipv4Addr::new(127, 0, rng.gen::<u8>(), rng.gen::<u8>())),
                 rng.gen::<u16>(),
             );
-            let mut last_attempt = 0;
+            let last_attempt: usize;
             let mut last_seen = 0;
             if ordered {
                 last_attempt = i;
@@ -439,7 +438,7 @@ pub mod tests {
             fail_count: 0,
             last_attempt: 0,
         };
-        peer_db.inbound_connection(socket_addr, db_peer.clone());
+        let _ = peer_db.inbound_connection(socket_addr, db_peer.clone());
         if let Some(peer) = peer_db.get(&socket_addr) {
             assert!(peer.get_last_seen() != &0);
             assert_eq!(peer.success_in_count, 1);
@@ -466,7 +465,7 @@ pub mod tests {
             fail_count: 0,
             last_attempt: 0,
         };
-        peer_db.outbound_connection(socket_addr, db_peer.clone());
+        let _ = peer_db.outbound_connection(socket_addr, db_peer.clone());
         if let Some(peer) = peer_db.get(&socket_addr) {
             assert!(peer.get_last_seen() != &0);
             assert_eq!(peer.success_out_count, 1);
@@ -490,7 +489,7 @@ pub mod tests {
             .expect("could not parse address");
         peer_db.db.remove(&seed);
         let peers = peer_factory(20, false, true);
-        peer_db.put_multiple(peers);
+        let _ = peer_db.put_multiple(peers);
         assert_eq!(peer_db.db.len(), 20);
     }
     #[test]
@@ -534,8 +533,8 @@ pub mod tests {
             fail_count: 0,
             last_attempt: 0,
         };
-        peer_db.inbound_connection(socket_addr.clone(), db_peer.clone());
-        peer_db.connection_failure(&socket_addr);
+        let _ = peer_db.inbound_connection(socket_addr.clone(), db_peer.clone());
+        let _ = peer_db.connection_failure(&socket_addr);
         if let Some(peer) = peer_db.get(&socket_addr) {
             assert_ne!(&peer, &db_peer);
             assert_eq!(peer.get_fail_count(), &1);
@@ -590,7 +589,7 @@ pub mod tests {
             fail_count: 0,
             last_attempt: 0,
         };
-        peer_db.outbound_connection(socket_addr.clone(), db_peer);
+        let _ = peer_db.outbound_connection(socket_addr.clone(), db_peer);
         if let Some(peer) = peer_db.get(&socket_addr) {
             assert_ne!(peer.get_status(), &PeerStatus::Disconnected);
         } else {

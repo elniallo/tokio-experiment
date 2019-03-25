@@ -89,6 +89,8 @@ impl Decode for Meta {
         Ok(meta_info)
     }
 }
+
+#[cfg(test)]
 mod tests {
     use super::*;
     #[test]

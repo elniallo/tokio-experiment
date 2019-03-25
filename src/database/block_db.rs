@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::path::PathBuf;
 
 use crate::common::block_status::{BlockStatus, EnumConverter};
@@ -6,7 +5,7 @@ use crate::common::meta::Meta;
 use crate::database::block_file::{BlockFile, BlockFileOps, PutResult as WriteLocation};
 use crate::database::dbkeys::DBKeys;
 use crate::database::{DBError, DBErrorType, DBResult, HashValue, IDB};
-use crate::traits::{Decode, Encode, Exception, Proto};
+use crate::traits::{Decode, Encode, Proto};
 
 use byteorder::{BigEndian, ByteOrder};
 use rocksdb::DB as RocksDB;
@@ -27,7 +26,7 @@ where
     BlockFileType: BlockFileOps,
     DatabaseType: IDB<OptionType = OptionType>,
 {
-    fn new(
+    pub fn new(
         db_path: PathBuf,
         file_path: PathBuf,
         db_keys: &'a DBKeys,
@@ -240,7 +239,6 @@ mod tests {
     use crate::common::test_functions::common_tests::assert_block;
     use crate::database::block_file::BlockFileResult;
     use crate::database::mock::RocksDBMock;
-    use std::collections::HashMap;
 
     struct BlockFileMock {
         write_location: WriteLocation,
@@ -316,7 +314,7 @@ mod tests {
         let block_status = BlockStatus::Block;
 
         db.set_block_status(&hash, block_status).unwrap();
-        let status = db.get_block_status(&hash).unwrap();
+        let _status = db.get_block_status(&hash).unwrap();
 
         hash.push(123);
         match db.get_block_status(&hash) {
