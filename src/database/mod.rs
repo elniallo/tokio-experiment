@@ -172,7 +172,8 @@ impl From<io::Error> for DBError {
 pub mod mock {
     use super::*;
     use std::collections::HashMap;
-
+    use crate::account::db_state::DBState;
+    use crate::traits::{Decode,Encode};
     pub struct RocksDBMock {
         db: HashMap<Vec<u8>, Vec<u8>>,
     }
@@ -215,7 +216,11 @@ pub mod mock {
         }
         fn write_batch(&mut self, key_pairs: Vec<(Vec<u8>, Vec<u8>)>) -> DBResult<()> {
             for (k, v) in key_pairs {
-                self.db.insert(k.to_vec(), v.to_vec());
+                self.db.entry(k.to_vec()).and_modify(|value| {
+                    let mut db_state = DBState::decode(&value).unwrap();
+                    db_state.ref_count += 1;
+                    *value = db_state.encode().unwrap()
+                }).or_insert(v.to_vec());
             }
             Ok(())
         }

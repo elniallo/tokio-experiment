@@ -1057,8 +1057,14 @@ pub mod tests {
         let retrieved = tree.get(&current_root,&addresses);
         assert!(retrieved.is_ok());
         let last_root = roots.pop();
-        assert_eq!(Some(current_root),last_root);
+        assert_eq!(Some(current_root.clone()),last_root);
         assert_eq!(roots.len(),100);
+        while roots.len() > 0 {
+            let removed = roots.remove(0);
+            tree.remove(&removed);
+        }
+        let post_prune = tree.get(&current_root,&addresses);
+        assert!(post_prune.is_ok());
     }
 
     #[test]
@@ -1083,7 +1089,6 @@ pub mod tests {
         let (root,_) = initiate_exodus_state(&mut tree);
         let new_root = tree.insert(Some(&root),addresses,&account_vec);
         println!("Root: {:?}",new_root);
-        unimplemented!();
     }
 
 
