@@ -144,6 +144,7 @@ where
         for ((split, key), account) in split_addresses.iter().zip(values.iter()) {
             let mut offset = *split;
             let mut current_node: TreeNode;
+            let mut prev_offset = 0;
             if offset > 0 {
                 let n = min(prev_split, offset);
                 if let Some(node) = node_map.get(&key[0..n]) {
@@ -192,6 +193,7 @@ where
                 if early_out {
                     continue;
                 } else {
+                    prev_offset = offset;
                     offset = offset + next_node.node_location.len();
                     ref_map.remove(&next_node.child);
                     db_state = self.db.get_node(&next_node.child)?;
@@ -209,7 +211,6 @@ where
                 prev_split = offset + 1;
                 continue;
             }
-            let mut prev_offset = 0;
             while let Some(state) = &db_state {
                 if let Some(_prev_account) = &state.account {
                     let new_account = Account::from_proto(account);
@@ -1035,7 +1036,9 @@ pub mod tests {
         let mut rng = thread_rng();
         let mut current_root = root;
         let mut roots = vec![current_root.clone()];
-            let mut changed_addresses = select_random_accounts(&mut rng, &addresses, 25);
+        for _ in 0..100 {
+            let num = rng.gen_range(1,100);
+            let mut changed_addresses = select_random_accounts(&mut rng, &addresses, num);
             changed_addresses.sort();
             let changed_accounts = tree.get(&current_root,&changed_addresses).unwrap();
             let mut updated_accounts = Vec::with_capacity(changed_accounts.len());
@@ -1048,21 +1051,14 @@ pub mod tests {
                 } 
             }
             let new_root = tree.insert(Some(&current_root), changed_addresses.clone(), &updated_accounts).unwrap();
-            let retrieved = tree.get(&new_root,&addresses);
-            match retrieved {
-                Ok(_) => {
-
-                }
-                Err(e) => {
-                    println!("Changed Addresses: {:?}",changed_addresses);
-                    println!("Error: {}",e);
-                }
-            }
             roots.push(new_root.clone());
             current_root = new_root;
-            println!("Updated Root: {:?}",current_root);
-        
-        unimplemented!();
+        }
+        let retrieved = tree.get(&current_root,&addresses);
+        assert!(retrieved.is_ok());
+        let last_root = roots.pop();
+        assert_eq!(Some(current_root),last_root);
+        assert_eq!(roots.len(),100);
     }
 
     #[test]
@@ -1084,8 +1080,9 @@ pub mod tests {
         let db_path = PathBuf::new();
         let state_db: StateDB<RocksDBMock> = StateDB::new(db_path, None).unwrap();
         let mut tree = LegacyTrie::new(state_db);
-        let root = initiate_exodus_state(&mut tree);
-        println!("Root: {:?}",root);
+        let (root,_) = initiate_exodus_state(&mut tree);
+        let new_root = tree.insert(Some(&root),addresses,&account_vec);
+        println!("Root: {:?}",new_root);
         unimplemented!();
     }
 
