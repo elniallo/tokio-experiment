@@ -3,5 +3,5 @@
 /src/serialization/*
 !mod.rs
 /.vscode
-
+/test
 
