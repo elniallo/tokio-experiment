@@ -2,10 +2,11 @@ pub mod block_db;
 pub mod block_file;
 pub mod dbkeys;
 pub mod state_db;
-
+use crate::account::db_state::DBState;
+use crate::traits::{Decode, Encode};
 use rocksdb::{
-    BlockBasedIndexType, BlockBasedOptions, Error as RocksdbError, Options as RocksDBOptions,
-    SliceTransform, WriteBatch, DB as RocksDB,
+    BlockBasedIndexType, BlockBasedOptions, Error as RocksdbError, MergeOperands,
+    Options as RocksDBOptions, SliceTransform, WriteBatch, DB as RocksDB,
 };
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -14,6 +15,29 @@ use std::path::PathBuf;
 
 type DBResult<T> = Result<T, Box<DBError>>;
 type HashValue = Vec<u8>;
+
+fn merge_function(
+    new_key: &[u8],
+    existing_value: Option<&[u8]>,
+    operands: &mut MergeOperands,
+) -> Option<Vec<u8>> {
+    if let Some(value) = existing_value {
+        let mut db_state: DBState = DBState::decode(value).unwrap();
+        for op in operands {
+            db_state.ref_count += 1;
+        }
+        return Some(db_state.encode().unwrap());
+    } else {
+        let refs = operands.size_hint().0;
+        if let Some(value) = operands.last() {
+            let mut db_state: DBState = DBState::decode(value).unwrap();
+            db_state.ref_count += refs as u32 - 1;
+            return Some(db_state.encode().unwrap());
+        } else {
+            None
+        }
+    }
+}
 
 pub trait IDB {
     type OptionType;
@@ -88,7 +112,7 @@ impl IDB for RocksDB {
     fn write_batch(&mut self, key_pairs: Vec<(Vec<u8>, Vec<u8>)>) -> DBResult<()> {
         let mut batch = WriteBatch::default();
         for (k, v) in key_pairs {
-            match batch.put(&k, &v) {
+            match batch.merge(&k, &v) {
                 Ok(_) => {}
                 Err(e) => {
                     return Err(Box::new(DBError::new(DBErrorType::RocksDBError(e))));
@@ -171,8 +195,9 @@ impl From<io::Error> for DBError {
 
 pub mod mock {
     use super::*;
+    use crate::account::db_state::DBState;
+    use crate::traits::{Decode, Encode};
     use std::collections::HashMap;
-
     pub struct RocksDBMock {
         db: HashMap<Vec<u8>, Vec<u8>>,
     }
@@ -215,9 +240,74 @@ pub mod mock {
         }
         fn write_batch(&mut self, key_pairs: Vec<(Vec<u8>, Vec<u8>)>) -> DBResult<()> {
             for (k, v) in key_pairs {
-                self.db.insert(k.to_vec(), v.to_vec());
+                self.db
+                    .entry(k.to_vec())
+                    .and_modify(|value| {
+                        let mut db_state = DBState::decode(&value).unwrap();
+                        db_state.ref_count += 1;
+                        *value = db_state.encode().unwrap()
+                    })
+                    .or_insert(v.to_vec());
             }
             Ok(())
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::account::account::Account;
+    use crate::account::db_state::DBState;
+    use crate::util::hash::hash;
+    use std::path::PathBuf;
+    #[test]
+    fn it_performs_merge_operations_on_rocks_instance() {
+        let mut options = RocksDB::get_default_option();
+        options.set_merge_operator("Update Ref Count", merge_function, None);
+        let path = PathBuf::from("./test/rocks");
+        let db = RocksDB::open(&options, &path).unwrap();
+        let account = Account::new(123, 123);
+        let db_state = DBState::new(Some(account), None, 1);
+        let encoded = db_state.encode().unwrap();
+        let _ = db.delete(&hash(&encoded, 32));
+        let res = db.merge(&hash(&encoded, 32), &encoded);
+        match res {
+            Ok(_) => {}
+            Err(e) => {
+                println!("Error: {:?}", e);
+                unimplemented!();
+            }
+        }
+        let retrieved = db.get(&hash(&encoded, 32)).unwrap();
+        match retrieved {
+            Some(v) => {
+                let state = DBState::decode(&v).unwrap();
+                assert_eq!(state.ref_count, 1u32);
+            }
+            None => {
+                println!("Got nothing");
+                unimplemented!();
+            }
+        }
+        let new_res = db.merge(&hash(&encoded, 32), &encoded);
+        match new_res {
+            Ok(_) => {}
+            Err(e) => {
+                println!("Error: {:?}", e);
+                unimplemented!();
+            }
+        }
+        let new_retrieved = db.get(&hash(&encoded, 32)).unwrap();
+        match new_retrieved {
+            Some(v) => {
+                let state = DBState::decode(&v).unwrap();
+                assert_eq!(state.ref_count, 2u32);
+            }
+            None => {
+                println!("Got nothing");
+                unimplemented!();
+            }
         }
     }
 }
