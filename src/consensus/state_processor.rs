@@ -29,7 +29,7 @@ pub struct StateProcessor<
 }
 
 impl<'a> StateProcessor<'a> {
-    fn new(
+    pub fn new(
         block_db: &'a mut BlockDB<'a>,
         worldstate: WorldState,
     ) -> StateProcessor<BlockDB<'a>, WorldState> {
