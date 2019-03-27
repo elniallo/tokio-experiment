@@ -20,7 +20,7 @@ impl<'a> HeaderProcessor<Header> for Consensus<'a> {
         let mut prehash = header.prehash()?;
         prehash.append(&mut header.nonce.to_le_bytes().to_vec());
         if difficulty_adjuster::acceptable(
-            hash_cryptonight(&prehash, 32),
+            hash_cryptonight(&prehash, prehash.len()),
             difficulty_adjuster::get_target(header.difficulty, 32)?,
         )? {
             Ok(())
@@ -53,11 +53,64 @@ pub trait TxProcessor<TxType> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::common::address::{Address, ValidAddress};
+    use crate::consensus::worldstate::WorldState;
+    use crate::database::block_db::BlockDB;
+    use crate::database::dbkeys::DBKeys;
+    use crate::database::state_db::StateDB;
+    use crate::traits::Encode;
+    use crate::util::hash::hash;
+    use rust_base58::{FromBase58, ToBase58};
     #[test]
     fn it_assigns_nonce_bytes_correctly() {
         let nonce: u64 = 9991999136134178034;
         let le_nonce = nonce.to_le_bytes();
         let expected_bytes = [242, 164, 73, 65, 70, 182, 170, 138];
         assert_eq!(le_nonce, expected_bytes);
+    }
+
+    #[test]
+    fn it_correctly_checks_cn_hash_of_header() {
+        //Set up consensus
+        let state_path = PathBuf::from("state");
+        let block_path = PathBuf::from("blocks");
+        let file_path = PathBuf::from("blockfile");
+        let keys = DBKeys::default();
+        let mut block_db = BlockDB::new(block_path, file_path, &keys, None).unwrap();
+        let state_db = StateDB::new(state_path, None).unwrap();
+        let world_state = WorldState::new(state_db, 20).unwrap();
+        let state_processor = StateProcessor::new(&mut block_db, world_state);
+        let consensus = Consensus::new(state_processor).unwrap();
+
+        // Set up header - Block Number 864589
+        let merkle_root = "xyw95Bsby3s4mt6f4FmFDnFVpQBAeJxBFNGzu2cX4dM"
+            .from_base58()
+            .unwrap();
+        let state_root = "2TQHHSG8daQxYMCisMywUppz7a3YXb83VKzpMsZwQgLi"
+            .from_base58()
+            .unwrap();
+        let time_stamp = 1553674416492;
+        let difficulty = 0.00000004430078803796533 as f64;
+        let nonce = 12610086967913974370;
+        let miner = Address::from_string(&"H2zF9ZrneniGejpGSs7dpafiU7vJACFTW".to_string()).unwrap();
+        let previous_hash = vec!["3u3jNwUbeMPiRBMCy2hHLRtGmiYQJmxMwyv1aUGV7AMN"
+            .from_base58()
+            .unwrap()];
+
+        let header = Header::new(
+            merkle_root.clone(),
+            time_stamp,
+            difficulty,
+            state_root.clone(),
+            previous_hash.clone(),
+            nonce,
+            miner,
+        );
+        let header_hash = hash(&header.encode().unwrap(), 32);
+        let header_hash_string = header_hash.to_base58();
+        println!("Header Hash: {}", &header_hash_string);
+        let res = consensus.process_header(&header);
+        assert!(res.is_ok());
     }
 }
