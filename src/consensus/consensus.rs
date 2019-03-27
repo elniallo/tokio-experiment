@@ -50,3 +50,14 @@ pub trait StateProcessorTrait<TxType> {
 pub trait TxProcessor<TxType> {
     fn check_signatures(&self, txs: &[TxType]) -> Result<(), Box<Error>>;
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_assigns_nonce_bytes_correctly() {
+        let nonce: u64 = 9991999136134178034;
+        let le_nonce = nonce.to_le_bytes();
+        let expected_bytes = [242, 164, 73, 65, 70, 182, 170, 138];
+        assert_eq!(le_nonce, expected_bytes);
+    }
+}
