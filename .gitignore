@@ -4,4 +4,7 @@
 !mod.rs
 /.vscode
 /test
+/blocks
+/state
+/blockfile
 
