@@ -1,10 +1,18 @@
 use crate::common::header::{BlockHeader, Header};
+use crate::common::meta::Meta;
 use crate::consensus::difficulty_adjuster;
 use crate::consensus::state_processor::StateProcessor;
+use crate::consensus::BlockForkChoice;
 use crate::traits::Exception;
 use crate::util::hash::hash_cryptonight;
+use std::cmp::Ordering;
 use std::error::Error;
-use std::path::PathBuf;
+
+impl BlockForkChoice for Meta {
+    fn fork_choice(&self, other: &Meta) -> Ordering {
+        self.total_work.partial_cmp(&other.total_work).unwrap()
+    }
+}
 pub struct Consensus<'a> {
     state_processor: StateProcessor<'a>,
 }
@@ -32,8 +40,20 @@ impl<'a> HeaderProcessor<Header> for Consensus<'a> {
     }
 }
 
-pub trait ForkChoice<BlockType> {
-    fn fork_choice(&self, tip: &BlockType, new_block_work: &BlockType) -> bool;
+impl<'a> ForkChoice<Meta> for Consensus<'a> {
+    fn fork_choice(&self, tip: &Meta, new_block: &Meta) -> bool {
+        match new_block.fork_choice(tip) {
+            Ordering::Greater => true,
+            _ => false,
+        }
+    }
+}
+
+pub trait ForkChoice<BlockType>
+where
+    BlockType: BlockForkChoice,
+{
+    fn fork_choice(&self, tip: &BlockType, new_block: &BlockType) -> bool;
 }
 
 pub trait HeaderProcessor<HeaderType>
@@ -61,7 +81,9 @@ mod tests {
     use crate::database::state_db::StateDB;
     use crate::traits::Encode;
     use crate::util::hash::hash;
+
     use rust_base58::{FromBase58, ToBase58};
+    use std::path::PathBuf;
     #[test]
     fn it_assigns_nonce_bytes_correctly() {
         let nonce: u64 = 9991999136134178034;
@@ -108,7 +130,6 @@ mod tests {
             miner,
         );
         let header_hash = hash(&header.encode().unwrap(), 32);
-        let header_hash_string = header_hash.to_base58();
         let res = consensus.process_header(&header);
         assert!(res.is_ok());
     }
