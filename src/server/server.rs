@@ -25,6 +25,7 @@ use crate::server::peer::Peer;
 use crate::server::peer_database::{DBPeer, PeerDatabase};
 use crate::server::socket_parser::SocketParser;
 use crate::traits::{Encode, ToDBType};
+
 pub enum NotificationType<T> {
     Inbound(T),
     Disconnect(T),
@@ -278,7 +279,7 @@ pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
     let state_db = StateDB::new(state_path, None).unwrap();
     let world_state = WorldState::new(state_db, 20).unwrap();
     let state_processor = StateProcessor::new(&mut block_db, world_state);
-    let consensus = Consensus::new(state_processor).unwrap();
+    let _consensus = Consensus::new(state_processor).unwrap();
 
     //Set up Blockchain Server
     let (tx, rx) = mpsc::unbounded::<NotificationType<DBPeer>>();
