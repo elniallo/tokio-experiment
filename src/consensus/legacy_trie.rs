@@ -144,7 +144,7 @@ where
         for ((split, key), account) in split_addresses.iter().zip(values.iter()) {
             let mut offset = *split;
             let mut current_node: TreeNode;
-            let mut prev_offset = 0;
+            let mut prev_offset:usize;
             if offset > 0 {
                 let n = min(prev_split, offset);
                 if let Some(node) = node_map.get(&key[0..n]) {
@@ -1067,7 +1067,7 @@ pub mod tests {
         assert_eq!(roots.len(), 100);
         while roots.len() > 0 {
             let removed = roots.remove(0);
-            tree.remove(&removed);
+            let _ = tree.remove(&removed);
         }
         let post_prune = tree.get(&current_root, &addresses);
         assert!(post_prune.is_ok());
