@@ -10,7 +10,7 @@ pub struct Consensus<'a> {
 }
 
 impl<'a> Consensus<'a> {
-    fn new(state_processor: StateProcessor<'a>) -> Result<Self, Box<Error>> {
+    pub fn new(state_processor: StateProcessor<'a>) -> Result<Self, Box<Error>> {
         Ok(Self { state_processor })
     }
 }
@@ -109,7 +109,6 @@ mod tests {
         );
         let header_hash = hash(&header.encode().unwrap(), 32);
         let header_hash_string = header_hash.to_base58();
-        println!("Header Hash: {}", &header_hash_string);
         let res = consensus.process_header(&header);
         assert!(res.is_ok());
     }
