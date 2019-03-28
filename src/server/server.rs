@@ -5,12 +5,19 @@ use futures::sync::mpsc;
 use slog::{Drain, Logger};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{SocketAddr, ToSocketAddrs};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 use tokio::timer::Interval;
 
+use crate::consensus::consensus::Consensus;
+use crate::consensus::worldstate::WorldState;
+use crate::consensus::state_processor::StateProcessor;
+use crate::database::block_db::BlockDB;
+use crate::database::dbkeys::DBKeys;
+use crate::database::state_db::StateDB;
 use crate::serialization::network::{self, Network_oneof_request};
 use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
@@ -256,27 +263,44 @@ pub fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
 }
 
 pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
+    // Set up logger
     let decorator = slog_term::TermDecorator::new().build();
     let drain = slog_term::CompactFormat::new(decorator).build();
     let drain = std::sync::Mutex::new(drain).fuse();
     let root_logger = Logger::root(drain, o!("version" => "1.0"));
     info!(root_logger, "Application started");
+    // Set up Consensus
+    let state_path = PathBuf::from("state");
+    let block_path = PathBuf::from("blocks");
+    let file_path = PathBuf::from("blockfile");
+    let keys = DBKeys::default();
+    let mut block_db = BlockDB::new(block_path, file_path, &keys, None).unwrap();
+    let state_db = StateDB::new(state_path, None).unwrap();
+    let world_state = WorldState::new(state_db, 20).unwrap();
+    let state_processor = StateProcessor::new(&mut block_db, world_state);
+    let consensus = Consensus::new(state_processor).unwrap();
+
+    //Set up Blockchain Server
     let (tx, rx) = mpsc::unbounded::<NotificationType<DBPeer>>();
     let srv = Arc::new(Mutex::new(Server::new(tx, root_logger.clone())));
+
+    // Set Up Peer DB
     let cloned = root_logger.clone();
     let peer_db_logger = root_logger.new(o!());
     let peer_database = PeerDatabase::new(rx, peer_db_logger);
+    let peer_db =
+        PeerDBFuture::new(peer_database, srv.clone(), root_logger.clone()).map_err(move |e| {
+            error!(cloned, "Error: {:?}", e);
+        });
+
+    // Initialise TCP listener
+    let second_clone = root_logger.clone();
     let addr = args[2]
         .to_socket_addrs()
         .unwrap()
         .next()
         .expect("could not parse address");
     let socket = TcpListener::bind(&addr)?;
-    let peer_db =
-        PeerDBFuture::new(peer_database, srv.clone(), root_logger.clone()).map_err(move |e| {
-            error!(cloned, "Error: {:?}", e);
-        });
-    let second_clone = root_logger.clone();
     let server = socket
         .incoming()
         .for_each(move |socket| {
@@ -287,6 +311,8 @@ pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
             error!(root_logger.clone(), "Accept error = {:?}", err);
         });
     info!(second_clone, "Server Running on {:?}", &addr);
+
+    // Pass futures to Tokio Execution environment
     tokio::run(server.join(peer_db).map(|(_, _)| ()));
     Ok(())
 }
