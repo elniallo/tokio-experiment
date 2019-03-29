@@ -221,9 +221,9 @@ where
         hash_cpy.insert(0, 's' as u8);
 
         match BlockStatus::from_u8(self.database._get(&hash_cpy)?.to_vec()[0]) {
-            Some(block_status) => Ok(block_status),
-            None => Err(Box::new(DBError::new(DBErrorType::UnexpectedError(
-                "".to_string(),
+            Ok(block_status) => Ok(block_status),
+            Err(e) => Err(Box::new(DBError::new(DBErrorType::UnexpectedError(
+                e.to_string(),
             )))),
         }
     }
@@ -516,6 +516,7 @@ mod tests {
             None,
             None,
             None,
+            BlockStatus::Block,
         )
     }
 

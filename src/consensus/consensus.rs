@@ -85,6 +85,7 @@ pub trait TxProcessor<TxType> {
 mod tests {
     use super::*;
     use crate::common::address::{Address, ValidAddress};
+    use crate::common::block_status::BlockStatus;
     use crate::consensus::worldstate::WorldState;
     use crate::database::block_db::BlockDB;
     use crate::database::dbkeys::DBKeys;
@@ -160,6 +161,7 @@ mod tests {
             Some(file_number),
             Some(offset),
             Some(length),
+            BlockStatus::Header,
         );
         let second_tw = 1.000000000001e23;
         let new_meta = Meta::new(
@@ -171,6 +173,7 @@ mod tests {
             Some(file_number),
             Some(offset),
             Some(length),
+            BlockStatus::Invalid,
         );
         assert!(Consensus::fork_choice(&tip_meta, &new_meta));
         assert_ne!(Consensus::fork_choice(&new_meta, &tip_meta), true);

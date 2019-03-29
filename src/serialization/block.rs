@@ -714,6 +714,7 @@ pub struct BlockDB {
     pub pEMA: f64,
     pub nextDifficulty: f64,
     pub totalWork: f64,
+    pub status: u32,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
     cached_size: ::protobuf::CachedSize,
@@ -876,6 +877,21 @@ impl BlockDB {
     pub fn get_totalWork(&self) -> f64 {
         self.totalWork
     }
+
+    // uint32 status = 10;
+
+    pub fn clear_status(&mut self) {
+        self.status = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_status(&mut self, v: u32) {
+        self.status = v;
+    }
+
+    pub fn get_status(&self) -> u32 {
+        self.status
+    }
 }
 
 impl ::protobuf::Message for BlockDB {
@@ -951,6 +967,13 @@ impl ::protobuf::Message for BlockDB {
                     let tmp = is.read_double()?;
                     self.totalWork = tmp;
                 },
+                10 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_uint32()?;
+                    self.status = tmp;
+                },
                 _ => {
                     ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
@@ -991,6 +1014,9 @@ impl ::protobuf::Message for BlockDB {
         if true {
             my_size += 9;
         }
+        if true {
+            my_size += ::protobuf::rt::value_size(10, self.status, ::protobuf::wire_format::WireTypeVarint);
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
         self.cached_size.set(my_size);
         my_size
@@ -1025,6 +1051,9 @@ impl ::protobuf::Message for BlockDB {
         }
         if true {
             os.write_double(9, self.totalWork)?;
+        }
+        if true {
+            os.write_uint32(10, self.status)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -1113,6 +1142,11 @@ impl ::protobuf::Message for BlockDB {
                     |m: &BlockDB| { &m.totalWork },
                     |m: &mut BlockDB| { &mut m.totalWork },
                 ));
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeUint32>(
+                    "status",
+                    |m: &BlockDB| { &m.status },
+                    |m: &mut BlockDB| { &mut m.status },
+                ));
                 ::protobuf::reflect::MessageDescriptor::new::<BlockDB>(
                     "BlockDB",
                     fields,
@@ -1144,6 +1178,7 @@ impl ::protobuf::Clear for BlockDB {
         self.clear_pEMA();
         self.clear_nextDifficulty();
         self.clear_totalWork();
+        self.clear_status();
         self.unknown_fields.clear();
     }
 }
@@ -1168,14 +1203,14 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x12\"\n\x03txs\x18\x02\x20\x03(\x0b2\x10.GenesisSignedTxR\x03txs\"R\n\
     \x0bExodusBlock\x12&\n\x06header\x18\x01\x20\x01(\x0b2\x0e.GenesisHeader\
     R\x06header\x12\x1b\n\x03txs\x18\x03\x20\x03(\x0b2\t.ExodusTxR\x03txs\"\
-    \x85\x02\n\x07BlockDB\x12\x16\n\x06height\x18\x01\x20\x01(\rR\x06height\
+    \x9d\x02\n\x07BlockDB\x12\x16\n\x06height\x18\x01\x20\x01(\rR\x06height\
     \x12$\n\x06header\x18\x02\x20\x01(\x0b2\x0c.BlockHeaderR\x06header\x12\
     \x1e\n\nfileNumber\x18\x03\x20\x01(\rR\nfileNumber\x12\x16\n\x06offset\
     \x18\x04\x20\x01(\x04R\x06offset\x12\x16\n\x06length\x18\x05\x20\x01(\rR\
     \x06length\x12\x12\n\x04tEMA\x18\x06\x20\x01(\x01R\x04tEMA\x12\x12\n\x04\
     pEMA\x18\x07\x20\x01(\x01R\x04pEMA\x12&\n\x0enextDifficulty\x18\x08\x20\
     \x01(\x01R\x0enextDifficulty\x12\x1c\n\ttotalWork\x18\t\x20\x01(\x01R\tt\
-    otalWorkb\x06proto3\
+    otalWork\x12\x16\n\x06status\x18\n\x20\x01(\rR\x06statusb\x06proto3\
 ";
 
 static mut file_descriptor_proto_lazy: ::protobuf::lazy::Lazy<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::lazy::Lazy {
