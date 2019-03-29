@@ -41,7 +41,7 @@ impl<'a> HeaderProcessor<Header> for Consensus<'a> {
 }
 
 impl<'a> ForkChoice<Meta> for Consensus<'a> {
-    fn fork_choice(&self, tip: &Meta, new_block: &Meta) -> bool {
+    fn fork_choice(tip: &Meta, new_block: &Meta) -> bool {
         match new_block.fork_choice(tip) {
             Ordering::Greater => true,
             _ => false,
@@ -53,7 +53,7 @@ pub trait ForkChoice<BlockType>
 where
     BlockType: BlockForkChoice,
 {
-    fn fork_choice(&self, tip: &BlockType, new_block: &BlockType) -> bool;
+    fn fork_choice(tip: &BlockType, new_block: &BlockType) -> bool;
 }
 
 pub trait HeaderProcessor<HeaderType>
@@ -143,6 +143,36 @@ mod tests {
 
     #[test]
     fn it_chooses_the_correct_fork() {
-        unimplemented!()
+        let height = 123456789;
+        let t_ema = 1234.0;
+        let p_ema = 0.1234;
+        let next_difficulty = 0.012345;
+        let total_work = 1e23;
+        let offset = 123;
+        let file_number = 234;
+        let length = 345;
+        let tip_meta = Meta::new(
+            height,
+            t_ema,
+            p_ema,
+            next_difficulty,
+            total_work,
+            Some(file_number),
+            Some(offset),
+            Some(length),
+        );
+        let second_tw = 1.000000000001e23;
+        let new_meta = Meta::new(
+            height,
+            t_ema,
+            p_ema,
+            next_difficulty,
+            second_tw,
+            Some(file_number),
+            Some(offset),
+            Some(length),
+        );
+        assert!(Consensus::fork_choice(&tip_meta, &new_meta));
+        assert_ne!(Consensus::fork_choice(&new_meta, &tip_meta), true);
     }
 }
