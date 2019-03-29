@@ -63,6 +63,16 @@ where
     fn process_header(&self, header: &HeaderType) -> Result<(), Box<Error>>;
 }
 
+pub trait BlockProcessor<BlockType, HeaderType, TxType, MetaType, SignatureType>
+where
+    MetaType: BlockForkChoice,
+{
+    fn split_block(
+        &self,
+        block: &BlockType,
+    ) -> (HeaderType, Vec<TxType>, MetaType, Vec<SignatureType>);
+}
+
 pub trait StateProcessorTrait<TxType> {
     fn process_txs(&self, txs: &[TxType]) -> Result<(), Box<Error>>;
 }
@@ -79,10 +89,8 @@ mod tests {
     use crate::database::block_db::BlockDB;
     use crate::database::dbkeys::DBKeys;
     use crate::database::state_db::StateDB;
-    use crate::traits::Encode;
-    use crate::util::hash::hash;
 
-    use rust_base58::{FromBase58, ToBase58};
+    use rust_base58::FromBase58;
     use std::path::PathBuf;
     #[test]
     fn it_assigns_nonce_bytes_correctly() {
@@ -129,8 +137,12 @@ mod tests {
             nonce,
             miner,
         );
-        let header_hash = hash(&header.encode().unwrap(), 32);
         let res = consensus.process_header(&header);
         assert!(res.is_ok());
+    }
+
+    #[test]
+    fn it_chooses_the_correct_fork() {
+        unimplemented!()
     }
 }

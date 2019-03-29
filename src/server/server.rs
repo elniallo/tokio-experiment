@@ -13,8 +13,8 @@ use tokio::prelude::*;
 use tokio::timer::Interval;
 
 use crate::consensus::consensus::Consensus;
-use crate::consensus::worldstate::WorldState;
 use crate::consensus::state_processor::StateProcessor;
+use crate::consensus::worldstate::WorldState;
 use crate::database::block_db::BlockDB;
 use crate::database::dbkeys::DBKeys;
 use crate::database::state_db::StateDB;
