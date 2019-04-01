@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use tokio::io;
 use tokio::prelude::*;
 
+use crate::common::block::Block;
 use crate::serialization::network::{self, Network_oneof_request};
 use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
