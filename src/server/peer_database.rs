@@ -23,9 +23,7 @@ enum PeerConnectionType {
     Inbound,
     Outbound,
 }
-trait DBPeerTrait {
-    fn get_fail_count_mut(&mut self) -> &mut usize;
-}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct DBPeer {
     addr: SocketAddr,

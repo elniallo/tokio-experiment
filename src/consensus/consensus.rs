@@ -3,27 +3,37 @@ use crate::common::meta::Meta;
 use crate::consensus::difficulty_adjuster;
 use crate::consensus::state_processor::StateProcessor;
 use crate::consensus::BlockForkChoice;
+use crate::database::block_db::BlockDB;
 use crate::traits::Exception;
 use crate::util::hash::hash_cryptonight;
+
 use std::cmp::Ordering;
 use std::error::Error;
+use std::sync::{Arc, Mutex};
 
 impl BlockForkChoice for Meta {
     fn fork_choice(&self, other: &Meta) -> Ordering {
         self.total_work.partial_cmp(&other.total_work).unwrap()
     }
 }
-pub struct Consensus<'a> {
-    state_processor: StateProcessor<'a>,
+pub struct Consensus {
+    block_db: Arc<Mutex<BlockDB>>,
+    state_processor: StateProcessor,
 }
 
-impl<'a> Consensus<'a> {
-    pub fn new(state_processor: StateProcessor<'a>) -> Result<Self, Box<Error>> {
-        Ok(Self { state_processor })
+impl Consensus {
+    pub fn new(
+        state_processor: StateProcessor,
+        block_db: Arc<Mutex<BlockDB>>,
+    ) -> Result<Self, Box<Error>> {
+        Ok(Self {
+            block_db,
+            state_processor,
+        })
     }
 }
 
-impl<'a> HeaderProcessor<Header> for Consensus<'a> {
+impl HeaderProcessor<Header> for Consensus {
     fn process_header(&self, header: &Header) -> Result<(), Box<Error>> {
         let mut prehash = header.prehash()?;
         prehash.append(&mut header.nonce.to_le_bytes().to_vec());
@@ -40,7 +50,7 @@ impl<'a> HeaderProcessor<Header> for Consensus<'a> {
     }
 }
 
-impl<'a> ForkChoice<Meta> for Consensus<'a> {
+impl ForkChoice<Meta> for Consensus {
     fn fork_choice(tip: &Meta, new_block: &Meta) -> bool {
         match new_block.fork_choice(tip) {
             Ordering::Greater => true,
@@ -108,11 +118,12 @@ mod tests {
         let block_path = PathBuf::from("blocks");
         let file_path = PathBuf::from("blockfile");
         let keys = DBKeys::default();
-        let mut block_db = BlockDB::new(block_path, file_path, &keys, None).unwrap();
+        let block_db = BlockDB::new(block_path, file_path, keys, None).unwrap();
+        let db_wrapper = Arc::new(Mutex::new(block_db));
         let state_db = StateDB::new(state_path, None).unwrap();
         let world_state = WorldState::new(state_db, 20).unwrap();
-        let state_processor = StateProcessor::new(&mut block_db, world_state);
-        let consensus = Consensus::new(state_processor).unwrap();
+        let state_processor = StateProcessor::new(db_wrapper.clone(), world_state);
+        let consensus = Consensus::new(state_processor, db_wrapper).unwrap();
 
         // Set up header - Block Number 864589
         let merkle_root = "xyw95Bsby3s4mt6f4FmFDnFVpQBAeJxBFNGzu2cX4dM"

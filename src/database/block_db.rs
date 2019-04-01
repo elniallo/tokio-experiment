@@ -10,7 +10,7 @@ use crate::traits::{Decode, Encode, Proto};
 use byteorder::{BigEndian, ByteOrder};
 use rocksdb::DB as RocksDB;
 
-pub struct BlockDB<'a, BlockFileType = BlockFile, DatabaseType = RocksDB>
+pub struct BlockDB<BlockFileType = BlockFile, DatabaseType = RocksDB>
 where
     BlockFileType: BlockFileOps,
     DatabaseType: IDB,
@@ -18,10 +18,10 @@ where
     database: DatabaseType,
     block_file: BlockFileType,
     file_number: u32,
-    db_keys: &'a DBKeys,
+    db_keys: DBKeys,
 }
 
-impl<'a, BlockFileType, DatabaseType, OptionType> BlockDB<'a, BlockFileType, DatabaseType>
+impl<BlockFileType, DatabaseType, OptionType> BlockDB<BlockFileType, DatabaseType>
 where
     BlockFileType: BlockFileOps,
     DatabaseType: IDB<OptionType = OptionType>,
@@ -29,7 +29,7 @@ where
     pub fn new(
         db_path: PathBuf,
         file_path: PathBuf,
-        db_keys: &'a DBKeys,
+        db_keys: DBKeys,
         options: Option<OptionType>,
     ) -> DBResult<Self> {
         let mut database = DatabaseType::open(db_path, options)?;
@@ -173,7 +173,7 @@ where
         self.get_block_by_meta_info::<T>(meta_info)
     }
 
-    fn get_block_by_height<T>(&mut self, height: u32) -> DBResult<T>
+    pub fn get_block_by_height<T>(&mut self, height: u32) -> DBResult<T>
     where
         T: Decode + Clone,
     {
@@ -309,7 +309,7 @@ mod tests {
     #[test]
     fn it_set_block_status_and_get_from_db() {
         let db_keys = DBKeys::new(b"a".to_vec(), b"b".to_vec(), b"c".to_vec(), b"d".to_vec());
-        let mut db = create_database(&db_keys);
+        let mut db = create_database(db_keys);
         let mut hash = vec![167];
         let block_status = BlockStatus::Block;
 
@@ -327,7 +327,7 @@ mod tests {
     #[should_panic]
     fn it_set_hash_using_height_and_get_from_db() {
         let db_keys = DBKeys::new(b"a".to_vec(), b"b".to_vec(), b"c".to_vec(), b"d".to_vec());
-        let mut db = create_database(&db_keys);
+        let mut db = create_database(db_keys);
         let hash = vec![167, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         let height = 0xFFFFFFFE;
         db.set_hash_using_height(height, &hash).unwrap();
@@ -340,7 +340,7 @@ mod tests {
     #[test]
     fn it_set_header_tip_hash_and_get_from_db() {
         let db_keys = DBKeys::new(b"a".to_vec(), b"b".to_vec(), b"c".to_vec(), b"d".to_vec());
-        let mut db = create_database(&db_keys);
+        let mut db = create_database(db_keys);
         let hash = vec![13, 04, 05, 09];
 
         db.set_header_tip_hash(&hash).unwrap();
@@ -352,7 +352,7 @@ mod tests {
     #[test]
     fn it_check_file_numbers_and_positions_when_it_set_and_get_many_blocks() {
         let db_keys = DBKeys::new(b"a".to_vec(), b"b".to_vec(), b"c".to_vec(), b"d".to_vec());
-        let mut db = create_database(&db_keys);
+        let mut db = create_database(db_keys);
         let mut hash = b"hash_for_test_meta".to_vec();
         let mut blocks = vec![];
 
@@ -391,7 +391,7 @@ mod tests {
     #[test]
     fn it_set_block_tip_hash_and_get_from_db() {
         let db_keys = DBKeys::new(b"a".to_vec(), b"b".to_vec(), b"c".to_vec(), b"d".to_vec());
-        let mut db = create_database(&db_keys);
+        let mut db = create_database(db_keys);
         let mut hash = vec![04, 05, 09, 13];
         for i in 0..255 {
             if hash.len() > 50 {
@@ -407,7 +407,7 @@ mod tests {
     #[test]
     fn it_set_meta_info_to_db_and_get() {
         let db_keys = DBKeys::new(b"a".to_vec(), b"b".to_vec(), b"c".to_vec(), b"d".to_vec());
-        let mut db = create_database(&db_keys);
+        let mut db = create_database(db_keys);
         let meta_info = create_meta();
 
         let mut hash = vec![
@@ -450,7 +450,7 @@ mod tests {
     #[test]
     fn it_set_meta_info_without_file_info_to_db_and_get() {
         let db_keys = DBKeys::new(b"a".to_vec(), b"b".to_vec(), b"c".to_vec(), b"d".to_vec());
-        let mut db = create_database(&db_keys);
+        let mut db = create_database(db_keys);
         let meta_info = create_meta_without_file_info();
 
         let mut hash = vec![
@@ -493,12 +493,12 @@ mod tests {
         }
     }
 
-    fn create_database<'a>(db_keys: &'a DBKeys) -> BlockDB<'a, BlockFileMock, RocksDBMock> {
+    fn create_database(db_keys: DBKeys) -> BlockDB<BlockFileMock, RocksDBMock> {
         let mut path = PathBuf::new();
         let mut file_path = PathBuf::new();
         path.push("./test");
         file_path.push("./testFile");
-        BlockDB::<'a, BlockFileMock, RocksDBMock>::new(path, file_path, db_keys, None).unwrap()
+        BlockDB::<BlockFileMock, RocksDBMock>::new(path, file_path, db_keys, None).unwrap()
     }
 
     fn create_meta_without_file_info() -> Meta {
