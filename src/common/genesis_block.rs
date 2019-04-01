@@ -48,6 +48,10 @@ impl Proto for GenesisBlock {
         }
         Ok(proto_block)
     }
+
+    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+        unimplemented!()
+    }
 }
 
 impl Encode for GenesisBlock {

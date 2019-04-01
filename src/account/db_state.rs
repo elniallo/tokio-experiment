@@ -92,6 +92,10 @@ impl Proto for DBState {
 
         Ok(data)
     }
+
+        fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+        unimplemented!()
+    }
 }
 
 impl Encode for DBState {

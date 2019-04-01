@@ -150,7 +150,7 @@ impl Server {
     ) -> Self {
         Self {
             active_peers: HashMap::new(),
-            guid: String::from("MyRustyGuid"),
+            guid: String::from("RustyGuid"),
             version: 14,
             peer_channel: transmitter,
             peer_db: None,
