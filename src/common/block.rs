@@ -65,31 +65,7 @@ impl Decode for Block<Header, SignedTx> {
         if let Err(_) = serialised.merge_from(&mut CodedInputStream::from_bytes(bytes)) {
             return Err(Box::new(Exception::new("Decoding fail")));
         }
-        let serial_header = serialised.get_header();
-        if serial_header.miner.len() == 0 {
-            return Err(Box::new(Exception::new("Miner data length 0")));
-        }
-        let mut miner_address = [0u8; 20];
-        miner_address.copy_from_slice(serial_header.miner.as_slice());
-        let header = Header::new(
-            serial_header.merkleRoot.clone(),
-            serial_header.timeStamp,
-            serial_header.difficulty,
-            serial_header.stateRoot.clone(),
-            serial_header.previousHash.to_vec(),
-            serial_header.nonce,
-            miner_address,
-        );
-        let mut txs: Vec<crate::common::signed_tx::SignedTx> = Vec::new();
-        for tx in serialised.get_txs().to_vec() {
-            let mut bytes = Vec::new();
-            tx.write_to_vec(&mut bytes)?;
-            txs.push(match SignedTx::decode(&bytes) {
-                Ok(good_result) => good_result,
-                Err(_) => return Err(Box::new(Exception::new("Decoding fail"))),
-            });
-        }
-        Ok(Block::new(header, Some(txs.to_vec()), None))
+        Block::from_proto(&serialised)
     }
 }
 
@@ -169,6 +145,34 @@ impl Proto for Block<Header, SignedTx> {
             _ => {}
         }
         Ok(proto_block)
+    }
+
+    fn from_proto(block: &ProtoBlock) -> Result<Self, Box<Error>> {
+        let serial_header = &block.get_header();
+        if serial_header.miner.len() == 0 {
+            return Err(Box::new(Exception::new("Miner data length 0")));
+        }
+        let mut miner_address = [0u8; 20];
+        miner_address.copy_from_slice(serial_header.miner.as_slice());
+        let header = Header::new(
+            serial_header.merkleRoot.clone(),
+            serial_header.timeStamp,
+            serial_header.difficulty,
+            serial_header.stateRoot.clone(),
+            serial_header.previousHash.to_vec(),
+            serial_header.nonce,
+            miner_address,
+        );
+        let mut txs: Vec<crate::common::signed_tx::SignedTx> = Vec::new();
+        for tx in &block.get_txs().to_vec() {
+            let mut bytes = Vec::new();
+            tx.write_to_vec(&mut bytes)?;
+            txs.push(match SignedTx::decode(&bytes) {
+                Ok(good_result) => good_result,
+                Err(_) => return Err(Box::new(Exception::new("Decoding fail"))),
+            });
+        }
+        Ok(Block::new(header, Some(txs.to_vec()), None))
     }
 }
 
