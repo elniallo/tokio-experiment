@@ -54,6 +54,10 @@ impl Proto for ExodusTx {
         proto_exodus_tx.set_nonce(self.nonce);
         Ok(proto_exodus_tx)
     }
+
+    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+        unimplemented!()
+    }
 }
 
 impl Encode for ExodusTx {

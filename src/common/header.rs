@@ -107,6 +107,10 @@ impl Proto for Header {
         proto_header.set_miner(self.miner.to_vec());
         Ok(proto_header)
     }
+
+    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+        unimplemented!()
+    }
 }
 
 #[cfg(test)]

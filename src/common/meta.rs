@@ -68,6 +68,10 @@ impl Proto for Meta {
         proto_meta.set_status(self.status.to_u8() as u32);
         Ok(proto_meta)
     }
+
+    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+        unimplemented!()
+    }
 }
 
 impl Encode for Meta {

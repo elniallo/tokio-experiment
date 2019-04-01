@@ -64,9 +64,9 @@ impl Proto for NetworkMessage {
     }
 
     fn from_proto(prototype: &ProtoNetwork) -> Result<Self, Box<Error>> {
-        if let Some(message) = prototype.request {
+        if let Some(message) = &prototype.request {
             Ok(Self {
-                message_type: message,
+                message_type: message.clone(),
             })
         } else {
             Err(Box::new(Exception::new("No Message")))

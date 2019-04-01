@@ -4,7 +4,7 @@ use std::ops::Deref;
 use crate::common::block::Block;
 use crate::common::exodus_tx::ExodusTx;
 use crate::common::genesis_header::GenesisHeader;
-use crate::traits::{Decode, Encode, Proto};
+use crate::traits::{Decode, Encode, Exception, Proto};
 
 use crate::serialization::block::ExodusBlock as ProtoBlock;
 use crate::serialization::tx::ExodusTx as ProtoTx;
@@ -47,6 +47,9 @@ impl Proto for ExodusBlock {
             None => {}
         }
         Ok(proto_block)
+    }
+    fn from_proto(block: &ProtoBlock) -> Result<Self, Box<Error>> {
+        Err(Box::new(Exception::new("Not Implemented")))
     }
 }
 
