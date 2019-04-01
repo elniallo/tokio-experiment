@@ -135,12 +135,14 @@ pub struct Server {
     seen_messages: HashSet<Vec<u8>>,
     seen_message_vec: VecDeque<Vec<u8>>,
     logger: Logger,
+    consensus: Consensus,
 }
 
 impl Server {
     pub fn new(
         transmitter: mpsc::UnboundedSender<NotificationType<DBPeer>>,
         logger: Logger,
+        consensus: Consensus,
     ) -> Self {
         Self {
             active_peers: HashMap::new(),
@@ -152,6 +154,7 @@ impl Server {
             seen_messages: HashSet::new(),
             seen_message_vec: VecDeque::with_capacity(1000),
             logger,
+            consensus,
         }
     }
 
@@ -275,15 +278,16 @@ pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
     let block_path = PathBuf::from("blocks");
     let file_path = PathBuf::from("blockfile");
     let keys = DBKeys::default();
-    let mut block_db = BlockDB::new(block_path, file_path, &keys, None).unwrap();
+    let block_db = BlockDB::new(block_path, file_path, keys, None).unwrap();
+    let db_wrapper = Arc::new(Mutex::new(block_db));
     let state_db = StateDB::new(state_path, None).unwrap();
     let world_state = WorldState::new(state_db, 20).unwrap();
-    let state_processor = StateProcessor::new(&mut block_db, world_state);
-    let _consensus = Consensus::new(state_processor).unwrap();
+    let state_processor = StateProcessor::new(db_wrapper.clone(), world_state);
+    let consensus = Consensus::new(state_processor, db_wrapper).unwrap();
 
     //Set up Blockchain Server
     let (tx, rx) = mpsc::unbounded::<NotificationType<DBPeer>>();
-    let srv = Arc::new(Mutex::new(Server::new(tx, root_logger.clone())));
+    let srv = Arc::new(Mutex::new(Server::new(tx, root_logger.clone(), consensus)));
 
     // Set Up Peer DB
     let cloned = root_logger.clone();
