@@ -12,7 +12,11 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 use tokio::timer::Interval;
 
+use crate::common::block::Block;
+use crate::common::header::Header;
+use crate::common::signed_tx::SignedTx;
 use crate::consensus::consensus::Consensus;
+use crate::consensus::consensus::HeaderProcessor;
 use crate::consensus::state_processor::StateProcessor;
 use crate::consensus::worldstate::WorldState;
 use crate::database::block_db::BlockDB;
@@ -24,7 +28,7 @@ use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer::Peer;
 use crate::server::peer_database::{DBPeer, PeerDatabase};
 use crate::server::socket_parser::SocketParser;
-use crate::traits::{Encode, ToDBType};
+use crate::traits::{Encode, Exception, ToDBType};
 
 pub enum NotificationType<T> {
     Inbound(T),
@@ -212,6 +216,13 @@ impl Server {
 
     pub fn get_logger(&self) -> &Logger {
         &self.logger
+    }
+
+    pub fn process_block(
+        &self,
+        block: &Block<Header, SignedTx>,
+    ) -> Result<(), Box<std::error::Error>> {
+        self.consensus.process_header(&block.header)
     }
 }
 
