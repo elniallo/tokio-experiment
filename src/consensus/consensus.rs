@@ -1,4 +1,5 @@
 use crate::common::block::Block;
+use crate::common::block_status::BlockStatus;
 use crate::common::header::{BlockHeader, Header};
 use crate::common::meta::Meta;
 use crate::common::signed_tx::SignedTx;
@@ -60,6 +61,23 @@ impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
 
 impl HeaderProcessor<Header> for Consensus {
     fn process_header(&self, header: &Header) -> Result<(), Box<Error>> {
+        if header.previous_hash.len() == 0 {
+            return Err(Box::new(Exception::new("Block Rejected: No previous hash")));
+        }
+
+        match self
+            .block_db
+            .lock()
+            .map_err(|_e| Exception::new("Poison Error"))?
+            .get_block_status(&header.previous_hash[0])?
+        {
+            BlockStatus::Rejected => {
+                return Err(Box::new(Exception::new(
+                    "Block Rejected: Previous block rejected",
+                )));
+            }
+            _ => {}
+        }
         let mut prehash = header.prehash()?;
         prehash.append(&mut header.nonce.to_le_bytes().to_vec());
         if difficulty_adjuster::acceptable(
