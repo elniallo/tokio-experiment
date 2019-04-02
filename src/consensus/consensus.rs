@@ -7,8 +7,8 @@ use crate::consensus::difficulty_adjuster;
 use crate::consensus::state_processor::StateProcessor;
 use crate::consensus::BlockForkChoice;
 use crate::database::block_db::BlockDB;
-use crate::traits::Exception;
-use crate::util::hash::hash_cryptonight;
+use crate::traits::{Encode, Exception};
+use crate::util::hash::{hash, hash_cryptonight};
 
 use std::cmp::Ordering;
 use std::error::Error;
@@ -73,7 +73,7 @@ impl HeaderProcessor<Header> for Consensus {
         {
             BlockStatus::Rejected => {
                 return Err(Box::new(Exception::new(
-                    "Block Rejected: Previous block rejected",
+                    "Block Ignored: Previous block rejected",
                 )));
             }
             _ => {}
@@ -84,8 +84,16 @@ impl HeaderProcessor<Header> for Consensus {
             hash_cryptonight(&prehash, prehash.len()),
             difficulty_adjuster::get_target(header.difficulty, 32)?,
         )? {
+            self.block_db
+                .lock()
+                .map_err(|_e| Exception::new("Poison Error"))?
+                .set_block_status(&hash(&header.encode()?, 32), BlockStatus::Header)?;
             Ok(())
         } else {
+            self.block_db
+                .lock()
+                .map_err(|_e| Exception::new("Poison Error"))?
+                .set_block_status(&hash(&header.encode()?, 32), BlockStatus::Rejected)?;
             Err(Box::new(Exception::new(
                 "Block rejected, hash does not match difficulty",
             )))

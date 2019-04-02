@@ -207,7 +207,7 @@ where
         }
     }
 
-    fn set_block_status(&mut self, hash: &Vec<u8>, status: BlockStatus) -> DBResult<()> {
+    pub fn set_block_status(&mut self, hash: &Vec<u8>, status: BlockStatus) -> DBResult<()> {
         let mut hash_cpy = hash.clone();
         hash_cpy.insert(0, 's' as u8);
 
