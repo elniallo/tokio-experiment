@@ -226,10 +226,55 @@ pub trait TxProcessor<TxType> {
     fn check_signatures(&self, txs: &[TxType]) -> Result<(), Box<Error>>;
 }
 
-pub trait HyconConsensus<HeaderType, BlockType> {
+/// # HyconConsensus Trait
+/// Base trait containing various methods necessary for consensus implementation
+/// ___
+/// ## Type Constraints
+/// ### HeaderType
+/// Must implement the BlockHeader trait
+/// ### BlockType
+/// A block
+/// ___
+/// ## Required Methods
+/// ### Init
+/// ```
+/// fn init(&mut self) -> Result<(), Box<std::error::Error>>
+/// ```
+/// Initialisation logic for consensus should be placed in here
+/// #### Returns
+/// An empty result
+/// ___
+/// ### Get Tip Height
+/// ```
+/// fn get_tip_height(&self) -> Option<usize>
+/// ```
+/// The height of the current tip, essentially how many blocks have been added to the main chain since genesis
+///
+/// #### Returns
+/// ```
+/// Option<usize>
+/// ```
+/// An option should be returned with the current height, or none if this is a cold startup with an unitialised consensus
+/// ___
+/// ### Put
+/// ```
+/// fn put(&mut self, header: HeaderType, block: Option<BlockType>) -> Result<(), Box<std::error::Error>>
+/// ```
+/// Entry point for putting a block (or just a header) onto the chain
+/// #### Arguments
+/// - `header` - the block header to be added to the chain, must implement BlockHeader trait
+/// - `block` - An optional parameter containing a block to be added to the chain
+///
+/// #### Returns
+/// An empty result
+/// ___
+pub trait HyconConsensus<HeaderType, BlockType>
+where
+    HeaderType: BlockHeader,
+{
     fn init(&mut self) -> Result<(), Box<Error>>;
     fn get_tip_height(&self) -> Option<usize>;
-    fn put(&mut self, header: HeaderType, block: Option<BlockType>) -> PutResult<()>;
+    fn put(&mut self, header: HeaderType, block: Option<BlockType>) -> Result<(), Box<Error>>;
 }
 
 #[cfg(test)]
