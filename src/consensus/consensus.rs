@@ -1,5 +1,7 @@
+use crate::common::block::Block;
 use crate::common::header::{BlockHeader, Header};
 use crate::common::meta::Meta;
+use crate::common::signed_tx::SignedTx;
 use crate::consensus::difficulty_adjuster;
 use crate::consensus::state_processor::StateProcessor;
 use crate::consensus::BlockForkChoice;
@@ -11,12 +13,15 @@ use std::cmp::Ordering;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 
+type PutResult<T> = Result<T, Box<Error>>;
+
 impl BlockForkChoice for Meta {
     fn fork_choice(&self, other: &Meta) -> Ordering {
         self.total_work.partial_cmp(&other.total_work).unwrap()
     }
 }
 pub struct Consensus {
+    tip_height: usize,
     block_db: Arc<Mutex<BlockDB>>,
     state_processor: StateProcessor,
 }
@@ -29,7 +34,27 @@ impl Consensus {
         Ok(Self {
             block_db,
             state_processor,
+            tip_height: 0,
         })
+    }
+}
+
+impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
+    fn init(&mut self) -> Result<(), Box<Error>> {
+        if let Some(tip_height) = self.get_tip_height() {
+            self.tip_height = tip_height
+        } else {
+            // init exodus
+        }
+
+        Ok(())
+    }
+    fn get_tip_height(&self) -> Option<usize> {
+        None
+    }
+
+    fn put(&mut self, header: Header, block: Option<Block<Header, SignedTx>>) -> PutResult<()> {
+        Ok(())
     }
 }
 
@@ -89,6 +114,12 @@ pub trait StateProcessorTrait<TxType> {
 
 pub trait TxProcessor<TxType> {
     fn check_signatures(&self, txs: &[TxType]) -> Result<(), Box<Error>>;
+}
+
+pub trait HyconConsensus<HeaderType, BlockType> {
+    fn init(&mut self) -> Result<(), Box<Error>>;
+    fn get_tip_height(&self) -> Option<usize>;
+    fn put(&mut self, header: HeaderType, block: Option<BlockType>) -> PutResult<()>;
 }
 
 #[cfg(test)]
