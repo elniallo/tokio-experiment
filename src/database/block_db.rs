@@ -219,8 +219,13 @@ where
     pub fn get_block_status(&self, hash: &Vec<u8>) -> DBResult<BlockStatus> {
         let mut hash_cpy = hash.clone();
         hash_cpy.insert(0, 's' as u8);
-
-        match BlockStatus::from_u8(self.database._get(&hash_cpy)?.to_vec()[0]) {
+        let status_u8: u8;
+        if let Ok(num) = self.database._get(&hash_cpy) {
+            status_u8 = num[0];
+        } else {
+            return Ok(BlockStatus::Nothing);
+        }
+        match BlockStatus::from_u8(status_u8) {
             Ok(block_status) => Ok(block_status),
             Err(e) => Err(Box::new(DBError::new(DBErrorType::UnexpectedError(
                 e.to_string(),
