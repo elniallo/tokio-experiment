@@ -144,7 +144,7 @@ where
         for ((split, key), account) in split_addresses.iter().zip(values.iter()) {
             let mut offset = *split;
             let mut current_node: TreeNode;
-            let mut prev_offset:usize;
+            let mut prev_offset: usize;
             if offset > 0 {
                 let n = min(prev_split, offset);
                 if let Some(node) = node_map.get(&key[0..n]) {
@@ -401,9 +401,10 @@ where
                         offset += node_ref.node_location.len();
                         state = Some(next_node);
                     } else {
-                        return Err(Box::new(Exception::new(
-                            " First Unable to find node, corrupted tree",
-                        )));
+                        return Err(Box::new(Exception::new(&format!(
+                            "Unable to find node {:?}, corrupted tree",
+                            &node_ref.child
+                        ))));
                     }
                 }
             }
@@ -420,19 +421,18 @@ where
                         state = Some(next_node);
                         continue;
                     } else {
-                        return Err(Box::new(Exception::new(
-                            "Second Unable to find node, corrupted tree",
-                        )));
+                        // can't find child node in db error
+                        return Err(Box::new(Exception::new(&format!(
+                            "Unable to find node {:?}, corrupted tree",
+                            &node_ref.child
+                        ))));
                     }
                 } else {
-                    return Err(Box::new(Exception::new(
-                        "Third Unable to find node, corrupted tree",
-                    )));
+                    return Ok(None);
+                    //Account does not exist yet
                 }
             } else {
-                return Err(Box::new(Exception::new(
-                    "Fourth Unable to find node, corrupted tree",
-                )));
+                return Ok(None);
                 // we got nothing
             }
         }
@@ -1217,7 +1217,10 @@ pub mod tests {
         address_vec
     }
 
-    fn initiate_exodus_state<T>(tree: &mut LegacyTrie<T>) -> (Vec<u8>, Vec<Address>) where T: IDB {
+    fn initiate_exodus_state<T>(tree: &mut LegacyTrie<T>) -> (Vec<u8>, Vec<Address>)
+    where
+        T: IDB,
+    {
         let mut path = env::current_dir().unwrap();
         path.push("data/exodusBlock.dat");
         let mut exodus_file = File::open(path).unwrap();
