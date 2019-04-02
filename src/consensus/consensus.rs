@@ -60,6 +60,7 @@ impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
 }
 
 impl HeaderProcessor<Header> for Consensus {
+    type UncleProcessResult = UncleResult;
     fn process_header(&self, header: &Header) -> Result<(), Box<Error>> {
         if header.previous_hash.len() == 0 {
             return Err(Box::new(Exception::new("Block Rejected: No previous hash")));
@@ -99,6 +100,26 @@ impl HeaderProcessor<Header> for Consensus {
             )))
         }
     }
+
+    fn process_uncles(&self, uncle_hashes: &[Vec<u8>]) -> Result<UncleResult, Box<Error>> {
+        for hash in uncle_hashes {
+            match self
+                .block_db
+                .lock()
+                .map_err(|_e| Exception::new("Poison Error"))?
+                .get_block_status(hash)
+            {
+                _ => {}
+            }
+        }
+        Ok(UncleResult::Success)
+    }
+}
+
+pub enum UncleResult {
+    Success,
+    Partial(Vec<Vec<u8>>),
+    Failure(Vec<Vec<u8>>),
 }
 
 impl ForkChoice<Meta> for Consensus {
@@ -109,7 +130,27 @@ impl ForkChoice<Meta> for Consensus {
         }
     }
 }
-
+/// # ForkChoice Trait
+/// Defines how the blockchain behaves in the event of a forking event
+/// ___
+/// ## Type Constraints
+///
+/// ### BlockType
+/// Must implement the BlockForkChoice trait
+/// ___
+/// ## Methods
+/// ### Fork Choice
+/// ```
+/// fn fork_choice(tip: &BlockType, &new_block: &BlockType) -> bool;
+/// ```
+/// #### Arguments
+/// - `tip` - the current tip of the blockchain
+/// - `new_block` - the new block that should be added to the existing tip
+///
+/// #### Returns
+/// - `true` - if the block can be added to the chain
+/// - `false` - if the block should not extend the existing chain
+/// ___
 pub trait ForkChoice<BlockType>
 where
     BlockType: BlockForkChoice,
@@ -117,11 +158,54 @@ where
     fn fork_choice(tip: &BlockType, new_block: &BlockType) -> bool;
 }
 
+/// # Header Processor Trait
+/// Defines methods to be used in the processing of blockchain headers
+/// ___
+/// ## Type Constraints
+///
+///  ### HeaderType
+/// Must implement the BlockHeader trait
+/// ### UncleProcessType
+/// User defined type to contain the result of processing uncle blocks
+/// ___
+/// ## Required Methods
+/// ### Process Header
+/// ```
+/// fn process_header(&self, header: &HeaderType) -> Result<(), Box<std::error::Error>>
+/// ```
+/// Defines how a header is processed
+/// #### Arguments
+/// `header` - a reference to the HeaderType being processed
+///
+/// #### Returns
+/// ```
+/// Result<(), Box<std::error::Error>>
+/// ```
+/// An empty result denoting success
+/// ___
+/// ### Process Uncles
+/// ```
+/// fn process_uncles(&self,uncle_hashes: &[Vec<u8>]) -> Result<Self::UncleProcessResult,Box<std::error::Error>>
+/// ```
+/// #### Arguments
+/// `uncle_hashes` - a slice of block hashes to be checked for validity as uncle blocks
+///
+/// #### Returns
+/// ```
+/// Result<Self::UncleProcessResult,Box<std::error::Error>>
+/// ```
+/// A result containing the user defined UncleProcessResult type
+///___
 pub trait HeaderProcessor<HeaderType>
 where
     HeaderType: BlockHeader,
 {
+    type UncleProcessResult;
     fn process_header(&self, header: &HeaderType) -> Result<(), Box<Error>>;
+    fn process_uncles(
+        &self,
+        uncle_hashes: &[Vec<u8>],
+    ) -> Result<Self::UncleProcessResult, Box<Error>>;
 }
 
 pub trait BlockProcessor<BlockType, HeaderType, TxType, MetaType, SignatureType>
