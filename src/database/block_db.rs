@@ -216,7 +216,7 @@ where
         self.database.set(&hash_cpy, &vec![status_byte])
     }
 
-    fn get_block_status(&self, hash: &Vec<u8>) -> DBResult<BlockStatus> {
+    pub fn get_block_status(&self, hash: &Vec<u8>) -> DBResult<BlockStatus> {
         let mut hash_cpy = hash.clone();
         hash_cpy.insert(0, 's' as u8);
 
