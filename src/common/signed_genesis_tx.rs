@@ -2,9 +2,9 @@ use std::error::Error;
 
 use crate::common::address::Address;
 use crate::common::genesis_tx::GenesisTx;
-use crate::common::transaction::{verify_tx, Transaction, Valid};
+use crate::common::transaction::verify_tx;
 use crate::serialization::tx::GenesisSignedTx as ProtoGenesisSignedTx;
-use crate::traits::{Decode, Encode, Proto};
+use crate::traits::{Decode, Encode, Proto, Transaction, VerifiableTransaction};
 
 use protobuf::Message as ProtoMessage;
 use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
@@ -17,7 +17,7 @@ pub struct SignedGenesisTx {
     recovery: RecoveryId,
 }
 
-impl Transaction for SignedGenesisTx {
+impl Transaction<Address, RecoverableSignature, RecoveryId> for SignedGenesisTx {
     fn get_from(&self) -> Option<Address> {
         None
     }
@@ -103,7 +103,7 @@ impl Decode for SignedGenesisTx {
     }
 }
 
-impl Valid for SignedGenesisTx {
+impl VerifiableTransaction for SignedGenesisTx {
     fn verify(&self) -> Result<(), Box<Error>> {
         let genesis_tx = GenesisTx::new(self.to, self.amount);
         let encoding = genesis_tx.encode()?;

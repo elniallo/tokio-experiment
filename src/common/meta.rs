@@ -1,6 +1,6 @@
 use crate::common::block_status::BlockStatus;
-use crate::common::block_status::EnumConverter;
 use crate::serialization::block::BlockDB as ProtoBlockDB;
+use crate::traits::EnumConverter;
 use crate::traits::{Decode, Encode, Proto};
 use protobuf::Message as ProtoMessage;
 use std::error::Error;

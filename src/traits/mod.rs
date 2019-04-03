@@ -1,5 +1,7 @@
+use std::borrow::Borrow;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::hash::Hash;
 
 /// Defines methods for a Valid Address Type
 pub trait ValidAddress<KeyType, AddressType> {
@@ -13,19 +15,70 @@ pub trait ValidAddress<KeyType, AddressType> {
     fn from_bytes(bytes: &[u8; 20]) -> AddressType;
 }
 
-pub trait PeerDB<K, T> {
-    fn get(&self, key: &K) -> Option<T>;
-    fn get_all(&self) -> Option<Vec<T>>;
-    fn get_multiple(&self, limit: usize) -> Option<Vec<T>>;
-    fn inbound_connection(&mut self, key: K, value: T) -> Result<(), Box<Error>>;
-    fn outbound_connection(&mut self, key: K, value: T) -> Result<(), Box<Error>>;
-    fn connection_failure(&mut self, key: &K) -> Result<(), Box<Error>>;
-    fn disconnect(&mut self, key: &K);
-    fn put_multiple(&mut self, values: Vec<(K, T)>) -> Result<(), Box<Error>>;
-    fn get_recent(&self, limit: usize) -> Option<Vec<T>>;
-    fn get_seen(&self, limit: usize) -> Option<Vec<T>>;
-    fn get_oldest(&self, limit: usize) -> Option<Vec<T>>;
-    fn get_random(&self, limit: usize) -> Option<Vec<T>>;
+/// Performs a conversion on an enum
+pub trait EnumConverter<OutputType> {
+    /// Returns a representation of the Enum in the form of the OutputType
+    fn to_output(&self) -> OutputType;
+    /// Returns an Enum from an input of the Specified Type
+    fn from_input(number: OutputType) -> Result<Self, Box<Error>>
+    where
+        Self: Sized;
+}
+/// Defines a BlockHeader
+pub trait BlockHeader {
+    /// Defines the type used to represent an Address
+    type AddressType;
+    /// Retrieves the Merkle Root from the Header
+    fn get_merkle_root(&self) -> &Vec<u8>;
+    /// Retrieves the TimeStamp from the Header
+    fn get_time_stamp(&self) -> u64;
+    /// Retrieves the Difficulty parameter from the Header
+    fn get_difficulty(&self) -> f64;
+    /// Retrieves the State Root from the Header
+    fn get_state_root(&self) -> &Vec<u8>;
+    /// Retrieves the previous hashes from the Header
+    fn get_previous_hash(&self) -> Option<&Vec<Vec<u8>>>;
+    /// Retrieves the nonce from the Header
+    fn get_nonce(&self) -> Option<u64>;
+    /// Retrieves the address of the miner
+    fn get_miner(&self) -> Option<&Self::AddressType>;
+}
+/// Defines behaviour for Transactions
+pub trait Transaction<AddressType, SignatureType, RecoveryType> {
+    /// Returns an `Option` containing the From Address
+    fn get_from(&self) -> Option<AddressType>;
+    /// Returns an `Option` containing the To Address
+    fn get_to(&self) -> Option<AddressType>;
+    /// Returns the Transaction amount
+    fn get_amount(&self) -> u64;
+    /// Returns an `Option` containing he transaction fee
+    fn get_fee(&self) -> Option<u64>;
+    /// Returns an `Option` containing the transaction nonce
+    fn get_nonce(&self) -> Option<u32>;
+    /// Returns an `Option` containing the transaction signature
+    fn get_signature(&self) -> Option<SignatureType>;
+    /// Returns an `Option` containing the secp256k1 recovery parameter
+    fn get_recovery(&self) -> Option<RecoveryType>;
+}
+/// Transaction can be verified
+pub trait VerifiableTransaction {
+    /// Verifies a transaction
+    fn verify(&self) -> Result<(), Box<Error>>;
+}
+
+pub trait PeerDB<KeyType, PeerType> {
+    fn get(&self, key: &KeyType) -> Option<PeerType>;
+    fn get_all(&self) -> Option<Vec<PeerType>>;
+    fn get_multiple(&self, limit: usize) -> Option<Vec<PeerType>>;
+    fn inbound_connection(&mut self, key: KeyType, value: PeerType) -> Result<(), Box<Error>>;
+    fn outbound_connection(&mut self, key: KeyType, value: PeerType) -> Result<(), Box<Error>>;
+    fn connection_failure(&mut self, key: &KeyType) -> Result<(), Box<Error>>;
+    fn disconnect(&mut self, key: &KeyType);
+    fn put_multiple(&mut self, values: Vec<(KeyType, PeerType)>) -> Result<(), Box<Error>>;
+    fn get_recent(&self, limit: usize) -> Option<Vec<PeerType>>;
+    fn get_seen(&self, limit: usize) -> Option<Vec<PeerType>>;
+    fn get_oldest(&self, limit: usize) -> Option<Vec<PeerType>>;
+    fn get_random(&self, limit: usize) -> Option<Vec<PeerType>>;
 }
 
 pub trait ToDBType<T> {

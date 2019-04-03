@@ -2,8 +2,8 @@ use std::error::Error;
 use std::f64::consts;
 
 use crate::common::block::Block;
-use crate::common::header::BlockHeader;
-use crate::traits::Exception;
+
+use crate::traits::{BlockHeader, Exception};
 
 use byteorder::{ByteOrder, LittleEndian};
 

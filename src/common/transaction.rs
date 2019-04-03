@@ -21,17 +21,3 @@ pub fn verify_tx(
     let standard_signature = signature.to_standard(&secp);
     Ok(secp.verify(&message, &standard_signature, &pubkey)?)
 }
-
-pub trait Transaction {
-    fn get_from(&self) -> Option<Address>;
-    fn get_to(&self) -> Option<Address>;
-    fn get_amount(&self) -> u64;
-    fn get_fee(&self) -> Option<u64>;
-    fn get_nonce(&self) -> Option<u32>;
-    fn get_signature(&self) -> Option<RecoverableSignature>;
-    fn get_recovery(&self) -> Option<RecoveryId>;
-}
-
-pub trait Valid {
-    fn verify(&self) -> Result<(), Box<Error>>;
-}

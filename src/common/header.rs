@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use crate::common::address::Address;
-use crate::traits::{Encode, Proto};
+use crate::traits::{BlockHeader, Encode, Proto};
 use crate::util::hash::hash;
 
 use crate::serialization::blockHeader::{BlockHeader as ProtoBlockHeader, HeaderPrehash};
@@ -18,18 +18,8 @@ pub struct Header {
     pub nonce: u64,
     pub miner: Address,
 }
-
-pub trait BlockHeader {
-    fn get_merkle_root(&self) -> &Vec<u8>;
-    fn get_time_stamp(&self) -> u64;
-    fn get_difficulty(&self) -> f64;
-    fn get_state_root(&self) -> &Vec<u8>;
-    fn get_previous_hash(&self) -> Option<&Vec<Vec<u8>>>;
-    fn get_nonce(&self) -> Option<u64>;
-    fn get_miner(&self) -> Option<&Address>;
-}
-
 impl BlockHeader for Header {
+    type AddressType = Address;
     fn get_merkle_root(&self) -> &Vec<u8> {
         &self.merkle_root
     }
@@ -48,7 +38,7 @@ impl BlockHeader for Header {
     fn get_nonce(&self) -> Option<u64> {
         Some(self.nonce)
     }
-    fn get_miner(&self) -> Option<&Address> {
+    fn get_miner(&self) -> Option<&Self::AddressType> {
         Some(&self.miner)
     }
 }

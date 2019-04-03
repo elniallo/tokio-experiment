@@ -1,17 +1,16 @@
-use std::borrow::BorrowMut;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 
 use crate::common::address::Address;
 use crate::common::block::Block;
-use crate::common::header::{BlockHeader, Header};
+use crate::common::header::Header;
 use crate::common::signed_tx::SignedTx;
-use crate::common::transaction::Transaction;
 use crate::consensus::worldstate::{Blake2bHashResult, WorldState};
 use crate::database::block_db::BlockDB;
-use crate::traits::Exception;
+use crate::traits::{BlockHeader, Exception, Transaction};
 use crate::util::strict_math::StrictU64;
+use secp256k1::{RecoverableSignature, RecoveryId};
 
 use crate::serialization::state::Account as ProtoAccount;
 
@@ -170,7 +169,7 @@ impl StateProcessor {
         genesis: bool,
     ) -> StateProcessorResult<()>
     where
-        TxType: Transaction,
+        TxType: Transaction<Address, RecoverableSignature, RecoveryId>,
     {
         // Handle a genesis transaction
         if genesis {
@@ -303,7 +302,7 @@ impl StateProcessor {
         miner: Option<&Address>,
     ) -> StateProcessorResult<()>
     where
-        TxType: Transaction,
+        TxType: Transaction<Address, RecoverableSignature, RecoveryId>,
     {
         let miner_address;
         if let Some(addr) = miner {

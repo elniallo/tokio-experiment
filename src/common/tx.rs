@@ -2,9 +2,8 @@ use std::cmp::{Ord, Ordering, PartialOrd};
 use std::error::Error;
 
 use crate::common::address::Address;
-use crate::common::transaction::Transaction;
 use crate::serialization::tx::Tx as ProtoTx;
-use crate::traits::{Decode, Encode, Proto};
+use crate::traits::{Decode, Encode, Proto, Transaction};
 
 use protobuf::Message as ProtoMessage;
 use secp256k1::{RecoverableSignature, RecoveryId};
@@ -30,7 +29,7 @@ impl Tx {
     }
 }
 
-impl Transaction for Tx {
+impl Transaction<Address, RecoverableSignature, RecoveryId> for Tx {
     fn get_from(&self) -> Option<Address> {
         Some(self.from)
     }

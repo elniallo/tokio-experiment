@@ -1,13 +1,13 @@
 use crate::common::block::Block;
 use crate::common::block_status::BlockStatus;
-use crate::common::header::{BlockHeader, Header};
+use crate::common::header::Header;
 use crate::common::meta::Meta;
 use crate::common::signed_tx::SignedTx;
 use crate::consensus::difficulty_adjuster;
 use crate::consensus::state_processor::StateProcessor;
 use crate::consensus::BlockForkChoice;
 use crate::database::block_db::BlockDB;
-use crate::traits::{Encode, Exception};
+use crate::traits::{BlockHeader, Encode, Exception};
 use crate::util::hash::{hash, hash_cryptonight};
 
 use std::cmp::Ordering;
