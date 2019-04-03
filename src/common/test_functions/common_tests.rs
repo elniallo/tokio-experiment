@@ -1,4 +1,4 @@
-use crate::common::address::{Address, ValidAddress};
+use crate::common::address::Address;
 use crate::common::block::Block;
 use crate::common::genesis_block::GenesisBlock;
 use crate::common::genesis_tx::GenesisTx;
@@ -6,6 +6,8 @@ use crate::common::header::Header;
 use crate::common::signed_tx::SignedTx;
 use crate::common::tx::Tx;
 use crate::common::wallet::Wallet;
+
+use crate::traits::ValidAddress;
 
 use rand::Rng;
 

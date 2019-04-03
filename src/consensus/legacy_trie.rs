@@ -459,10 +459,10 @@ pub mod tests {
     use super::*;
     use crate::account::account::Account;
     use crate::account::node_ref::NodeRef;
-    use crate::common::address::ValidAddress;
     use crate::common::exodus_block::ExodusBlock;
     use crate::common::transaction::Transaction;
     use crate::database::mock::RocksDBMock;
+    use crate::traits::ValidAddress;
     use crate::traits::{Decode, Encode};
     use crate::util::hash::hash;
     use rand::{thread_rng, Rng};

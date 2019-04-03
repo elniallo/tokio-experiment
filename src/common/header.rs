@@ -116,7 +116,7 @@ impl Proto for Header {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::address::ValidAddress;
+    use crate::traits::ValidAddress;
     use rust_base58::FromBase58;
 
     #[test]

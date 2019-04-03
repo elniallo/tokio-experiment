@@ -253,8 +253,9 @@ impl TxPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::address::{Address, ValidAddress};
+    use crate::common::address::Address;
     use crate::common::signed_tx::SignedTx;
+    use crate::traits::ValidAddress;
 
     use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
     #[test]
