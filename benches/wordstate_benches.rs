@@ -11,8 +11,7 @@ use hycon_rust::common::exodus_block::ExodusBlock;
 use hycon_rust::consensus::legacy_trie::LegacyTrie;
 use hycon_rust::database::mock::RocksDBMock;
 use hycon_rust::database::state_db::StateDB;
-use hycon_rust::serialization::state::Account as ProtoAccount;
-use hycon_rust::traits::{Decode, Encode, Proto, Transaction};
+use hycon_rust::traits::{Decode, Encode, Transaction};
 use hycon_rust::util::hash::hash;
 use starling::traits::Database;
 use std::env;
@@ -51,48 +50,48 @@ fn get_from_trie_best_case(c: &mut Criterion) {
         b.iter(|| {
             legacy_trie.get(
                 &state_hash,
-                &vec![[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+                &vec![&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
             )
         })
     });
 }
 
-fn exodus(c: &mut Criterion) {
-    let mut path = env::current_dir().unwrap();
-    path.push("data/exodusBlock.dat");
-    let mut exodus_file = File::open(path).unwrap();
-    let mut exodus_buf = Vec::new();
-    exodus_file.read_to_end(&mut exodus_buf).unwrap();
-    let exodus = ExodusBlock::decode(&exodus_buf).unwrap();
-    let mut keypairs: Vec<(Address, ProtoAccount)> = Vec::with_capacity(12000);
-    let mut addresses: Vec<Address> = Vec::with_capacity(12000);
-    let mut accounts: Vec<ProtoAccount> = Vec::with_capacity(12000);
-    match &exodus.txs {
-        Some(tx_vec) => {
-            for tx in tx_vec {
-                let amount: u64 = tx.get_amount();
-                let nonce: u32;
-                if let Some(tx_nonce) = tx.get_nonce() {
-                    nonce = tx_nonce;
-                } else {
-                    break;
-                }
-                if let Some(add) = tx.get_to() {
-                    keypairs.push((add, Account::new(amount, nonce).to_proto().unwrap()));
-                } else {
-                    break;
+fn exodus<'a>(c: &mut Criterion) {
+    c.bench_function("Exodus Block", move |b| {
+        let mut path = env::current_dir().unwrap();
+        path.push("data/exodusBlock.dat");
+        let mut exodus_file = File::open(path).unwrap();
+        let mut exodus_buf = Vec::new();
+        exodus_file.read_to_end(&mut exodus_buf).unwrap();
+        let exodus = ExodusBlock::decode(&exodus_buf).unwrap();
+        let mut keypairs: Vec<(Address, Account)> = Vec::with_capacity(12000);
+        let mut addresses: Vec<&Address> = Vec::with_capacity(12000);
+        let mut accounts: Vec<Account> = Vec::with_capacity(12000);
+        match &exodus.txs {
+            Some(tx_vec) => {
+                for tx in tx_vec {
+                    let amount: u64 = tx.get_amount();
+                    let nonce: u32;
+                    if let Some(tx_nonce) = tx.get_nonce() {
+                        nonce = tx_nonce;
+                    } else {
+                        break;
+                    }
+                    if let Some(add) = tx.get_to() {
+                        keypairs.push((add, Account::new(amount, nonce)));
+                    } else {
+                        break;
+                    }
                 }
             }
+            None => {}
         }
-        None => {}
-    }
-    keypairs.sort_by(|a, b| a.0.cmp(&b.0));
-    for (key, value) in keypairs.clone() {
-        addresses.push(key);
-        accounts.push(value);
-    }
-    let db_path = PathBuf::new();
-    c.bench_function("Exodus Block", move |b| {
+        keypairs.sort_by(|a, b| a.0.cmp(&b.0));
+        for (key, value) in keypairs.iter() {
+            addresses.push(&key);
+            accounts.push(*value);
+        }
+        let db_path = PathBuf::new();
         let add = addresses.clone();
         let acc = accounts.clone();
         b.iter(|| {
@@ -104,44 +103,44 @@ fn exodus(c: &mut Criterion) {
 }
 
 fn get_from_exodus_state(c: &mut Criterion) {
-    let mut path = env::current_dir().unwrap();
-    path.push("data/exodusBlock.dat");
-    let mut exodus_file = File::open(path).unwrap();
-    let mut exodus_buf = Vec::new();
-    exodus_file.read_to_end(&mut exodus_buf).unwrap();
-    let exodus = ExodusBlock::decode(&exodus_buf).unwrap();
-    let mut keypairs: Vec<(Address, ProtoAccount)> = Vec::with_capacity(12000);
-    let mut addresses: Vec<Address> = Vec::with_capacity(12000);
-    let mut accounts: Vec<ProtoAccount> = Vec::with_capacity(12000);
-    match &exodus.txs {
-        Some(tx_vec) => {
-            for tx in tx_vec {
-                let amount: u64 = tx.get_amount();
-                let nonce: u32;
-                if let Some(tx_nonce) = tx.get_nonce() {
-                    nonce = tx_nonce;
-                } else {
-                    break;
-                }
-                if let Some(add) = tx.get_to() {
-                    keypairs.push((add, Account::new(amount, nonce).to_proto().unwrap()));
-                } else {
-                    break;
+    c.bench_function("Get After Exodus", move |b| {
+        let mut path = env::current_dir().unwrap();
+        path.push("data/exodusBlock.dat");
+        let mut exodus_file = File::open(path).unwrap();
+        let mut exodus_buf = Vec::new();
+        exodus_file.read_to_end(&mut exodus_buf).unwrap();
+        let exodus = ExodusBlock::decode(&exodus_buf).unwrap();
+        let mut keypairs: Vec<(Address, Account)> = Vec::with_capacity(12000);
+        let mut addresses: Vec<&Address> = Vec::with_capacity(12000);
+        let mut accounts: Vec<Account> = Vec::with_capacity(12000);
+        match &exodus.txs {
+            Some(tx_vec) => {
+                for tx in tx_vec {
+                    let amount: u64 = tx.get_amount();
+                    let nonce: u32;
+                    if let Some(tx_nonce) = tx.get_nonce() {
+                        nonce = tx_nonce;
+                    } else {
+                        break;
+                    }
+                    if let Some(add) = tx.get_to() {
+                        keypairs.push((add, Account::new(amount, nonce)));
+                    } else {
+                        break;
+                    }
                 }
             }
+            None => {}
         }
-        None => {}
-    }
-    keypairs.sort_by(|a, b| a.0.cmp(&b.0));
-    for (key, value) in keypairs.clone() {
-        addresses.push(key);
-        accounts.push(value);
-    }
-    let db_path = PathBuf::new();
-    let state_db: StateDB<RocksDBMock> = StateDB::new(db_path.clone(), None).unwrap();
-    let mut tree = LegacyTrie::new(state_db);
-    let root = tree.insert(None, addresses.clone(), &accounts).unwrap();
-    c.bench_function("Get After Exodus", move |b| {
+        keypairs.sort_by(|a, b| a.0.cmp(&b.0));
+        for (key, value) in keypairs.iter() {
+            addresses.push(&key);
+            accounts.push(*value);
+        }
+        let db_path = PathBuf::new();
+        let state_db: StateDB<RocksDBMock> = StateDB::new(db_path.clone(), None).unwrap();
+        let mut tree = LegacyTrie::new(state_db);
+        let root = tree.insert(None, addresses.clone(), &accounts).unwrap();
         b.iter(|| {
             let _retrieved = &tree.get(&root, &addresses);
         });

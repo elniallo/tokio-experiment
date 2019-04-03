@@ -43,7 +43,7 @@ where
             let entry = self.pending_inserts.remove(0);
             let key = entry.0;
             let value = entry.1;
-            batch.push((key, value.encode().unwrap()));
+            batch.push((key, value.encode()?));
         }
         self.database.write_batch(batch)?;
         Ok(())
@@ -64,7 +64,7 @@ where
         options: Option<OptionType>,
     ) -> Result<StateDB<DatabaseType, EntryType>, Box<Error>> {
         let database = DatabaseType::open(path, options)?;
-        let pending_inserts = Vec::with_capacity(8193);
+        let pending_inserts = Vec::with_capacity(40000);
         Ok(StateDB {
             database,
             pending_inserts,
