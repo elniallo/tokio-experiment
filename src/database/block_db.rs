@@ -211,7 +211,7 @@ where
         let mut hash_cpy = hash.clone();
         hash_cpy.insert(0, 's' as u8);
 
-        let status_byte = status.to_u8();
+        let status_byte = status.to_output();
 
         self.database.set(&hash_cpy, &vec![status_byte])
     }
@@ -225,7 +225,7 @@ where
         } else {
             return Ok(BlockStatus::Nothing);
         }
-        match BlockStatus::from_u8(status_u8) {
+        match BlockStatus::from_input(status_u8) {
             Ok(block_status) => Ok(block_status),
             Err(e) => Err(Box::new(DBError::new(DBErrorType::UnexpectedError(
                 e.to_string(),
