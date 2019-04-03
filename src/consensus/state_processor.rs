@@ -1,5 +1,7 @@
+use std::borrow::BorrowMut;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
+use std::sync::{Arc, Mutex};
 
 use crate::common::address::Address;
 use crate::common::block::Block;
@@ -18,21 +20,20 @@ const MAX_STATE_CACHE_SIZE: usize = 5000;
 type StateProcessorResult<T> = Result<T, Box<Error>>;
 
 pub struct StateProcessor<
-    'a,
-    BlockDBType = BlockDB<'a>,
+    BlockDBType = BlockDB,
     WorldStateType = WorldState,
     HashresultType = Blake2bHashResult,
 > {
     worldstate: WorldStateType,
-    block_db: &'a mut BlockDBType,
+    block_db: Arc<Mutex<BlockDBType>>,
     state_cache: Vec<HashresultType>,
 }
 
-impl<'a> StateProcessor<'a> {
-    fn new(
-        block_db: &'a mut BlockDB<'a>,
+impl StateProcessor {
+    pub fn new(
+        block_db: Arc<Mutex<BlockDB>>,
         worldstate: WorldState,
-    ) -> StateProcessor<BlockDB<'a>, WorldState> {
+    ) -> StateProcessor<BlockDB, WorldState> {
         let state_cache = Vec::with_capacity(MAX_STATE_CACHE_SIZE);
         StateProcessor {
             worldstate,
@@ -55,9 +56,15 @@ impl<'a> StateProcessor<'a> {
     }
 
     fn regenerate(&mut self, height: u32) -> StateProcessorResult<()> {
-        let block_tip = self.block_db.get_block_tip_hash()?;
+        let block_tip = self
+            .block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison error"))?
+            .get_block_tip_hash()?;
         let block = self
             .block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison error"))?
             .get_block::<Block<Header, SignedTx>>(&block_tip)?;
         let tip_height;
         if let Some(m) = block.meta {

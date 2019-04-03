@@ -16,14 +16,14 @@ use std::path::PathBuf;
 type DBResult<T> = Result<T, Box<DBError>>;
 type HashValue = Vec<u8>;
 
-fn merge_function(
-    new_key: &[u8],
+pub fn merge_function(
+    _new_key: &[u8],
     existing_value: Option<&[u8]>,
     operands: &mut MergeOperands,
 ) -> Option<Vec<u8>> {
     if let Some(value) = existing_value {
         let mut db_state: DBState = DBState::decode(value).unwrap();
-        for op in operands {
+        for _op in operands {
             db_state.ref_count += 1;
         }
         return Some(db_state.encode().unwrap());
@@ -105,7 +105,7 @@ impl IDB for RocksDB {
         }
     }
 
-    fn delete(&mut self, key: &[u8]) -> DBResult<()> {
+    fn delete(&mut self, _key: &[u8]) -> DBResult<()> {
         Ok(())
     }
 

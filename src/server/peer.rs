@@ -7,12 +7,13 @@ use std::sync::{Arc, Mutex};
 use tokio::io;
 use tokio::prelude::*;
 
+use crate::common::block::Block;
 use crate::serialization::network::{self, Network_oneof_request};
 use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer_database::DBPeer;
 use crate::server::server::{NotificationType, Server};
-use crate::traits::{Encode, ToDBType};
+use crate::traits::{Encode, Proto, ToDBType};
 use crate::util::hash::hash;
 
 type Rx = mpsc::UnboundedReceiver<Bytes>;
@@ -178,7 +179,20 @@ impl Future for Peer {
                             }
                             if self.srv.lock().unwrap().new_data(msg_vec) {
                                 self.srv.lock().unwrap().increment_block_count();
-                                info!(self.logger, "Block Received: {:?}", block);
+                                for block in block.clone().take_blocks().into_iter() {
+                                    match self
+                                        .srv
+                                        .lock()
+                                        .unwrap()
+                                        .process_block(&Block::from_proto(&block).unwrap())
+                                    {
+                                        Ok(_) => {}
+                                        Err(e) => {
+                                            error!(self.logger, "Header Processing Error: {:?}", e)
+                                        }
+                                    }
+                                }
+                                info!(self.logger, "Block Received: {:?}", &block);
                             }
                         }
                         Network_oneof_request::putBlockReturn(_) => {

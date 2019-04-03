@@ -1,15 +1,19 @@
-#[derive(Debug, PartialEq)]
+use crate::traits::Exception;
+use std::error::Error;
+
+#[derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)]
 pub enum BlockStatus {
     Rejected,
     Nothing,
     Header,
+    Invalid,
     Block,
     MainChain,
 }
 
 pub trait EnumConverter {
     fn to_u8(&self) -> u8;
-    fn from_u8(number: u8) -> Option<BlockStatus>;
+    fn from_u8(number: u8) -> Result<BlockStatus, Box<Error>>;
 }
 
 impl EnumConverter for BlockStatus {
@@ -18,19 +22,24 @@ impl EnumConverter for BlockStatus {
             BlockStatus::Rejected => return 0,
             BlockStatus::Nothing => return 1,
             BlockStatus::Header => return 2,
-            BlockStatus::Block => return 3,
-            BlockStatus::MainChain => return 4,
+            BlockStatus::Invalid => return 3,
+            BlockStatus::Block => return 4,
+            BlockStatus::MainChain => return 5,
         }
     }
 
-    fn from_u8(number: u8) -> Option<BlockStatus> {
+    fn from_u8(number: u8) -> Result<BlockStatus, Box<Error>> {
         match number {
-            0 => return Some(BlockStatus::Rejected),
-            1 => return Some(BlockStatus::Nothing),
-            2 => return Some(BlockStatus::Header),
-            3 => return Some(BlockStatus::Block),
-            4 => return Some(BlockStatus::MainChain),
-            _ => None,
+            0 => return Ok(BlockStatus::Rejected),
+            1 => return Ok(BlockStatus::Nothing),
+            2 => return Ok(BlockStatus::Header),
+            3 => return Ok(BlockStatus::Invalid),
+            4 => return Ok(BlockStatus::Block),
+            5 => return Ok(BlockStatus::MainChain),
+            _ => Err(Box::new(Exception::new(&format!(
+                "Enum does not exist for number {}",
+                number
+            )))),
         }
     }
 }
@@ -47,24 +56,32 @@ mod tests {
     }
 
     #[test]
-    fn it_gives_4_as_u8_from_block_status_main_chain() {
+    fn it_gives_5_as_u8_from_block_status_main_chain() {
         let status = BlockStatus::MainChain;
-        assert_eq!(status.to_u8(), 4)
+        assert_eq!(status.to_u8(), 5)
     }
 
     #[test]
-    fn it_gives_none_from_wrong_u8() {
+    fn it_gives_err_from_wrong_u8() {
         assert!(
-            BlockStatus::from_u8(10).is_none(),
+            BlockStatus::from_u8(10).is_err(),
             "10 is not a value for BlockStatus"
         )
     }
 
     #[test]
-    fn it_gives_none_from_wrong_value() {
+    fn it_gives_err_from_wrong_value() {
         assert!(
-            BlockStatus::from_u8(5).is_none(),
-            "5 is not the value for BlockStatus"
+            BlockStatus::from_u8(6).is_err(),
+            "6 is not the value for BlockStatus"
         );
+    }
+    #[test]
+    fn it_is_ordered_correctly() {
+        assert!(BlockStatus::MainChain > BlockStatus::Block);
+        assert!(BlockStatus::Block > BlockStatus::Invalid);
+        assert!(BlockStatus::Invalid > BlockStatus::Header);
+        assert!(BlockStatus::Header > BlockStatus::Nothing);
+        assert!(BlockStatus::Nothing > BlockStatus::Rejected);
     }
 }

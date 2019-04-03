@@ -5,19 +5,31 @@ use futures::sync::mpsc;
 use slog::{Drain, Logger};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{SocketAddr, ToSocketAddrs};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 use tokio::timer::Interval;
 
+use crate::common::block::Block;
+use crate::common::header::Header;
+use crate::common::signed_tx::SignedTx;
+use crate::consensus::consensus::Consensus;
+use crate::consensus::consensus::HeaderProcessor;
+use crate::consensus::state_processor::StateProcessor;
+use crate::consensus::worldstate::WorldState;
+use crate::database::block_db::BlockDB;
+use crate::database::dbkeys::DBKeys;
+use crate::database::state_db::StateDB;
 use crate::serialization::network::{self, Network_oneof_request};
 use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer::Peer;
 use crate::server::peer_database::{DBPeer, PeerDatabase};
 use crate::server::socket_parser::SocketParser;
-use crate::traits::{Encode, ToDBType};
+use crate::traits::{Encode, Exception, ToDBType};
+
 pub enum NotificationType<T> {
     Inbound(T),
     Disconnect(T),
@@ -127,16 +139,18 @@ pub struct Server {
     seen_messages: HashSet<Vec<u8>>,
     seen_message_vec: VecDeque<Vec<u8>>,
     logger: Logger,
+    consensus: Consensus,
 }
 
 impl Server {
     pub fn new(
         transmitter: mpsc::UnboundedSender<NotificationType<DBPeer>>,
         logger: Logger,
+        consensus: Consensus,
     ) -> Self {
         Self {
             active_peers: HashMap::new(),
-            guid: String::from("MyRustyGuid"),
+            guid: String::from("RustyGuid"),
             version: 14,
             peer_channel: transmitter,
             peer_db: None,
@@ -144,6 +158,7 @@ impl Server {
             seen_messages: HashSet::new(),
             seen_message_vec: VecDeque::with_capacity(1000),
             logger,
+            consensus,
         }
     }
 
@@ -202,6 +217,13 @@ impl Server {
     pub fn get_logger(&self) -> &Logger {
         &self.logger
     }
+
+    pub fn process_block(
+        &self,
+        block: &Block<Header, SignedTx>,
+    ) -> Result<(), Box<std::error::Error>> {
+        self.consensus.process_header(&block.header)
+    }
 }
 
 pub fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
@@ -256,27 +278,45 @@ pub fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
 }
 
 pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
+    // Set up logger
     let decorator = slog_term::TermDecorator::new().build();
     let drain = slog_term::CompactFormat::new(decorator).build();
     let drain = std::sync::Mutex::new(drain).fuse();
     let root_logger = Logger::root(drain, o!("version" => "1.0"));
     info!(root_logger, "Application started");
+    // Set up Consensus
+    let state_path = PathBuf::from("state");
+    let block_path = PathBuf::from("blocks");
+    let file_path = PathBuf::from("blockfile");
+    let keys = DBKeys::default();
+    let block_db = BlockDB::new(block_path, file_path, keys, None).unwrap();
+    let db_wrapper = Arc::new(Mutex::new(block_db));
+    let state_db = StateDB::new(state_path, None).unwrap();
+    let world_state = WorldState::new(state_db, 20).unwrap();
+    let state_processor = StateProcessor::new(db_wrapper.clone(), world_state);
+    let consensus = Consensus::new(state_processor, db_wrapper).unwrap();
+
+    //Set up Blockchain Server
     let (tx, rx) = mpsc::unbounded::<NotificationType<DBPeer>>();
-    let srv = Arc::new(Mutex::new(Server::new(tx, root_logger.clone())));
+    let srv = Arc::new(Mutex::new(Server::new(tx, root_logger.clone(), consensus)));
+
+    // Set Up Peer DB
     let cloned = root_logger.clone();
     let peer_db_logger = root_logger.new(o!());
     let peer_database = PeerDatabase::new(rx, peer_db_logger);
+    let peer_db =
+        PeerDBFuture::new(peer_database, srv.clone(), root_logger.clone()).map_err(move |e| {
+            error!(cloned, "Error: {:?}", e);
+        });
+
+    // Initialise TCP listener
+    let second_clone = root_logger.clone();
     let addr = args[2]
         .to_socket_addrs()
         .unwrap()
         .next()
         .expect("could not parse address");
     let socket = TcpListener::bind(&addr)?;
-    let peer_db =
-        PeerDBFuture::new(peer_database, srv.clone(), root_logger.clone()).map_err(move |e| {
-            error!(cloned, "Error: {:?}", e);
-        });
-    let second_clone = root_logger.clone();
     let server = socket
         .incoming()
         .for_each(move |socket| {
@@ -287,6 +327,8 @@ pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
             error!(root_logger.clone(), "Accept error = {:?}", err);
         });
     info!(second_clone, "Server Running on {:?}", &addr);
+
+    // Pass futures to Tokio Execution environment
     tokio::run(server.join(peer_db).map(|(_, _)| ()));
     Ok(())
 }

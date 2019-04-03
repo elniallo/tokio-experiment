@@ -72,6 +72,9 @@ impl Proto for GenesisHeader {
         proto_genesis_block_header.set_stateRoot(self.state_root.clone());
         Ok(proto_genesis_block_header)
     }
+    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+        unimplemented!()
+    }
 }
 
 impl Encode for GenesisHeader {

@@ -1,3 +1,5 @@
+use crate::common::block_status::BlockStatus;
+use crate::common::block_status::EnumConverter;
 use crate::serialization::block::BlockDB as ProtoBlockDB;
 use crate::traits::{Decode, Encode, Proto};
 use protobuf::Message as ProtoMessage;
@@ -13,6 +15,7 @@ pub struct Meta {
     pub file_number: Option<u32>,
     pub offset: Option<u64>,
     pub length: Option<u32>,
+    pub status: BlockStatus,
 }
 
 impl Meta {
@@ -25,6 +28,7 @@ impl Meta {
         file_number: Option<u32>,
         offset: Option<u64>,
         length: Option<u32>,
+        status: BlockStatus,
     ) -> Meta {
         Meta {
             height,
@@ -35,6 +39,7 @@ impl Meta {
             file_number,
             offset,
             length,
+            status,
         }
     }
 }
@@ -60,7 +65,12 @@ impl Proto for Meta {
             Some(length) => proto_meta.set_length(length),
             None => {}
         }
+        proto_meta.set_status(self.status.to_u8() as u32);
         Ok(proto_meta)
+    }
+
+    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+        unimplemented!()
     }
 }
 
@@ -85,6 +95,7 @@ impl Decode for Meta {
             Some(proto_meta.fileNumber),
             Some(proto_meta.offset),
             Some(proto_meta.length),
+            BlockStatus::from_u8(proto_meta.status as u8)?,
         );
         Ok(meta_info)
     }
@@ -109,6 +120,7 @@ mod tests {
             None,
             None,
             None,
+            BlockStatus::Nothing,
         );
 
         assert_eq!(meta.height, height);
@@ -139,6 +151,7 @@ mod tests {
             Some(file_number),
             Some(offset),
             Some(length),
+            BlockStatus::Header,
         );
 
         assert_eq!(meta.height, height);

@@ -62,6 +62,16 @@ impl Proto for NetworkMessage {
         }
         Ok(proto_message)
     }
+
+    fn from_proto(prototype: &ProtoNetwork) -> Result<Self, Box<Error>> {
+        if let Some(message) = &prototype.request {
+            Ok(Self {
+                message_type: message.clone(),
+            })
+        } else {
+            Err(Box::new(Exception::new("No Message")))
+        }
+    }
 }
 #[derive(Clone)]
 pub struct NetworkManager {}

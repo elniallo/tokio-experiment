@@ -36,6 +36,10 @@ impl Proto for NodeRef {
         proto_node_ref.set_child(self.child.clone());
         Ok(proto_node_ref)
     }
+
+    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+        unimplemented!()
+    }
 }
 
 impl Encode for NodeRef {

@@ -10,7 +10,7 @@ use secp256k1::PublicKey;
 fn check_sum(arr: &[u8; 20]) -> String {
     let arr_hash = hash(arr, 32);
     let string = arr_hash.to_base58();
-    format!("{}", &string[0..4])
+    string[0..4].to_string()
 }
 
 pub type AddressResult<T> = Result<T, Box<Error>>;
@@ -31,24 +31,28 @@ impl ValidAddress for Address {
     }
 
     fn from_string(string: &String) -> AddressResult<Address> {
-        let mut string_iter = string.chars();
-        let first_char = string_iter.next();
-        match first_char {
-            Some(letter) => {
-                if letter.to_string() != "H" {
-                    return Err(Box::new(Exception::new("Address must begin with an H")));
-                }
-            }
-            None => return Err(Box::new(Exception::new("No data was supplied"))),
+        if string.len() < 5 {
+            return Err(Box::new(Exception::new("Address is too short")));
         }
+        if !string.starts_with("H") {
+            return Err(Box::new(Exception::new("Address must begin with an H")));
+        }
+        // let mut string_iter = string.chars();
+        // let first_char = string_iter.next();
+        // match first_char {
+        //     Some(letter) => {
+        //         if letter != 'H' {
+        //             return Err(Box::new(Exception::new("Address must begin with an H")));
+        //         }
+        //     }
+        //     None => return Err(Box::new(Exception::new("No data was supplied"))),
+        // }
 
-        let address_and_checksum = &string[1..string.len()];
-        let address = &address_and_checksum[0..address_and_checksum.len() - 4];
-        let checksum =
-            &address_and_checksum[address_and_checksum.len() - 4..address_and_checksum.len()];
+        //let address_and_checksum = &string[1..string.len()];
+        let (address, checksum) = string.split_at(string.len() - 4);
 
         let decoded_bytes;
-        if let Ok(b) = address.from_base58() {
+        if let Ok(b) = address[1..address.len()].from_base58() {
             decoded_bytes = b;
         } else {
             return Err(Box::new(Exception::new("Failed to decode address string")));
@@ -62,10 +66,10 @@ impl ValidAddress for Address {
         }
 
         let mut address_bytes: [u8; 20] = [0; 20];
-        address_bytes.clone_from_slice(&decoded_bytes[0..20]);
+        address_bytes.copy_from_slice(&decoded_bytes[0..20]);
 
         let checksum_bytes = check_sum(&address_bytes);
-        if checksum_bytes.to_string() != checksum {
+        if &checksum_bytes != checksum {
             return Err(Box::new(Exception::new(&format!(
                 "{} did not match {}",
                 checksum,
@@ -129,16 +133,6 @@ mod tests {
     }
 
     #[test]
-    fn it_only_allows_valid_addresses() {
-        let address_string = "Not a valid address string".to_string();
-        let address = Address::from_string(&address_string);
-        match address {
-            Ok(_addr) => panic!("{} is not a valid address string!", address_string),
-            Err(_) => {}
-        }
-    }
-
-    #[test]
     fn it_checks_checksum() {
         let address_string = "HAa7S1QqVRMw13VdUnrSkn5w6oNK36MM".to_string();
         let address = Address::from_string(&address_string);
@@ -158,5 +152,24 @@ mod tests {
             87, 180,
         ];
         assert_eq!(address, other_address);
+    }
+
+    #[test]
+    fn it_fails_on_malformed_addresses() {
+        let empty_string = "".to_string();
+        let empty_address = Address::from_string(&empty_string);
+        assert!(empty_address.is_err());
+        let h_string = "H".to_string();
+        let h_address = Address::from_string(&h_string);
+        assert!(h_address.is_err());
+        let h_plus_checksum = "H1234".to_string();
+        let h_plus_checksum_address = Address::from_string(&h_plus_checksum);
+        assert!(h_plus_checksum_address.is_err());
+        let short_address = "H1223425fjsf".to_string();
+        let short_address_address = Address::from_string(&short_address);
+        assert!(short_address_address.is_err());
+        let address_string = "Not a valid address string".to_string();
+        let address = Address::from_string(&address_string);
+        assert!(address.is_err());
     }
 }

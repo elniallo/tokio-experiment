@@ -137,6 +137,7 @@ pub fn acceptable(hash: Vec<u8>, target: Vec<u8>) -> Result<bool, Box<Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::block_status::BlockStatus;
     use crate::common::header::Header;
     use crate::common::meta::Meta;
     use crate::common::signed_tx::SignedTx;
@@ -154,7 +155,17 @@ mod tests {
             0,
             [0u8; 20],
         );
-        let meta = Meta::new(1, 0.5, 0.5, 0.5, 0.0, None, None, None);
+        let meta = Meta::new(
+            1,
+            0.5,
+            0.5,
+            0.5,
+            0.0,
+            None,
+            None,
+            None,
+            BlockStatus::Nothing,
+        );
         let previous_block: Block<Header, SignedTx> =
             Block::new(previous_block_header, None, Some(meta));
         let (next_difficulty, time_ema, difficulty_ema) =
@@ -202,6 +213,7 @@ mod tests {
             file_number,
             offset,
             length,
+            BlockStatus::Block,
         );
         let mut block: Block<Header, SignedTx> =
             Block::new(previous_block_header, None, Some(meta));
@@ -220,6 +232,7 @@ mod tests {
                 file_number,
                 offset,
                 length,
+                BlockStatus::Block,
             );
             previous_block_header = Header::new(
                 merkle_root.clone(),

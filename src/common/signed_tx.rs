@@ -112,6 +112,9 @@ impl Proto for SignedTx {
         proto_signed_tx.set_signature(self.signature.serialize_compact(&secp).1.to_vec());
         Ok(proto_signed_tx)
     }
+    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+        unimplemented!()
+    }
 }
 
 impl Encode for SignedTx {

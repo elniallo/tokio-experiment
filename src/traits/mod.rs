@@ -32,6 +32,9 @@ pub trait Decode {
 pub trait Proto {
     type ProtoType;
     fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>>;
+    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>>
+    where
+        Self: Sized;
 }
 
 #[derive(Debug)]

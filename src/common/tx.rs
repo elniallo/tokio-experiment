@@ -65,6 +65,10 @@ impl Proto for Tx {
         proto_tx.set_nonce(self.nonce);
         Ok(proto_tx)
     }
+
+    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+        unimplemented!()
+    }
 }
 
 impl Encode for Tx {
