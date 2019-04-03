@@ -179,9 +179,10 @@ impl Proto for Block<Header, SignedTx> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::common::address::{Address, ValidAddress};
+    use crate::common::address::{Address};
     use crate::common::block_status::BlockStatus;
     use crate::common::signed_tx::SignedTx;
+    use crate::traits::ValidAddress;
     use rust_base58::FromBase58;
     use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
 

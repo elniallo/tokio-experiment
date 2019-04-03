@@ -118,7 +118,7 @@ impl PartialOrd for Tx {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::address::ValidAddress;
+    use crate::traits::ValidAddress;
     use rand::prelude::*;
     use rand::{Rng, SeedableRng};
 

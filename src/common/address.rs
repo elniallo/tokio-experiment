@@ -2,7 +2,7 @@ use crate::util::hash::hash;
 use std::error::Error;
 use std::result::Result;
 
-use crate::traits::Exception;
+use crate::traits::{Exception, ValidAddress};
 
 use rust_base58::{FromBase58, ToBase58};
 use secp256k1::PublicKey;
@@ -17,14 +17,7 @@ pub type AddressResult<T> = Result<T, Box<Error>>;
 
 pub type Address = [u8; 20];
 
-pub trait ValidAddress {
-    fn to_string(&self) -> String;
-    fn from_string(string: &String) -> AddressResult<Address>;
-    fn from_pubkey(pubkey: PublicKey) -> Address;
-    fn from_bytes(bytes: &[u8; 20]) -> Address;
-}
-
-impl ValidAddress for Address {
+impl ValidAddress<PublicKey,Address> for Address {
     fn to_string(&self) -> String {
         let base58_address = self.to_base58();
         "H".to_string() + &base58_address + &check_sum(&self)

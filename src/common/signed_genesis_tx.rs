@@ -114,7 +114,7 @@ impl Valid for SignedGenesisTx {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::address::ValidAddress;
+    use crate::traits::ValidAddress;
     use rand::{thread_rng, Rng};
 
     #[test]

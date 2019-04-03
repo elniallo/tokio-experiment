@@ -256,12 +256,13 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::address::{Address, ValidAddress};
+    use crate::common::address::Address;
     use crate::common::block_status::BlockStatus;
     use crate::consensus::worldstate::WorldState;
     use crate::database::block_db::BlockDB;
     use crate::database::dbkeys::DBKeys;
     use crate::database::state_db::StateDB;
+    use crate::traits::ValidAddress;
 
     use rust_base58::FromBase58;
     use std::path::PathBuf;
