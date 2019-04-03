@@ -2,9 +2,9 @@ use std::error::Error;
 use std::ops::Deref;
 
 use crate::common::address::Address;
-use crate::common::header::{BlockHeader, Header};
+use crate::common::header::Header;
 use crate::serialization::blockHeader::GenesisHeader as ProtoGenesisHeader;
-use crate::traits::{Encode, Proto};
+use crate::traits::{BlockHeader, Encode, Proto};
 use protobuf::Message;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -19,6 +19,7 @@ impl Deref for GenesisHeader {
 }
 
 impl BlockHeader for GenesisHeader {
+    type AddressType = Address;
     fn get_merkle_root(&self) -> &Vec<u8> {
         &self.merkle_root
     }
@@ -37,7 +38,7 @@ impl BlockHeader for GenesisHeader {
     fn get_nonce(&self) -> Option<u64> {
         None
     }
-    fn get_miner(&self) -> Option<&Address> {
+    fn get_miner(&self) -> Option<&Self::AddressType> {
         None
     }
 }
