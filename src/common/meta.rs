@@ -65,7 +65,7 @@ impl Proto for Meta {
             Some(length) => proto_meta.set_length(length),
             None => {}
         }
-        proto_meta.set_status(self.status.to_u8() as u32);
+        proto_meta.set_status(self.status.to_output() as u32);
         Ok(proto_meta)
     }
 
@@ -95,7 +95,7 @@ impl Decode for Meta {
             Some(proto_meta.fileNumber),
             Some(proto_meta.offset),
             Some(proto_meta.length),
-            BlockStatus::from_u8(proto_meta.status as u8)?,
+            BlockStatus::from_input(proto_meta.status as u8)?,
         );
         Ok(meta_info)
     }
