@@ -1,7 +1,4 @@
-use std::collections::{HashMap, HashSet};
-use std::error::Error;
-use std::sync::{Arc, Mutex};
-
+use crate::account::account::Account;
 use crate::common::address::Address;
 use crate::common::block::Block;
 use crate::common::header::Header;
@@ -11,6 +8,9 @@ use crate::database::block_db::BlockDB;
 use crate::traits::{BlockHeader, Exception, Transaction};
 use crate::util::strict_math::StrictU64;
 use secp256k1::{RecoverableSignature, RecoveryId};
+use std::collections::{HashMap, HashSet};
+use std::error::Error;
+use std::sync::{Arc, Mutex};
 
 use crate::serialization::state::Account as ProtoAccount;
 
@@ -112,7 +112,7 @@ impl StateProcessor {
 
         let mut address_keys = Vec::with_capacity(address_list.len());
         for i in 0..address_list.len() {
-            address_keys.push(address_list[i])
+            address_keys.push(&address_list[i])
         }
 
         // Insert existing balances into a map
@@ -164,7 +164,7 @@ impl StateProcessor {
 
     fn generate_tx_transition<TxType>(
         tx: &TxType,
-        account_map: &mut HashMap<Address, ProtoAccount>,
+        account_map: &mut HashMap<Address, Account>,
         miner: Option<&Address>,
         genesis: bool,
     ) -> StateProcessorResult<()>
@@ -183,8 +183,8 @@ impl StateProcessor {
 
                 if let Some(to_account) = account_map.get_mut(&to) {
                     // Begin committing updates to account map
-                    to_account.set_balance(tx.get_amount());
-                    to_account.set_nonce(nonce);
+                    to_account.balance = tx.get_amount();
+                    to_account.nonce = nonce;
                 } else {
                     return Err(Box::new(Exception::new(
                         "Invalid Tx: Tx to account does not exist",
@@ -212,7 +212,7 @@ impl StateProcessor {
         let nonce;
 
         if let Some(a) = account_map.get(miner_address) {
-            prev_miner_balance = StrictU64::new(a.get_balance());
+            prev_miner_balance = StrictU64::new(a.balance);
         } else {
             return Err(Box::new(Exception::new(
                 "Block miner not found in account map",
@@ -223,8 +223,8 @@ impl StateProcessor {
         if let Some(f) = tx.get_from() {
             from = f;
             if let Some(a) = account_map.get(&from) {
-                prev_from_balance = StrictU64::new(a.get_balance());
-                prev_from_nonce = a.get_nonce();
+                prev_from_balance = StrictU64::new(a.balance);
+                prev_from_nonce = a.nonce;
             } else {
                 return Err(Box::new(Exception::new(
                     "Invalid Tx: Tx is missing from account",
@@ -265,12 +265,12 @@ impl StateProcessor {
         // Handle the to account if one is supplied
         if let Some(to) = tx.get_to() {
             if let Some(to_account) = account_map.get_mut(&to) {
-                let prev_to_balance = StrictU64::new(to_account.get_balance());
+                let prev_to_balance = StrictU64::new(to_account.balance);
 
                 let new_to_balance = (prev_to_balance + amount)?;
 
                 // Begin committing updates to account map if the previous line succeeded
-                to_account.set_balance(u64::from(new_to_balance));
+                to_account.balance = u64::from(new_to_balance);
             } else {
                 return Err(Box::new(Exception::new(
                     "Invalid Tx: Tx to account does not exist",
@@ -280,15 +280,15 @@ impl StateProcessor {
 
         // Commit updates for the from address to the account map
         if let Some(from_account) = account_map.get_mut(&from) {
-            from_account.set_balance(u64::from(new_from_balance));
-            from_account.set_nonce(new_from_nonce);
+            from_account.balance = u64::from(new_from_balance);
+            from_account.nonce = new_from_nonce;
         } else {
             return Err(Box::new(Exception::new("Corrupt account map")));
         }
 
         // Commit updates for the miner address to the account map
         if let Some(miner_account) = account_map.get_mut(miner_address) {
-            miner_account.set_balance(u64::from(new_miner_balance));
+            miner_account.balance = u64::from(new_miner_balance);
         } else {
             return Err(Box::new(Exception::new("Corrupt account map")));
         }

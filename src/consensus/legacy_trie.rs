@@ -7,7 +7,7 @@ use crate::consensus::tree_node::TreeNode;
 use crate::database::state_db::StateDB;
 use crate::database::IDB;
 use crate::serialization::state::Account as ProtoAccount;
-use crate::traits::{Encode, Exception, Proto};
+use crate::traits::{Encode, Exception};
 use crate::util::hash::hash;
 use futures::Future;
 use starling::traits::Database;
@@ -38,11 +38,11 @@ where
     pub fn get_account(&self, _address: Address, _root_node: &DBState) -> Option<ProtoAccount> {
         None
     }
-    pub fn get(
+    pub fn get<'a>(
         &self,
         root: &[u8],
-        modified_accounts: &Vec<Address>,
-    ) -> Result<Vec<Option<(Address, ProtoAccount)>>, Box<Error>> {
+        modified_accounts: &Vec<&'a Address>,
+    ) -> Result<Vec<Option<(&'a Address, Account)>>, Box<Error>> {
         let mut accounts = Vec::with_capacity(modified_accounts.len());
         let root_node = self.db.get_node(root)?;
         let mut node_map: HashMap<Vec<u8>, StateNode> = HashMap::new();
@@ -70,7 +70,7 @@ where
 
     fn split_keys<'a>(
         &self,
-        keys: &'a Vec<Address>,
+        keys: &Vec<&'a Address>,
     ) -> Result<Vec<(usize, &'a Address)>, Box<Error>> {
         if keys.is_empty() {
             return Err(Box::new(Exception::new("No keys provided")));
@@ -91,11 +91,11 @@ where
         Ok(splits)
     }
 
-    pub fn insert(
+    pub fn insert<'a>(
         &mut self,
         root: Option<&[u8]>,
-        keys: Vec<Address>,
-        values: &[ProtoAccount],
+        keys: Vec<&'a Address>,
+        values: &[Account],
     ) -> Result<Vec<u8>, Box<Error>> {
         // encode accounts and insert to db
         if keys.len() != values.len() {
@@ -167,7 +167,7 @@ where
                 for (i, loc) in next_node.node_location.iter().enumerate() {
                     if loc != &key[offset + i] {
                         early_out = true;
-                        let new_account = Account::from_proto(account);
+                        let new_account = *account;
                         let node_hash = hash(&new_account.encode().unwrap(), 32);
                         self.db
                             .insert(&node_hash, &DBState::new(Some(new_account), None, 1))?;
@@ -200,7 +200,7 @@ where
                 }
             } else {
                 // Early out if branch is empty
-                let new_account = Account::from_proto(account);
+                let new_account = *account;
                 let tree_node = TreeNode::new(
                     NodeType::Leaf(new_account),
                     key[offset..key.len()].to_vec(),
@@ -213,7 +213,7 @@ where
             }
             while let Some(state) = &db_state {
                 if let Some(_prev_account) = &state.account {
-                    let new_account = Account::from_proto(account);
+                    let new_account = *account;
 
                     let tree_node = TreeNode::new(
                         NodeType::Leaf(new_account),
@@ -240,7 +240,7 @@ where
                         for (i, loc) in node_ref.node_location.iter().enumerate() {
                             if loc != &key[offset + i] {
                                 early_out = true;
-                                let new_account = Account::from_proto(account);
+                                let new_account = *account;
                                 let node_hash = hash(&new_account.encode().unwrap(), 32);
                                 self.db.insert(
                                     &node_hash,
@@ -276,7 +276,7 @@ where
                                 db_state = Some(next_node);
                                 continue;
                             } else {
-                                let new_account = Account::from_proto(account);
+                                let new_account = *account;
                                 let tree_node = TreeNode::new(
                                     NodeType::Leaf(new_account),
                                     key[offset..key.len()].to_vec(),
@@ -289,7 +289,7 @@ where
                                 continue;
                             }
                         } else {
-                            let new_account = Account::from_proto(account);
+                            let new_account = *account;
                             let tree_node = TreeNode::new(
                                 NodeType::Leaf(new_account),
                                 key[offset..key.len()].to_vec(),
@@ -302,7 +302,7 @@ where
                             continue;
                         }
                     } else {
-                        let new_account = Account::from_proto(account);
+                        let new_account = *account;
                         let tree_node = TreeNode::new(
                             NodeType::Leaf(new_account),
                             key[offset..key.len()].to_vec(),
@@ -385,13 +385,13 @@ where
         Ok(())
     }
 
-    fn traverse_nodes(
+    fn traverse_nodes<'a>(
         &self,
         root: &DBState,
-        address: &Address,
+        address: &'a Address,
         map: &mut HashMap<Vec<u8>, StateNode>,
         split: usize,
-    ) -> Result<Option<(Address, ProtoAccount)>, Box<Error>> {
+    ) -> Result<Option<(&'a Address, Account)>, Box<Error>> {
         let mut state: Option<DBState> = Some(root.clone());;
         let mut offset = split;
         if offset > 0 {
@@ -411,7 +411,7 @@ where
         }
         while let Some(db_state) = &state {
             if let Some(account) = &db_state.account {
-                return Ok(Some((*address, account.to_proto()?)));
+                return Ok(Some((address, *account)));
             //we have an account
             } else if let Some(node) = &db_state.node {
                 map.insert(address[0..offset].to_vec(), node.clone());
@@ -501,8 +501,8 @@ pub mod tests {
         let returned_accounts = legacy_trie.get(
             &state_hash,
             &vec![
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                [12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                &[12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             ],
         );
         match returned_accounts {
@@ -584,9 +584,9 @@ pub mod tests {
         let _ = state_db.batch_write();
         let tree = LegacyTrie::new(state_db);
         let addresses = vec![
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            &[0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            &[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ];
         let returned_accounts = tree.get(&root_hash, &addresses);
         match returned_accounts {
@@ -663,9 +663,9 @@ pub mod tests {
         let _ = state_db.batch_write();
         let tree = LegacyTrie::new(state_db);
         let addresses = vec![
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            &[0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            &[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ];
         let returned_accounts = tree.get(&root_hash, &addresses);
         match returned_accounts {
@@ -699,9 +699,9 @@ pub mod tests {
             [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ];
-        let mut addresses: Vec<Address> = Vec::new();
-        for address in address_bytes {
-            addresses.push(Address::from_bytes(&address));
+        let mut addresses: Vec<&Address> = Vec::new();
+        for address in address_bytes.iter() {
+            addresses.push(address);
         }
         let split_addresses = trie.split_keys(&addresses).unwrap();
         assert_eq!(split_addresses.len(), 3);
@@ -724,11 +724,15 @@ pub mod tests {
             let address = Address::from([
                 i as u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ]);
-            accounts.push(account.to_proto().unwrap());
+            accounts.push(account);
             addresses.push(address);
         }
-        let root_hash = tree.insert(None, addresses.clone(), &accounts).unwrap();
-        let retrieved_accounts = tree.get(&root_hash, &addresses).unwrap();
+        let mut add_refs = Vec::with_capacity(256);
+        for add in addresses.iter() {
+            add_refs.push(add)
+        }
+        let root_hash = tree.insert(None, add_refs.clone(), &accounts).unwrap();
+        let retrieved_accounts = tree.get(&root_hash, &add_refs).unwrap();
         assert_eq!(retrieved_accounts.len(), 256);
         for (i, (opt, original_address)) in
             retrieved_accounts.iter().zip(addresses.iter()).enumerate()
@@ -736,7 +740,7 @@ pub mod tests {
             assert!(opt.is_some());
             match opt {
                 Some((add, account)) => {
-                    assert_eq!(add, original_address);
+                    assert_eq!(add, &original_address);
                     assert_eq!(account.balance, (i * 100) as u64);
                     assert_eq!(account.nonce, i as u32);
                 }
@@ -801,22 +805,17 @@ pub mod tests {
             balance: 500,
             nonce: 2,
         };
-        let account_proto = account.to_proto().unwrap();
         let address_bytes = vec![
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            &[0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            &[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ];
-        let mut addresses: Vec<Address> = Vec::new();
-        for address in address_bytes {
-            addresses.push(Address::from_bytes(&address));
+        let mut addresses: Vec<&Address> = Vec::new();
+        for address in address_bytes.iter() {
+            addresses.push(address);
         }
-        let accounts = vec![
-            account_proto.clone(),
-            account_proto.clone(),
-            account_proto.clone(),
-        ];
-        let result = tree.insert(Some(&root_hash), addresses.clone(), &accounts);
+        let accounts = vec![account.clone(), account.clone(), account.clone()];
+        let result = tree.insert(Some(&root_hash), address_bytes.clone(), &accounts);
         let new_root = result.unwrap();
         assert_ne!(&new_root, &root_hash);
         let returned_accounts = tree.get(&new_root, &addresses);
@@ -855,9 +854,9 @@ pub mod tests {
             [1, 1, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [1, 2, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ];
-        let mut addresses: Vec<Address> = Vec::new();
-        for address in address_bytes {
-            addresses.push(Address::from_bytes(&address));
+        let mut addresses: Vec<&Address> = Vec::new();
+        for address in address_bytes.iter() {
+            addresses.push(address);
         }
         addresses.sort();
         let mut account_vec = Vec::with_capacity(4);
@@ -866,7 +865,7 @@ pub mod tests {
                 balance: i * 100,
                 nonce: i as u32,
             };
-            account_vec.push(account.to_proto().unwrap());
+            account_vec.push(account);
         }
 
         let result = tree.insert(None, addresses.clone(), &account_vec);
@@ -877,7 +876,7 @@ pub mod tests {
             assert!(opt.is_some());
             match opt {
                 Some((add, account)) => {
-                    assert_eq!(add, original_address);
+                    assert_eq!(&add, &original_address);
                     assert_eq!(account.balance, ((i + 1) * 100) as u64);
                     assert_eq!(account.nonce, (i + 1) as u32);
                 }
@@ -887,11 +886,11 @@ pub mod tests {
         let new_address =
             Address::from_bytes(&[0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
         let new_account = Account::new(1100, 1);
-        let vec = vec![new_account.to_proto().unwrap()];
+        let vec = vec![new_account];
         let new_result = tree
-            .insert(Some(&new_root), vec![new_address], &vec)
+            .insert(Some(&new_root), vec![&new_address], &vec)
             .unwrap();
-        addresses.push(new_address);
+        addresses.push(&new_address);
         addresses.sort();
         let accounts = tree.get(&new_result, &addresses).unwrap();
         assert_eq!(accounts.len(), 8);
@@ -899,7 +898,7 @@ pub mod tests {
             assert!(opt.is_some());
             match opt {
                 Some((add, account)) => {
-                    assert_eq!(add, original_address);
+                    assert_eq!(&add, &original_address);
                     if i == 3 {
                         assert_eq!(account.balance, 1100);
                         assert_eq!(account.nonce, 1);
@@ -919,9 +918,9 @@ pub mod tests {
         let mut exodus_buf = Vec::new();
         exodus_file.read_to_end(&mut exodus_buf).unwrap();
         let exodus = ExodusBlock::decode(&exodus_buf).unwrap();
-        let mut keypairs: Vec<(Address, ProtoAccount)> = Vec::with_capacity(12000);
-        let mut addresses: Vec<Address> = Vec::with_capacity(12000);
-        let mut accounts: Vec<ProtoAccount> = Vec::with_capacity(12000);
+        let mut keypairs: Vec<(Address, Account)> = Vec::with_capacity(12000);
+        let mut addresses: Vec<&Address> = Vec::with_capacity(12000);
+        let mut accounts: Vec<Account> = Vec::with_capacity(12000);
         match &exodus.txs {
             Some(tx_vec) => {
                 for tx in tx_vec {
@@ -933,7 +932,7 @@ pub mod tests {
                         break;
                     }
                     if let Some(add) = tx.get_to() {
-                        keypairs.push((add, Account::new(amount, nonce).to_proto().unwrap()));
+                        keypairs.push((add, Account::new(amount, nonce)));
                     } else {
                         break;
                     }
@@ -942,9 +941,9 @@ pub mod tests {
             None => {}
         }
         keypairs.sort_by(|a, b| a.0.cmp(&b.0));
-        for (key, value) in keypairs.clone() {
-            addresses.push(key);
-            accounts.push(value);
+        for (key, value) in keypairs.iter() {
+            addresses.push(&key);
+            accounts.push(*value);
         }
         let db_path = PathBuf::new();
         let state_db: StateDB<RocksDBMock> = StateDB::new(db_path, None).unwrap();
@@ -960,7 +959,7 @@ pub mod tests {
             assert!(ret.is_some());
             match ret {
                 Some((add, account)) => {
-                    assert_eq!(add, &keypair.0);
+                    assert_eq!(add, &&keypair.0);
                     assert_eq!(account.balance, keypair.1.balance);
                     assert_eq!(account.nonce, keypair.1.nonce);
                 }
@@ -982,9 +981,9 @@ pub mod tests {
             [1, 1, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [1, 2, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ];
-        let mut addresses: Vec<Address> = Vec::new();
-        for address in address_bytes {
-            addresses.push(Address::from_bytes(&address));
+        let mut addresses: Vec<&Address> = Vec::new();
+        for address in address_bytes.iter() {
+            addresses.push(&address);
         }
         addresses.sort();
         let mut account_vec = Vec::with_capacity(4);
@@ -993,7 +992,7 @@ pub mod tests {
                 balance: i * 100,
                 nonce: i as u32,
             };
-            account_vec.push(account.to_proto().unwrap());
+            account_vec.push(account);
         }
 
         let result = tree.insert(None, addresses.clone(), &account_vec);
@@ -1001,11 +1000,11 @@ pub mod tests {
         let new_address =
             Address::from_bytes(&[0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
         let new_account = Account::new(1100, 1);
-        let vec = vec![new_account.to_proto().unwrap()];
+        let vec = vec![new_account];
         let new_result = tree
-            .insert(Some(&new_root), vec![new_address], &vec)
+            .insert(Some(&new_root), vec![&new_address], &vec)
             .unwrap();
-        addresses.push(new_address);
+        addresses.push(&new_address);
         addresses.sort();
         let _ = tree.remove(&new_root);
         assert!(tree.db.get_node(&new_root).is_err());
@@ -1015,7 +1014,7 @@ pub mod tests {
             assert!(opt.is_some());
             match opt {
                 Some((add, account)) => {
-                    assert_eq!(add, original_address);
+                    assert_eq!(&add, &original_address);
                     if i == 3 {
                         assert_eq!(account.balance, 1100);
                         assert_eq!(account.nonce, 1);
@@ -1032,6 +1031,10 @@ pub mod tests {
         let state_db: StateDB<RocksDBMock> = StateDB::new(db_path, None).unwrap();
         let mut tree = LegacyTrie::new(state_db);
         let (root, addresses) = initiate_exodus_state::<RocksDBMock>(&mut tree);
+        let mut address_refs = Vec::with_capacity(addresses.len());
+        for add in addresses.iter() {
+            address_refs.push(add);
+        }
         let mut rng = thread_rng();
         let mut current_root = root;
         let mut roots = vec![current_root.clone()];
@@ -1059,7 +1062,7 @@ pub mod tests {
             roots.push(new_root.clone());
             current_root = new_root;
         }
-        let retrieved = tree.get(&current_root, &addresses);
+        let retrieved = tree.get(&current_root, &address_refs);
         assert!(retrieved.is_ok());
         let last_root = roots.pop();
         assert_eq!(Some(current_root.clone()), last_root);
@@ -1068,7 +1071,7 @@ pub mod tests {
             let removed = roots.remove(0);
             let _ = tree.remove(&removed);
         }
-        let post_prune = tree.get(&current_root, &addresses);
+        let post_prune = tree.get(&current_root, &address_refs);
         assert!(post_prune.is_ok());
     }
 
@@ -1176,9 +1179,9 @@ pub mod tests {
                 198,
             ],
         ];
-        let mut addresses: Vec<Address> = Vec::new();
-        for address in address_bytes {
-            addresses.push(Address::from_bytes(&address));
+        let mut addresses: Vec<&Address> = Vec::new();
+        for address in address_bytes.iter() {
+            addresses.push(&address);
         }
         addresses.sort();
         let mut account_vec = Vec::with_capacity(4);
@@ -1187,7 +1190,7 @@ pub mod tests {
                 balance: i as u64 * 100,
                 nonce: i as u32,
             };
-            account_vec.push(account.to_proto().unwrap());
+            account_vec.push(account);
         }
         let db_path = PathBuf::new();
         let state_db: StateDB<RocksDBMock> = StateDB::new(db_path, None).unwrap();
@@ -1198,17 +1201,17 @@ pub mod tests {
     }
 
     // Helper Functions for easier construction of tests
-    fn select_random_accounts(
+    fn select_random_accounts<'a>(
         rng: &mut rand::prelude::ThreadRng,
-        accounts: &Vec<Address>,
+        accounts: &'a Vec<Address>,
         number: usize,
-    ) -> Vec<Address> {
+    ) -> Vec<&'a Address> {
         assert!(number <= accounts.len());
-        let mut add_set: BTreeMap<Address, ()> = BTreeMap::new();
+        let mut add_set: BTreeMap<&Address, ()> = BTreeMap::new();
         let mut address_vec = Vec::with_capacity(number);
         for _ in 0..number {
             let index = rng.gen_range(0, accounts.len());
-            add_set.insert(accounts[index].clone(), ());
+            add_set.insert(&accounts[index], ());
         }
         for add in add_set {
             address_vec.push(add.0);
@@ -1216,7 +1219,7 @@ pub mod tests {
         address_vec
     }
 
-    fn initiate_exodus_state<T>(tree: &mut LegacyTrie<T>) -> (Vec<u8>, Vec<Address>)
+    fn initiate_exodus_state<'a, T>(tree: &mut LegacyTrie<T>) -> (Vec<u8>, Vec<Address>)
     where
         T: IDB,
     {
@@ -1226,9 +1229,9 @@ pub mod tests {
         let mut exodus_buf = Vec::new();
         exodus_file.read_to_end(&mut exodus_buf).unwrap();
         let exodus = ExodusBlock::decode(&exodus_buf).unwrap();
-        let mut keypairs: Vec<(Address, ProtoAccount)> = Vec::with_capacity(12000);
+        let mut keypairs: Box<Vec<(Address, Account)>> = Box::new(Vec::with_capacity(12000));
         let mut addresses: Vec<Address> = Vec::with_capacity(12000);
-        let mut accounts: Vec<ProtoAccount> = Vec::with_capacity(12000);
+        let mut accounts: Vec<Account> = Vec::with_capacity(12000);
         match &exodus.txs {
             Some(tx_vec) => {
                 for tx in tx_vec {
@@ -1240,7 +1243,7 @@ pub mod tests {
                         break;
                     }
                     if let Some(add) = tx.get_to() {
-                        keypairs.push((add, Account::new(amount, nonce).to_proto().unwrap()));
+                        keypairs.push((add, Account::new(amount, nonce)));
                     } else {
                         break;
                     }
@@ -1248,14 +1251,17 @@ pub mod tests {
             }
             None => {}
         }
+        let mut address_refs = Vec::with_capacity(keypairs.len());
         keypairs.sort_by(|a, b| a.0.cmp(&b.0));
-        for (key, value) in keypairs.clone() {
-            addresses.push(key);
-            accounts.push(value);
+        for (key, value) in keypairs.iter() {
+            let k = key.clone();
+            address_refs.push(key);
+            addresses.push(k);
+            accounts.push(*value);
         }
         addresses.sort();
         (
-            tree.insert(None, addresses.clone(), &accounts).unwrap(),
+            tree.insert(None, address_refs, &accounts).unwrap(),
             addresses,
         )
     }
