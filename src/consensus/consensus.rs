@@ -21,6 +21,7 @@ impl BlockForkChoice for Meta {
         self.total_work.partial_cmp(&other.total_work).unwrap()
     }
 }
+/// Entry Point for Consensus related functionality
 pub struct Consensus {
     tip_height: usize,
     block_db: Arc<Mutex<BlockDB>>,
@@ -132,76 +133,56 @@ impl ForkChoice<Meta> for Consensus {
 }
 /// # ForkChoice Trait
 /// Defines how the blockchain behaves in the event of a forking event
-/// ___
-/// ## Type Constraints
-///
-/// ### BlockType
-/// Must implement the BlockForkChoice trait
-/// ___
-/// ## Methods
-/// ### Fork Choice
-/// ```
-/// fn fork_choice(tip: &BlockType, &new_block: &BlockType) -> bool;
-/// ```
-/// #### Arguments
-/// - `tip` - the current tip of the blockchain
-/// - `new_block` - the new block that should be added to the existing tip
-///
-/// #### Returns
-/// - `true` - if the block can be added to the chain
-/// - `false` - if the block should not extend the existing chain
-/// ___
+
 pub trait ForkChoice<BlockType>
 where
     BlockType: BlockForkChoice,
 {
+    /**
+     * Defines forking behavior for two blocks
+     *
+     * #### Arguments
+     * - `tip` - the current tip of the blockchain
+     * - `new_block` - the new block that should be added to the existing tip
+     *
+     * #### Return Value
+     * - `true` - if the block can be added to the chain
+     * - `false` - if the block should not extend the existing chain
+     */
     fn fork_choice(tip: &BlockType, new_block: &BlockType) -> bool;
 }
 
 /// # Header Processor Trait
 /// Defines methods to be used in the processing of blockchain headers
 /// ___
-/// ## Type Constraints
-///
-///  ### HeaderType
-/// Must implement the BlockHeader trait
-/// ### UncleProcessType
-/// User defined type to contain the result of processing uncle blocks
-/// ___
-/// ## Required Methods
-/// ### Process Header
-/// ```
-/// fn process_header(&self, header: &HeaderType) -> Result<(), Box<std::error::Error>>
-/// ```
-/// Defines how a header is processed
-/// #### Arguments
-/// `header` - a reference to the HeaderType being processed
-///
-/// #### Returns
-/// ```
-/// Result<(), Box<std::error::Error>>
-/// ```
-/// An empty result denoting success
-/// ___
-/// ### Process Uncles
-/// ```
-/// fn process_uncles(&self,uncle_hashes: &[Vec<u8>]) -> Result<Self::UncleProcessResult,Box<std::error::Error>>
-/// ```
-/// #### Arguments
-/// `uncle_hashes` - a slice of block hashes to be checked for validity as uncle blocks
-///
-/// #### Returns
-/// ```
-/// Result<Self::UncleProcessResult,Box<std::error::Error>>
-/// ```
-/// A result containing the user defined UncleProcessResult type
-///___
+
 pub trait HeaderProcessor<HeaderType>
 where
     HeaderType: BlockHeader,
 {
+    /**
+     * User defined type to contain the result of processing uncle blocks
+     */
     type UncleProcessResult;
+    /**
+     * Defines how a header is processed
+     *
+     * #### Arguments
+     * `header` - a reference to the HeaderType being processed
+     *
+     * #### Return Value
+     * An empty `Result` denoting success
+     */
     fn process_header(&self, header: &HeaderType) -> Result<(), Box<Error>>;
+    /**
+     * Defines how uncles are processed
+     *
+     * #### Arguments
+     * `uncle_hashes` - a slice of block hashes to be checked for validity as uncle blocks
+     *
+     * #### Return Value
+     * A `Result` containing the user defined UncleProcessResult type
+     */
     fn process_uncles(
         &self,
         uncle_hashes: &[Vec<u8>],
@@ -228,52 +209,35 @@ pub trait TxProcessor<TxType> {
 
 /// # HyconConsensus Trait
 /// Base trait containing various methods necessary for consensus implementation
-/// ___
-/// ## Type Constraints
-/// ### HeaderType
-/// Must implement the BlockHeader trait
-/// ### BlockType
-/// A block
-/// ___
-/// ## Required Methods
-/// ### Init
-/// ```
-/// fn init(&mut self) -> Result<(), Box<std::error::Error>>
-/// ```
-/// Initialisation logic for consensus should be placed in here
-/// #### Returns
-/// An empty result
-/// ___
-/// ### Get Tip Height
-/// ```
-/// fn get_tip_height(&self) -> Option<usize>
-/// ```
-/// The height of the current tip, essentially how many blocks have been added to the main chain since genesis
-///
-/// #### Returns
-/// ```
-/// Option<usize>
-/// ```
-/// An option should be returned with the current height, or none if this is a cold startup with an unitialised consensus
-/// ___
-/// ### Put
-/// ```
-/// fn put(&mut self, header: HeaderType, block: Option<BlockType>) -> Result<(), Box<std::error::Error>>
-/// ```
-/// Entry point for putting a block (or just a header) onto the chain
-/// #### Arguments
-/// - `header` - the block header to be added to the chain, must implement BlockHeader trait
-/// - `block` - An optional parameter containing a block to be added to the chain
-///
-/// #### Returns
-/// An empty result
-/// ___
 pub trait HyconConsensus<HeaderType, BlockType>
 where
     HeaderType: BlockHeader,
 {
+    /**
+     * Initialisation logic for consensus should be placed in here
+     *
+     * #### Return Value
+     * An empty `Result`
+     */
     fn init(&mut self) -> Result<(), Box<Error>>;
+    /**
+     * The height of the current tip, essentially how many blocks have been added to the main chain since genesis
+     *
+     * #### Return Value
+     * An `Option` containing the current height, or `None` if this is a cold startup with an unitialised consensus
+     */
     fn get_tip_height(&self) -> Option<usize>;
+    /**
+     * Entry point for putting a block (or just a header) onto the chain
+     *
+     * #### Arguments
+     * - `header` - the block header to be added to the chain, must implement BlockHeader trait
+     * - `block` - An optional parameter containing a block to be added to the chain
+     *
+     * #### Return Value
+     * An empty `Result`
+     *
+     */
     fn put(&mut self, header: HeaderType, block: Option<BlockType>) -> Result<(), Box<Error>>;
 }
 
