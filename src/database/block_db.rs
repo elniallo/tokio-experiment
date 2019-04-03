@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
-use crate::common::block_status::{BlockStatus, EnumConverter};
+use crate::common::block_status::BlockStatus;
 use crate::common::meta::Meta;
 use crate::database::block_file::{BlockFile, BlockFileOps, PutResult as WriteLocation};
 use crate::database::dbkeys::DBKeys;
 use crate::database::{DBError, DBErrorType, DBResult, HashValue, IDB};
-use crate::traits::{Decode, Encode, Proto};
+use crate::traits::{Decode, Encode, EnumConverter, Proto};
 
 use byteorder::{BigEndian, ByteOrder};
 use rocksdb::DB as RocksDB;

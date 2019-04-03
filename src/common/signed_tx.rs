@@ -2,9 +2,9 @@ use std::cmp::{Ord, Ordering, PartialOrd};
 use std::error::Error;
 
 use crate::common::address::Address;
-use crate::common::transaction::{verify_tx, Transaction, Valid};
+use crate::common::transaction::verify_tx;
 use crate::common::tx::Tx;
-use crate::traits::{Decode, Encode, Proto};
+use crate::traits::{Decode, Encode, Proto, Transaction, VerifiableTransaction};
 
 use crate::serialization::tx::SignedTx as ProtoSignedTx;
 
@@ -22,7 +22,7 @@ pub struct SignedTx {
     pub recovery: RecoveryId,
 }
 
-impl Transaction for SignedTx {
+impl Transaction<Address, RecoverableSignature, RecoveryId> for SignedTx {
     fn get_from(&self) -> Option<Address> {
         Some(self.from)
     }
@@ -148,7 +148,7 @@ impl Decode for SignedTx {
     }
 }
 
-impl Valid for SignedTx {
+impl VerifiableTransaction for SignedTx {
     fn verify(&self) -> Result<(), Box<Error>> {
         let tx = Tx::new(self.from, self.to, self.amount, self.fee, self.nonce);
         let encoding = tx.encode()?;

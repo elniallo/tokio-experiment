@@ -1,9 +1,8 @@
 use std::error::Error;
 
 use crate::common::address::Address;
-use crate::common::transaction::{Transaction, Valid};
 use crate::serialization::tx::ExodusTx as ProtoExodusTx;
-use crate::traits::{Decode, Encode, Proto};
+use crate::traits::{Decode, Encode, Proto, Transaction, VerifiableTransaction};
 
 use protobuf::Message as ProtoMessage;
 use secp256k1::{RecoverableSignature, RecoveryId};
@@ -15,7 +14,7 @@ pub struct ExodusTx {
     nonce: u32,
 }
 
-impl Transaction for ExodusTx {
+impl Transaction<Address, RecoverableSignature, RecoveryId> for ExodusTx {
     fn get_from(&self) -> Option<Address> {
         None
     }
@@ -77,7 +76,7 @@ impl Decode for ExodusTx {
     }
 }
 
-impl Valid for ExodusTx {
+impl VerifiableTransaction for ExodusTx {
     fn verify(&self) -> Result<(), Box<Error>> {
         Ok(())
     }

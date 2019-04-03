@@ -460,10 +460,9 @@ pub mod tests {
     use crate::account::account::Account;
     use crate::account::node_ref::NodeRef;
     use crate::common::exodus_block::ExodusBlock;
-    use crate::common::transaction::Transaction;
     use crate::database::mock::RocksDBMock;
-    use crate::traits::ValidAddress;
     use crate::traits::{Decode, Encode};
+    use crate::traits::{Transaction, ValidAddress};
     use crate::util::hash::hash;
     use rand::{thread_rng, Rng};
     use std::env;

@@ -1,4 +1,4 @@
-use crate::traits::Exception;
+use crate::traits::{EnumConverter,Exception};
 use std::error::Error;
 /// Enum for the status of a Block
 #[derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)]
@@ -15,15 +15,6 @@ pub enum BlockStatus {
     Block,
     /// Block is part of the currently defined heaviest chain
     MainChain,
-}
-/// Performs a conversion on an enum
-pub trait EnumConverter<OutputType> {
-    /// Returns a representation of the Enum in the form of the OutputType
-    fn to_output(&self) -> OutputType;
-    /// Returns an Enum from an input of the Specified Type
-    fn from_input(number: OutputType) -> Result<Self, Box<Error>>
-    where
-        Self: Sized;
 }
 
 impl EnumConverter<u8> for BlockStatus {
