@@ -1,5 +1,18 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
+
+/// Defines methods for a Valid Address Type
+pub trait ValidAddress<KeyType, AddressType> {
+    /// Returns a String representation of the Address
+    fn to_string(&self) -> String;
+    /// Converts a string into an AddressType, wrapped in a `Result`
+    fn from_string(string: &String) -> Result<AddressType, Box<Error>>;
+    /// Converts a Public Key Type into an AddressType
+    fn from_pubkey(pubkey: KeyType) -> AddressType;
+    /// Converts a raw byte array into an Address Type
+    fn from_bytes(bytes: &[u8; 20]) -> AddressType;
+}
+
 pub trait PeerDB<K, T> {
     fn get(&self, key: &K) -> Option<T>;
     fn get_all(&self) -> Option<Vec<T>>;

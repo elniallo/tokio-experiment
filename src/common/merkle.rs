@@ -114,10 +114,10 @@ pub fn calculate_merkle_root(v: Vec<HashValue>) -> HashValue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::address::{Address, ValidAddress};
+    use crate::common::address::Address;
     use crate::common::signed_tx::SignedTx;
     use crate::common::tx::Tx;
-    use crate::traits::Encode;
+    use crate::traits::{Encode, ValidAddress};
     use blake2_rfc::blake2b::blake2b;
     use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
 
