@@ -324,7 +324,7 @@ mod tests {
         hash.push(123);
         match db.get_block_status(&hash) {
             Err(e) => assert_eq!(e.error_type, DBErrorType::NotFoundError),
-            _ => panic!("It should not exist {:?}", hash),
+            Ok(status) => assert_eq!(status, BlockStatus::Nothing),
         }
     }
 
