@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::error::Error;
 
+use crate::account::account::Account;
 use crate::common::address::Address;
 use crate::consensus::legacy_trie::LegacyTrie;
 use crate::database::state_db::StateDB;
@@ -269,19 +270,19 @@ impl WorldState {
         Ok(Self { tree })
     }
 
-    pub fn get(
+    pub fn get<'a>(
         &self,
         root: &Blake2bHashResult,
-        keys: &Vec<Address>,
-    ) -> Result<Vec<Option<(Address, ProtoAccount)>>, Box<Error>> {
+        keys: &Vec<&'a Address>,
+    ) -> Result<Vec<Option<(&'a Address, Account)>>, Box<Error>> {
         Ok(self.tree.get(root.as_ref(), keys)?)
     }
 
-    pub fn insert(
+    pub fn insert<'a>(
         &mut self,
         previous_root: Option<&[u8]>,
-        keys: Vec<Address>,
-        values: &[ProtoAccount],
+        keys: Vec<&'a Address>,
+        values: &[Account],
     ) -> Result<Vec<u8>, Box<Error>> {
         Ok(self.tree.insert(previous_root, keys, values)?)
     }
