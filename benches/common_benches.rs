@@ -2,7 +2,8 @@
 extern crate criterion;
 
 use criterion::Criterion;
-use hycon_rust::common::address::{Address, ValidAddress};
+use hycon_rust::common::address::Address;
+use hycon_rust::traits::ValidAddress;
 
 fn address_from_string_benchmark(c: &mut Criterion) {
     let address_string = "H2AekHdP6xu1i21taRty649EaV68oCfb9".to_string();
@@ -11,8 +12,5 @@ fn address_from_string_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(
-    benches,
-    address_from_string_benchmark
-);
+criterion_group!(benches, address_from_string_benchmark);
 criterion_main!(benches);
