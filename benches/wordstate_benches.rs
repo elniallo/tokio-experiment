@@ -11,8 +11,10 @@ use hycon_rust::common::exodus_block::ExodusBlock;
 use hycon_rust::consensus::legacy_trie::LegacyTrie;
 use hycon_rust::database::mock::RocksDBMock;
 use hycon_rust::database::state_db::StateDB;
+use hycon_rust::database::{self, merge_function, IDB};
 use hycon_rust::traits::{Decode, Encode, Transaction};
 use hycon_rust::util::hash::hash;
+use rocksdb::{Options, DB as RocksDB};
 use starling::traits::Database;
 use std::env;
 use std::fs::File;
@@ -146,10 +148,59 @@ fn get_from_exodus_state(c: &mut Criterion) {
         });
     });
 }
+
+fn exodus_block_with_rocks(c: &mut Criterion) {
+    c.bench_function("Exodus Block with Rocks", move |b| {
+        let mut path = env::current_dir().unwrap();
+        path.push("data/exodusBlock.dat");
+        let mut exodus_file = File::open(path).unwrap();
+        let mut exodus_buf = Vec::new();
+        exodus_file.read_to_end(&mut exodus_buf).unwrap();
+        let exodus = ExodusBlock::decode(&exodus_buf).unwrap();
+        let mut keypairs: Vec<(Address, Account)> = Vec::with_capacity(12000);
+        let mut addresses: Vec<&Address> = Vec::with_capacity(12000);
+        let mut accounts: Vec<Account> = Vec::with_capacity(12000);
+        match &exodus.txs {
+            Some(tx_vec) => {
+                for tx in tx_vec {
+                    let amount: u64 = tx.get_amount();
+                    let nonce: u32;
+                    if let Some(tx_nonce) = tx.get_nonce() {
+                        nonce = tx_nonce;
+                    } else {
+                        break;
+                    }
+                    if let Some(add) = tx.get_to() {
+                        keypairs.push((add, Account::new(amount, nonce)));
+                    } else {
+                        break;
+                    }
+                }
+            }
+            None => {}
+        }
+        keypairs.sort_by(|a, b| a.0.cmp(&b.0));
+        for (key, value) in keypairs.iter() {
+            addresses.push(&key);
+            accounts.push(*value);
+        }
+        let path = PathBuf::from("./test/rocks");
+        let add = addresses.clone();
+        let acc = accounts.clone();
+        let mut options = RocksDB::get_default_option();
+        options.set_merge_operator("Update Ref Count", merge_function, None);
+        let state_db: StateDB<RocksDB> = StateDB::new(path.clone(), Some(options)).unwrap();
+        let mut tree = LegacyTrie::new(state_db);
+        b.iter(|| {
+            let _root = tree.insert(None, add.clone(), &acc).unwrap();
+        });
+    });
+}
 criterion_group!(
     benches,
     get_from_trie_best_case,
     exodus,
+    exodus_block_with_rocks,
     get_from_exodus_state
 );
 criterion_main!(benches);
