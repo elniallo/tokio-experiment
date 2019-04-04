@@ -98,7 +98,7 @@ impl Proto for Header {
         Ok(proto_header)
     }
 
-    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+    fn from_proto(_prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
         unimplemented!()
     }
 }

@@ -1,4 +1,4 @@
-use crate::traits::{EnumConverter,Exception};
+use crate::traits::{EnumConverter, Exception};
 use std::error::Error;
 /// Enum for the status of a Block
 #[derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)]

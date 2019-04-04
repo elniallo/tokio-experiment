@@ -53,7 +53,7 @@ impl Proto for StateNode {
         Ok(proto_state_node)
     }
 
-    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+    fn from_proto(_prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
         unimplemented!()
     }
 }

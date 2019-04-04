@@ -37,7 +37,7 @@ impl Proto for NodeRef {
         Ok(proto_node_ref)
     }
 
-    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+    fn from_proto(_prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
         unimplemented!()
     }
 }
