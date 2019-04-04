@@ -50,7 +50,7 @@ impl Proto for GenesisTx {
         proto_genesis_tx.set_amount(self.amount);
         Ok(proto_genesis_tx)
     }
-    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+    fn from_proto(_prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
         unimplemented!()
     }
 }

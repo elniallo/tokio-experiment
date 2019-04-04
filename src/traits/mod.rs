@@ -1,7 +1,5 @@
-use std::borrow::Borrow;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
-use std::hash::Hash;
 
 /// Defines methods for a Valid Address Type
 pub trait ValidAddress<KeyType, AddressType> {
