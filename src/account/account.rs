@@ -41,7 +41,7 @@ impl Proto for Account {
         Ok(proto_account)
     }
 
-    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+    fn from_proto(_prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
         unimplemented!()
     }
 }

@@ -29,7 +29,7 @@ use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer::Peer;
 use crate::server::peer_database::{DBPeer, PeerDatabase};
 use crate::server::socket_parser::SocketParser;
-use crate::traits::{Encode, Exception, ToDBType};
+use crate::traits::{Encode, ToDBType};
 use crate::util::hash::hash;
 use crate::util::random_bytes;
 

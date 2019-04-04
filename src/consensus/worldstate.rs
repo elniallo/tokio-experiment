@@ -13,15 +13,12 @@ use crate::traits::{Decode, Encode, Exception};
 
 use blake2_rfc::blake2b::{Blake2b, Blake2bResult};
 use protobuf::Message as ProtoMessage;
-use starling::merkle_bit::{BinaryMerkleTreeResult, MerkleBIT, NodeVariant};
+use starling::merkle_bit::{BinaryMerkleTreeResult, NodeVariant};
 use starling::traits::{
     Branch, Data, Decode as TreeDecode, Encode as TreeEncode, Hasher, Leaf, Node,
 };
 
-use rocksdb::{
-    BlockBasedIndexType, BlockBasedOptions, Error as RocksdbError, Options as RocksDBOptions,
-    SliceTransform, WriteBatch, DB as RocksDB,
-};
+use rocksdb::DB as RocksDB;
 
 impl Branch for ProtoBranch {
     fn new() -> ProtoBranch {
@@ -44,9 +41,7 @@ impl Branch for ProtoBranch {
         ProtoBranch::get_split_index(&self)
     }
 
-    fn set_key(&mut self, key: &[u8]) {
-        ProtoBranch::set_key(self, key)
-    }
+    fn set_key(&mut self, _key: &[u8]) {}
 
     fn set_count(&mut self, count: u64) {
         ProtoBranch::set_count(self, count)
@@ -65,7 +60,7 @@ impl Branch for ProtoBranch {
     }
 
     fn get_key(&self) -> Option<&[u8]> {
-        ProtoBranch::get_key(&self)
+        None
     }
 }
 
@@ -249,7 +244,7 @@ impl Hasher for Blake2bHasher {
     type HashType = Blake2bHasher;
     type HashResultType = Blake2bHashResult;
 
-    fn new(size: usize) -> Self::HashType {
+    fn new(_size: usize) -> Self::HashType {
         Blake2bHasher::new()
     }
     fn update(&mut self, data: &[u8]) {
@@ -265,7 +260,7 @@ pub struct WorldState {
 }
 
 impl WorldState {
-    pub fn new(db: StateDB, max_depth: usize) -> Result<WorldState, Box<Error>> {
+    pub fn new(db: StateDB, _max_depth: usize) -> Result<WorldState, Box<Error>> {
         let tree = LegacyTrie::new(db);
         Ok(Self { tree })
     }

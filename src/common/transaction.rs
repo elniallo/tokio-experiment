@@ -4,7 +4,7 @@ use crate::common::address::Address;
 use crate::traits::ValidAddress;
 use crate::util::hash::hash;
 
-use secp256k1::{Error as SecpError, Message, RecoverableSignature, RecoveryId, Secp256k1};
+use secp256k1::{Error as SecpError, Message, RecoverableSignature, Secp256k1};
 
 pub fn verify_tx(
     encoding: Vec<u8>,

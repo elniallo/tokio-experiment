@@ -69,7 +69,7 @@ impl Proto for Meta {
         Ok(proto_meta)
     }
 
-    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+    fn from_proto(_prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
         unimplemented!()
     }
 }
