@@ -14,6 +14,11 @@ use std::cmp::Ordering;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 
+const EMPTY_MERKLE_ROOT: [u8; 32] = [
+    14, 87, 81, 192, 38, 229, 67, 178, 232, 171, 46, 176, 96, 153, 218, 161, 209, 229, 223, 71,
+    119, 143, 119, 135, 250, 171, 69, 205, 241, 47, 227, 168,
+];
+
 type PutResult<T> = Result<T, Box<Error>>;
 
 impl BlockForkChoice for Meta {
@@ -98,10 +103,17 @@ impl HeaderProcessor<Header> for Consensus {
             hash_cryptonight(&prehash, prehash.len()),
             difficulty_adjuster::get_target(header.difficulty, 32)?,
         )? {
+            let new_status;
+            if header.get_merkle_root() == &EMPTY_MERKLE_ROOT {
+                println!("empty merkle root");
+                new_status = BlockStatus::Block;
+            } else {
+                new_status = BlockStatus::Header;
+            }
             self.block_db
                 .lock()
                 .map_err(|_e| Exception::new("Poison Error"))?
-                .set_block_status(&hash(&header.encode()?, 32), BlockStatus::Header)?;
+                .set_block_status(&hash(&header.encode()?, 32), new_status)?;
             Ok(())
         } else {
             self.block_db
@@ -292,6 +304,8 @@ mod tests {
         let merkle_root = "xyw95Bsby3s4mt6f4FmFDnFVpQBAeJxBFNGzu2cX4dM"
             .from_base58()
             .unwrap();
+        println!("MerkleRoot: {:?}", merkle_root);
+        unimplemented!();
         let state_root = "2TQHHSG8daQxYMCisMywUppz7a3YXb83VKzpMsZwQgLi"
             .from_base58()
             .unwrap();
