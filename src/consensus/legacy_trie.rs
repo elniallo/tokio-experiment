@@ -17,11 +17,16 @@ use std::error::Error;
 use std::iter::FromIterator;
 use std::sync::{Arc, Mutex};
 
+/// A node in the Merkle Patricia Trie
 #[derive(Clone, Debug)]
 pub enum NodeType {
+    /// Contains an [Account](crate::account::account::Account)
     Leaf(Account),
+    /// Contains a [StateNode](crate::account::state_node::StateNode)
     Branch(StateNode),
 }
+
+/// Hycon Merkle Patricia Trie, a hashed radix tree with bytewise branching
 pub struct LegacyTrie<DBType> {
     db: StateDB<DBType, (Vec<u8>, DBState)>,
     write_queue: Arc<Mutex<Vec<(Vec<u8>, DBState)>>>,
@@ -35,9 +40,7 @@ where
         let write_queue = Arc::new(Mutex::new(Vec::new()));
         Self { db, write_queue }
     }
-    pub fn get_account(&self, _address: Address, _root_node: &DBState) -> Option<ProtoAccount> {
-        None
-    }
+    /// Gets the specified Accounts from the tree
     pub fn get<'a>(
         &self,
         root: &[u8],
@@ -90,7 +93,7 @@ where
         }
         Ok(splits)
     }
-
+    /// Inserts the specified accounts into the tree
     pub fn insert<'a>(
         &mut self,
         root: Option<&[u8]>,
@@ -354,6 +357,7 @@ where
         }
     }
 
+    /// Removes a root and all sub nodes that have a Zero reference count
     pub fn remove(&mut self, root: &[u8]) -> Result<(), Box<Error>> {
         let mut pending_keys: Vec<Vec<u8>> = Vec::new();
         let mut db_state = self.db.get_node(root)?;
