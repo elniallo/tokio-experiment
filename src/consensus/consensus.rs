@@ -141,9 +141,13 @@ impl HeaderProcessor<Header> for Consensus {
     }
 }
 
+/// Enum representing the result of a processing uncle blocks
 pub enum UncleResult {
+    /// All uncles have passed validation
     Success,
+    /// Insufficient Data, contains hashes of missing uncles
     Partial(Vec<Vec<u8>>),
+    /// One or more Uncles have failed validation, contains failed uncles
     Failure(Vec<Vec<u8>>),
 }
 
