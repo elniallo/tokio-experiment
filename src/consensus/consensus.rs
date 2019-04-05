@@ -308,8 +308,6 @@ mod tests {
         let merkle_root = "xyw95Bsby3s4mt6f4FmFDnFVpQBAeJxBFNGzu2cX4dM"
             .from_base58()
             .unwrap();
-        println!("MerkleRoot: {:?}", merkle_root);
-        unimplemented!();
         let state_root = "2TQHHSG8daQxYMCisMywUppz7a3YXb83VKzpMsZwQgLi"
             .from_base58()
             .unwrap();
