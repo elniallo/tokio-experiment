@@ -23,3 +23,7 @@ and
 ```
 cargo bench
 ```
+
+## Documentation
+ - [Hycon Rest API](docs.hycon.io)
+ - [Rust Implementation Docs](https://team-hycon.github.io/hycon-rust/) 
