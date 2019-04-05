@@ -64,22 +64,36 @@ pub trait VerifiableTransaction {
     fn verify(&self) -> Result<(), Box<Error>>;
 }
 
+/// Defines methods required for a peer database implementation
 pub trait PeerDB<KeyType, PeerType> {
+    /// An `Option` containing the Peer corresponding to the given key, `None` if not found
     fn get(&self, key: &KeyType) -> Option<PeerType>;
+    /// Gets all peers from the DB
     fn get_all(&self) -> Option<Vec<PeerType>>;
+    /// Gets multiple peers from the DB
     fn get_multiple(&self, limit: usize) -> Option<Vec<PeerType>>;
+    /// Handler for an inbound peer connection
     fn inbound_connection(&mut self, key: KeyType, value: PeerType) -> Result<(), Box<Error>>;
+    /// Handler for an outbound peer connection
     fn outbound_connection(&mut self, key: KeyType, value: PeerType) -> Result<(), Box<Error>>;
+    /// Handler for a connection failure
     fn connection_failure(&mut self, key: &KeyType) -> Result<(), Box<Error>>;
+    /// Handler for a disconnect event
     fn disconnect(&mut self, key: &KeyType);
+    /// Puts multiple peers into the DB
     fn put_multiple(&mut self, values: Vec<(KeyType, PeerType)>) -> Result<(), Box<Error>>;
+    /// Get peers that have been seen recently
     fn get_recent(&self, limit: usize) -> Option<Vec<PeerType>>;
+    /// Gets list of seen peers
     fn get_seen(&self, limit: usize) -> Option<Vec<PeerType>>;
+    /// Gets peer that is the oldest
     fn get_oldest(&self, limit: usize) -> Option<Vec<PeerType>>;
+    /// Gets a random peer
     fn get_random(&self, limit: usize) -> Option<Vec<PeerType>>;
 }
-
+/// Converts an in memory representation to a type for insertion into a database
 pub trait ToDBType<T> {
+    /// Converts self to database type
     fn to_db_type(&self) -> T;
 }
 

@@ -22,9 +22,12 @@ pub struct TreeNode {
     /// ```
     /// The location in the tree for this node's parent would then be:
     /// ```
-    /// key[0..parent] == [0];
+    /// key[0..parent];
     /// ```
-    ///
+    /// With ```parent=3``` for example, the parent's location would be
+    /// ```
+    /// key[0..3] == [0,1,2]
+    /// ```
     pub parent: usize,
     futures: Vec<TreeNode>,
     write_queue: Arc<Mutex<Vec<(Vec<u8>, DBState)>>>,
