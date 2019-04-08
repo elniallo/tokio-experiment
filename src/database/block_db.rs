@@ -108,7 +108,7 @@ where
         self.database.set(hash_copy.as_ref(), &encoded)
     }
 
-    fn get_meta(&self, hash: &HashValue) -> DBResult<Meta> {
+    pub fn get_meta(&self, hash: &HashValue) -> DBResult<Meta> {
         let mut hash_copy = hash.clone();
         hash_copy.insert(0, b"b"[0]);
         match self.database._get(&hash_copy) {
