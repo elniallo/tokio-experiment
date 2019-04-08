@@ -44,11 +44,13 @@ impl Consensus {
             tip_height: None,
         })
     }
+
+    fn init_exodus_block() {}
 }
 
 impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
     fn init(&mut self) -> Result<(), Box<Error>> {
-        if let Some(tip_height) = self.get_tip_height() {
+        if let Some(tip_height) = self.get_tip_height()? {
             self.tip_height = Some(tip_height)
         } else {
             // init exodus
@@ -56,8 +58,19 @@ impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
 
         Ok(())
     }
-    fn get_tip_height(&self) -> Option<usize> {
-        self.tip_height
+    fn get_tip_height(&self) -> Result<Option<usize>, Box<Error>> {
+        let hash = self
+            .block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison Error"))?
+            .get_block_tip_hash()?;
+        let meta = self
+            .block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison Error"))?
+            .get_meta(&hash)?;
+
+        Ok(Some(meta.height as usize))
     }
 
     fn put(&mut self, header: Header, block: Option<Block<Header, SignedTx>>) -> PutResult<()> {
@@ -254,7 +267,7 @@ where
     /// #### Return Value
     /// An `Option` containing the current height, or `None` if this is a cold startup with an unitialised consensus
     ///
-    fn get_tip_height(&self) -> Option<usize>;
+    fn get_tip_height(&self) -> Result<Option<usize>, Box<Error>>;
     ///
     /// Entry point for putting a block (or just a header) onto the chain
     ///
