@@ -96,17 +96,17 @@ pub trait ToDBType<T> {
     /// Converts self to database type
     fn to_db_type(&self) -> T;
 }
-
+/// Encodes for network transmission or storage in a DB
 pub trait Encode {
     fn encode(&self) -> Result<Vec<u8>, Box<Error>>;
 }
-
+/// Decodes a serialized buffer into the desired type
 pub trait Decode {
     fn decode(buffer: &[u8]) -> Result<Self, Box<Error>>
     where
         Self: Sized;
 }
-
+/// Converts items to/from the protobuf version
 pub trait Proto {
     type ProtoType;
     fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>>;
@@ -114,7 +114,7 @@ pub trait Proto {
     where
         Self: Sized;
 }
-
+// Error wrapper
 #[derive(Debug)]
 pub struct Exception {
     details: String,
