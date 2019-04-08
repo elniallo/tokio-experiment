@@ -28,7 +28,7 @@ impl BlockForkChoice for Meta {
 }
 /// Entry Point for Consensus related functionality
 pub struct Consensus {
-    tip_height: usize,
+    tip_height: Option<usize>,
     block_db: Arc<Mutex<BlockDB>>,
     state_processor: StateProcessor,
 }
@@ -41,7 +41,7 @@ impl Consensus {
         Ok(Self {
             block_db,
             state_processor,
-            tip_height: 0,
+            tip_height: None,
         })
     }
 }
@@ -49,7 +49,7 @@ impl Consensus {
 impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
     fn init(&mut self) -> Result<(), Box<Error>> {
         if let Some(tip_height) = self.get_tip_height() {
-            self.tip_height = tip_height
+            self.tip_height = Some(tip_height)
         } else {
             // init exodus
         }
@@ -57,7 +57,7 @@ impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
         Ok(())
     }
     fn get_tip_height(&self) -> Option<usize> {
-        None
+        self.tip_height
     }
 
     fn put(&mut self, header: Header, block: Option<Block<Header, SignedTx>>) -> PutResult<()> {
