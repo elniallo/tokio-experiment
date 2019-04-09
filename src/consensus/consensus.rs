@@ -1,3 +1,4 @@
+use crate::common::address::Address;
 use crate::common::block::Block;
 use crate::common::block_status::BlockStatus;
 use crate::common::header::Header;
@@ -9,6 +10,7 @@ use crate::consensus::BlockForkChoice;
 use crate::database::block_db::BlockDB;
 use crate::traits::{BlockHeader, Encode, Exception};
 use crate::util::hash::{hash, hash_cryptonight};
+use crate::util::init_exodus::{init_exodus_block, init_exodus_meta};
 
 use rust_base58::FromBase58;
 use std::cmp::Ordering;
@@ -47,10 +49,8 @@ impl Consensus {
     }
 
     fn init_exodus_block(&mut self) -> Result<(), Box<Error>> {
-        let exodus_hash = "6yt4X2giLv73Jh2b2iGN1Ns7fBUQYUdAS7LpQxdtGQJq"
-            .from_base58()
-            .map_err(|e| Exception::new(&format!("Error: {:?}", e)))?;
-
+        let exodus = init_exodus_block()?;
+        let (exodus_meta, exodus_hash) = init_exodus_meta()?;
         Ok(())
     }
 }
@@ -60,7 +60,7 @@ impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
         if let Some(tip_height) = self.get_tip_height()? {
             self.tip_height = Some(tip_height)
         } else {
-            // init exodus
+            self.init_exodus_block()?;
         }
 
         Ok(())
