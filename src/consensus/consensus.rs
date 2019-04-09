@@ -10,6 +10,7 @@ use crate::database::block_db::BlockDB;
 use crate::traits::{BlockHeader, Encode, Exception};
 use crate::util::hash::{hash, hash_cryptonight};
 
+use rust_base58::FromBase58;
 use std::cmp::Ordering;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
@@ -45,7 +46,13 @@ impl Consensus {
         })
     }
 
-    fn init_exodus_block() {}
+    fn init_exodus_block(&mut self) -> Result<(), Box<Error>> {
+        let exodus_hash = "6yt4X2giLv73Jh2b2iGN1Ns7fBUQYUdAS7LpQxdtGQJq"
+            .from_base58()
+            .map_err(|e| Exception::new(&format!("Error: {:?}", e)))?;
+
+        Ok(())
+    }
 }
 
 impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
