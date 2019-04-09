@@ -1,5 +1,5 @@
 use rust_base58::FromBase58;
-use serde_json::{from_str, from_value};
+use serde_json::from_str;
 use std::env;
 use std::error::Error;
 use std::fs::File;
@@ -29,7 +29,6 @@ pub fn init_exodus_meta() -> Result<(Meta, Vec<u8>), Box<Error>> {
     let mut buff = String::new();
     file.read_to_string(&mut buff)?;
     let json: serde_json::Value = from_str(&buff)?;
-    let difficulty = &json["header"]["difficulty"];
     let height: u32;
     match &json["height"] {
         serde_json::Value::Number(n) => {
