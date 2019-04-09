@@ -5,6 +5,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 
+use crate::common::block_status::BlockStatus;
 use crate::common::exodus_block::ExodusBlock;
 use crate::common::meta::Meta;
 use crate::traits::{Decode, Exception};
@@ -29,15 +30,83 @@ pub fn init_exodus_meta() -> Result<(Meta, Vec<u8>), Box<Error>> {
     file.read_to_string(&mut buff)?;
     let json: serde_json::Value = from_str(&buff)?;
     let difficulty = &json["header"]["difficulty"];
-    match difficulty {
+    let height: u32;
+    match &json["height"] {
         serde_json::Value::Number(n) => {
-            println!("Difficulty: {:?}", n.as_f64());
-            unimplemented!();
+            if let Some(block_height) = n.as_u64() {
+                height = block_height as u32;
+            } else {
+                return Err(Box::new(Exception::new("Exodus Height not Found")));
+            }
         }
         _ => {
-            unimplemented!();
+            return Err(Box::new(Exception::new("Exodus Height not Found")));
         }
     }
+    let t_ema: f64;
+    match &json["tEMA"] {
+        serde_json::Value::Number(n) => {
+            if let Some(block_tema) = n.as_f64() {
+                t_ema = block_tema;
+            } else {
+                return Err(Box::new(Exception::new("Exodus TEMA not Found")));
+            }
+        }
+        _ => {
+            return Err(Box::new(Exception::new("Exodus TEMA not Found")));
+        }
+    }
+    let p_ema: f64;
+    match &json["pEMA"] {
+        serde_json::Value::Number(n) => {
+            if let Some(block_pema) = n.as_f64() {
+                p_ema = block_pema;
+            } else {
+                return Err(Box::new(Exception::new("Exodus pEMA not Found")));
+            }
+        }
+        _ => {
+            return Err(Box::new(Exception::new("Exodus pEMA not Found")));
+        }
+    }
+    let next_difficulty: f64;
+    match &json["nextDifficulty"] {
+        serde_json::Value::Number(n) => {
+            if let Some(next_diff) = n.as_f64() {
+                next_difficulty = next_diff;
+            } else {
+                return Err(Box::new(Exception::new("Exodus nextDifficulty not Found")));
+            }
+        }
+        _ => {
+            return Err(Box::new(Exception::new("Exodus nextDifficulty not Found")));
+        }
+    }
+    let total_work: f64;
+    match &json["totalWork"] {
+        serde_json::Value::Number(n) => {
+            if let Some(tot_work) = n.as_f64() {
+                total_work = tot_work;
+            } else {
+                return Err(Box::new(Exception::new("Exodus totalWork not Found")));
+            }
+        }
+        _ => {
+            return Err(Box::new(Exception::new("Exodus totalWork not Found")));
+        }
+    }
+    let meta = Meta::new(
+        height,
+        t_ema,
+        p_ema,
+        next_difficulty,
+        total_work,
+        None,
+        None,
+        None,
+        BlockStatus::MainChain,
+    );
+    Ok((meta, exodus_hash))
 }
 
 #[cfg(test)]
@@ -46,7 +115,10 @@ pub mod tests {
 
     #[test]
     fn it_reads_exodus_meta() {
-        println!("{:?}", init_exodus_meta());
-        unimplemented!();
+        assert!(init_exodus_meta().is_ok());
+    }
+    #[test]
+    fn it_reads_exodus_block() {
+        assert!(init_exodus_block().is_ok());
     }
 }
