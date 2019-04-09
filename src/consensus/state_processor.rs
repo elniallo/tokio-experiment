@@ -79,7 +79,7 @@ impl StateProcessor {
         return Err(Box::new(Exception::new("Not Implemented")));
     }
 
-    fn generate_transition(
+    pub fn generate_transition(
         &self,
         blocks: Vec<&Block<Header, SignedTx>>,
     ) -> StateProcessorResult<HashMap<Address, ProtoAccount>> {
@@ -162,7 +162,7 @@ impl StateProcessor {
         return Err(Box::new(Exception::new("Not Implemented")));
     }
 
-    fn generate_tx_transition<TxType>(
+    pub fn generate_tx_transition<TxType>(
         tx: &TxType,
         account_map: &mut HashMap<Address, Account>,
         miner: Option<&Address>,
@@ -296,7 +296,7 @@ impl StateProcessor {
         return Ok(());
     }
 
-    fn revert_tx_transition<TxType>(
+    pub fn revert_tx_transition<TxType>(
         tx: &TxType,
         account_map: &mut HashMap<Address, ProtoAccount>,
         miner: Option<&Address>,

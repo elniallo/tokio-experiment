@@ -915,7 +915,6 @@ pub mod tests {
 
     #[test]
     fn it_matches_typescript_world_state_for_exodus_block() {
-        //let path_to_exodus = PathBuf::from("./../../data/exodusBlock.dat");
         let mut path = env::current_dir().unwrap();
         path.push("data/exodusBlock.dat");
         let mut exodus_file = File::open(path).unwrap();
@@ -954,8 +953,8 @@ pub mod tests {
         let mut tree = LegacyTrie::new(state_db);
         let root = tree.insert(None, addresses.clone(), &accounts).unwrap();
         let expected_root = vec![
-            57, 92, 11, 69, 43, 154, 183, 169, 122, 56, 191, 8, 12, 60, 185, 124, 155, 185, 54, 47,
-            143, 83, 11, 147, 238, 198, 92, 130, 35, 27, 188, 134,
+            202, 69, 158, 107, 102, 235, 159, 245, 39, 221, 20, 207, 134, 180, 208, 199, 131, 45,
+            190, 90, 112, 243, 240, 108, 135, 97, 169, 165, 102, 78, 15, 252,
         ];
         assert_eq!(root, expected_root);
         let retrieved = tree.get(&root, &addresses).unwrap();
