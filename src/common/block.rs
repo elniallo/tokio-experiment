@@ -6,7 +6,7 @@ use crate::common::header::Header;
 use crate::common::meta::Meta;
 use crate::common::signed_genesis_tx::SignedGenesisTx;
 use crate::common::signed_tx::SignedTx;
-use crate::traits::{BlockHeader, Decode, Encode, Exception, Proto};
+use crate::traits::{BlockHeader, Decode, Encode, Exception, Proto, ValidAddress};
 
 use crate::serialization::block::{
     Block as ProtoBlock, BlockDB as ProtoBlockDB, ExodusBlock as ProtoExodusBlock,

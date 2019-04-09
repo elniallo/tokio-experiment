@@ -1,3 +1,4 @@
+use crate::common::address::Address;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
@@ -24,8 +25,6 @@ pub trait EnumConverter<OutputType> {
 }
 /// Defines a BlockHeader
 pub trait BlockHeader {
-    /// Defines the type used to represent an Address
-    type AddressType;
     /// Retrieves the Merkle Root from the Header
     fn get_merkle_root(&self) -> &Vec<u8>;
     /// Retrieves the TimeStamp from the Header
@@ -39,7 +38,7 @@ pub trait BlockHeader {
     /// Retrieves the nonce from the Header
     fn get_nonce(&self) -> Option<u64>;
     /// Retrieves the address of the miner
-    fn get_miner(&self) -> Option<&Self::AddressType>;
+    fn get_miner(&self) -> Option<&Address>;
 }
 /// Defines behaviour for Transactions
 pub trait Transaction<AddressType, SignatureType, RecoveryType> {

@@ -1,5 +1,6 @@
 pub mod aes;
 pub mod hash;
+pub mod init_exodus;
 pub mod strict_math;
 use std::time::{SystemTime, UNIX_EPOCH};
 
