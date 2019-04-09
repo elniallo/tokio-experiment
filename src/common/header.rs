@@ -19,7 +19,6 @@ pub struct Header {
     pub miner: Address,
 }
 impl BlockHeader for Header {
-    type AddressType = Address;
     fn get_merkle_root(&self) -> &Vec<u8> {
         &self.merkle_root
     }
@@ -38,7 +37,7 @@ impl BlockHeader for Header {
     fn get_nonce(&self) -> Option<u64> {
         Some(self.nonce)
     }
-    fn get_miner(&self) -> Option<&Self::AddressType> {
+    fn get_miner(&self) -> Option<&Address> {
         Some(&self.miner)
     }
 }

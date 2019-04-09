@@ -19,7 +19,6 @@ impl Deref for GenesisHeader {
 }
 
 impl BlockHeader for GenesisHeader {
-    type AddressType = Address;
     fn get_merkle_root(&self) -> &Vec<u8> {
         &self.merkle_root
     }
@@ -38,7 +37,7 @@ impl BlockHeader for GenesisHeader {
     fn get_nonce(&self) -> Option<u64> {
         None
     }
-    fn get_miner(&self) -> Option<&Self::AddressType> {
+    fn get_miner(&self) -> Option<&Address> {
         None
     }
 }
