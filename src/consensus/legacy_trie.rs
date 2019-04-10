@@ -6,7 +6,6 @@ use crate::common::address::Address;
 use crate::consensus::tree_node::TreeNode;
 use crate::database::state_db::StateDB;
 use crate::database::IDB;
-use crate::serialization::state::Account as ProtoAccount;
 use crate::traits::{Encode, Exception};
 use crate::util::hash::hash;
 use futures::Future;

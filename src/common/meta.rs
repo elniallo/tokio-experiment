@@ -1,5 +1,4 @@
 use crate::common::block_status::BlockStatus;
-use crate::common::header::Header;
 use crate::serialization::block::BlockDB as ProtoBlockDB;
 use crate::traits::EnumConverter;
 use crate::traits::{BlockHeader, Decode, Encode, Proto};
