@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
-use crate::common::block_status::{BlockStatus, EnumConverter};
+use crate::common::block_status::BlockStatus;
 use crate::common::meta::Meta;
 use crate::database::block_file::{BlockFile, BlockFileOps, PutResult as WriteLocation};
 use crate::database::dbkeys::DBKeys;
 use crate::database::{DBError, DBErrorType, DBResult, HashValue, IDB};
-use crate::traits::{Decode, Encode, Proto};
+use crate::traits::{BlockHeader, Decode, Encode, EnumConverter, Proto};
 
 use byteorder::{BigEndian, ByteOrder};
 use rocksdb::DB as RocksDB;
@@ -70,18 +70,18 @@ where
         self.database._get(&self.db_keys.header_tip)
     }
 
-    fn set_header_tip_hash(&mut self, hash: &HashValue) -> DBResult<()> {
+    pub fn set_header_tip_hash(&mut self, hash: &HashValue) -> DBResult<()> {
         self.database.set(&self.db_keys.header_tip, hash)
     }
 
     pub fn get_block_tip_hash(&self) -> DBResult<HashValue> {
         self.database._get(&self.db_keys.block_tip)
     }
-    fn set_block_tip_hash(&mut self, hash: &HashValue) -> DBResult<()> {
+    pub fn set_block_tip_hash(&mut self, hash: &HashValue) -> DBResult<()> {
         self.database.set(&self.db_keys.block_tip, hash)
     }
 
-    fn set_hash_using_height(&mut self, height: u32, hash: &HashValue) -> DBResult<()> {
+    pub fn set_hash_using_height(&mut self, height: u32, hash: &HashValue) -> DBResult<()> {
         let mut height_buf = vec![0; 4];
         BigEndian::write_u32(&mut height_buf, height);
         self.database.set(&height_buf, &hash)
@@ -93,7 +93,14 @@ where
         self.database._get(&height_buf)
     }
 
-    fn set_meta(&mut self, hash: &HashValue, meta_info: &Meta) -> DBResult<()> {
+    pub fn set_meta<HeaderType>(
+        &mut self,
+        hash: &HashValue,
+        meta_info: &Meta<HeaderType>,
+    ) -> DBResult<()>
+    where
+        HeaderType: BlockHeader + Clone + Proto + Encode,
+    {
         let mut hash_copy = hash.clone();
         hash_copy.insert(0, b"b"[0]);
         let encoded;
@@ -108,7 +115,13 @@ where
         self.database.set(hash_copy.as_ref(), &encoded)
     }
 
-    fn get_meta(&self, hash: &HashValue) -> DBResult<Meta> {
+    pub fn get_meta<HeaderType>(&self, hash: &HashValue) -> DBResult<Meta<HeaderType>>
+    where
+        HeaderType: BlockHeader
+            + Clone
+            + Proto<ProtoType = crate::serialization::blockHeader::BlockHeader>
+            + Encode,
+    {
         let mut hash_copy = hash.clone();
         hash_copy.insert(0, b"b"[0]);
         match self.database._get(&hash_copy) {
@@ -124,7 +137,7 @@ where
         }
     }
 
-    fn set_block<T>(&mut self, block: &mut T) -> DBResult<WriteLocation>
+    pub fn set_block<T>(&mut self, block: &mut T) -> DBResult<WriteLocation>
     where
         T: Encode + Proto,
     {
@@ -151,39 +164,52 @@ where
         Ok(write_location)
     }
 
-    fn get_blocks<T>(&mut self, from_height: u32, count: u32) -> DBResult<Vec<T>>
+    pub fn get_blocks<T, HeaderType>(&mut self, from_height: u32, count: u32) -> DBResult<Vec<T>>
     where
         T: Decode + Clone,
+        HeaderType: BlockHeader
+            + Encode
+            + Clone
+            + Proto<ProtoType = crate::serialization::blockHeader::BlockHeader>,
     {
         let mut i = 0;
         let mut blocks = Vec::new();
         let _limit = count - 1;
         while i != _limit {
-            blocks.push(self.get_block_by_height(from_height + i)?);
+            blocks.push(self.get_block_by_height::<T, HeaderType>(from_height + i)?);
             i += 1;
         }
         Ok(blocks)
     }
 
-    pub fn get_block<T>(&mut self, hash: &HashValue) -> DBResult<T>
+    pub fn get_block<T, HeaderType>(&mut self, hash: &HashValue) -> DBResult<T>
     where
         T: Decode + Clone,
+        HeaderType: BlockHeader
+            + Encode
+            + Clone
+            + Proto<ProtoType = crate::serialization::blockHeader::BlockHeader>,
     {
         let meta_info = self.get_meta(hash)?;
-        self.get_block_by_meta_info::<T>(meta_info)
+        self.get_block_by_meta_info::<T, HeaderType>(meta_info)
     }
 
-    pub fn get_block_by_height<T>(&mut self, height: u32) -> DBResult<T>
+    pub fn get_block_by_height<T, HeaderType>(&mut self, height: u32) -> DBResult<T>
     where
         T: Decode + Clone,
+        HeaderType: BlockHeader
+            + Encode
+            + Clone
+            + Proto<ProtoType = crate::serialization::blockHeader::BlockHeader>,
     {
         let hash = self.get_hash_by_height(height)?;
-        self.get_block::<T>(&hash)
+        self.get_block::<T, HeaderType>(&hash)
     }
 
-    fn get_block_by_meta_info<T>(&mut self, meta_info: Meta) -> DBResult<T>
+    fn get_block_by_meta_info<T, HeaderType>(&mut self, meta_info: Meta<HeaderType>) -> DBResult<T>
     where
         T: Decode + Clone,
+        HeaderType: BlockHeader + Encode + Clone + Proto,
     {
         if meta_info.length == Some(0)
             || meta_info.file_number.is_none()
@@ -211,7 +237,7 @@ where
         let mut hash_cpy = hash.clone();
         hash_cpy.insert(0, 's' as u8);
 
-        let status_byte = status.to_u8();
+        let status_byte = status.to_output();
 
         self.database.set(&hash_cpy, &vec![status_byte])
     }
@@ -225,7 +251,7 @@ where
         } else {
             return Ok(BlockStatus::Nothing);
         }
-        match BlockStatus::from_u8(status_u8) {
+        match BlockStatus::from_input(status_u8) {
             Ok(block_status) => Ok(block_status),
             Err(e) => Err(Box::new(DBError::new(DBErrorType::UnexpectedError(
                 e.to_string(),
@@ -237,7 +263,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::block::tests::create_test_block_without_meta;
+    use crate::common::block::tests::{create_test_block_without_meta, create_test_header};
     use crate::common::block::Block;
     use crate::common::header::Header;
     use crate::common::signed_tx::SignedTx;
@@ -324,7 +350,7 @@ mod tests {
         hash.push(123);
         match db.get_block_status(&hash) {
             Err(e) => assert_eq!(e.error_type, DBErrorType::NotFoundError),
-            _ => panic!("It should not exist {:?}", hash),
+            Ok(status) => assert_eq!(status, BlockStatus::Nothing),
         }
     }
 
@@ -378,12 +404,14 @@ mod tests {
             meta.length = Some((write_location.length) as u32);
             db.set_meta(&hash, &meta).unwrap();
             assert_meta(meta, db.get_meta(&hash).unwrap());
-            let result_block = db.get_block(&hash);
+            let result_block = db.get_block::<Block<Header, SignedTx>, Header>(&hash);
             blocks.push(block.clone());
             assert_block(block, result_block.unwrap());
         }
 
-        let database_blocks: Vec<Block<Header, SignedTx>> = db.get_blocks(1, 255).unwrap();
+        let database_blocks: Vec<Block<Header, SignedTx>> = db
+            .get_blocks::<Block<Header, SignedTx>, Header>(1, 255)
+            .unwrap();
         let blocks_cnt = database_blocks.len();
         for i in 0..blocks_cnt - 1 {
             assert_block(
@@ -422,7 +450,7 @@ mod tests {
 
         db.set_meta(&hash, &meta_info).unwrap();
 
-        match db.get_meta(&hash) {
+        match db.get_meta::<Header>(&hash) {
             Ok(meta) => {
                 assert_eq!(meta.height, meta_info.height);
                 assert_eq!(meta.t_ema, meta_info.t_ema);
@@ -440,7 +468,7 @@ mod tests {
         }
 
         hash.insert(0, 't' as u8);
-        match db.get_meta(&hash) {
+        match db.get_meta::<Header>(&hash) {
             Ok(meta) => panic!(format!(
                 "meta data with wrong hash should not be found from db {:?}",
                 meta
@@ -467,7 +495,7 @@ mod tests {
         assert_eq!(meta_info.length, None);
         db.set_meta(&hash, &meta_info).unwrap();
 
-        match db.get_meta(&hash) {
+        match db.get_meta::<Header>(&hash) {
             Ok(meta) => {
                 assert_eq!(meta.height, meta_info.height);
                 assert_eq!(meta.t_ema, meta_info.t_ema);
@@ -486,7 +514,7 @@ mod tests {
         }
 
         hash.insert(0, 't' as u8);
-        match db.get_meta(&hash) {
+        match db.get_meta::<Header>(&hash) {
             Ok(meta) => panic!(format!(
                 "meta data with wrong hash should not be found from db {:?}",
                 meta
@@ -506,7 +534,7 @@ mod tests {
         BlockDB::<BlockFileMock, RocksDBMock>::new(path, file_path, db_keys, None).unwrap()
     }
 
-    fn create_meta_without_file_info() -> Meta {
+    fn create_meta_without_file_info() -> Meta<Header> {
         let height = 1234589;
         let t_ema = 134.0;
         let p_ema = 0.234;
@@ -514,6 +542,7 @@ mod tests {
         let total_work = 1e23;
         Meta::new(
             height,
+            create_test_header(),
             t_ema,
             p_ema,
             next_difficulty,
@@ -525,7 +554,7 @@ mod tests {
         )
     }
 
-    fn create_meta() -> Meta {
+    fn create_meta() -> Meta<Header> {
         let mut meta = create_meta_without_file_info();
         meta.offset = Some(123);
         meta.file_number = Some(234);
@@ -533,7 +562,7 @@ mod tests {
         meta
     }
 
-    fn assert_meta(meta1: Meta, meta2: Meta) {
+    fn assert_meta(meta1: Meta<Header>, meta2: Meta<Header>) {
         assert_eq!(meta1.height, meta1.height);
         assert_eq!(meta1.t_ema, meta2.t_ema);
         assert_eq!(meta1.p_ema, meta2.p_ema);

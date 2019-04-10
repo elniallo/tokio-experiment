@@ -48,7 +48,7 @@ impl Proto for ExodusBlock {
         }
         Ok(proto_block)
     }
-    fn from_proto(block: &ProtoBlock) -> Result<Self, Box<Error>> {
+    fn from_proto(_block: &ProtoBlock) -> Result<Self, Box<Error>> {
         Err(Box::new(Exception::new("Not Implemented")))
     }
 }

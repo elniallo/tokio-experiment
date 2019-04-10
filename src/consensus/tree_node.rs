@@ -9,10 +9,25 @@ use std::error::Error;
 use std::fmt::{Debug, Formatter, Result as FormatResult};
 use std::sync::{Arc, Mutex};
 use tokio::prelude::*;
+/// Node that represents a future that will resolve to a new node in a Merkle Patricia Trie
 #[derive(Clone)]
 pub struct TreeNode {
     node: NodeType,
     location: Vec<u8>,
+    /// A number representing the how much of the current node's physical location represents the node's parent
+    /// #### Example
+    /// Suppose we have a key
+    /// ```
+    /// let key = [0,1,2,3,4,5,6];
+    /// ```
+    /// The location in the tree for this node's parent would then be:
+    /// ```
+    /// key[0..parent];
+    /// ```
+    /// With ```parent=3``` for example, the parent's location would be
+    /// ```
+    /// key[0..3] == [0,1,2]
+    /// ```
     pub parent: usize,
     futures: Vec<TreeNode>,
     write_queue: Arc<Mutex<Vec<(Vec<u8>, DBState)>>>,
@@ -33,11 +48,12 @@ impl TreeNode {
             write_queue,
         }
     }
-
+    /// Adds a sub-future to this node, which will be resolved before this one
     pub fn add_future(&mut self, tree_node: &TreeNode) {
         self.futures.push(tree_node.clone());
     }
 
+    /// Retrieves a reference to the [NodeRef](crate::account::node_ref::NodeRef) at the next location specified by the key
     pub fn get_next_node_location(&self, key: u8) -> Option<&NodeRef> {
         match &self.node {
             NodeType::Leaf(_) => None,
@@ -50,22 +66,22 @@ impl TreeNode {
             }
         }
     }
-
+    /// Returns a reference to the [Node](crate::consensus::legacy_trie::NodeType) held by this struct
     pub fn get_node(&self) -> &NodeType {
         &self.node
     }
-
+    /// Returns the physical location in the tree of this Node
     pub fn get_location(&self) -> &Vec<u8> {
         &self.location
     }
-
+    /// Check if contained Node is a leaf node
     pub fn is_leaf(&self) -> bool {
         match self.node {
             NodeType::Leaf(_) => true,
             NodeType::Branch(_) => false,
         }
     }
-
+    /// Upgrades a NodeType::Leaf to NodeType::Branch
     pub fn upgrade_to_branch(&mut self) -> Result<(), Box<Error>> {
         match self.node {
             NodeType::Leaf(account) => {

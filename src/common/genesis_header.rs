@@ -2,9 +2,9 @@ use std::error::Error;
 use std::ops::Deref;
 
 use crate::common::address::Address;
-use crate::common::header::{BlockHeader, Header};
+use crate::common::header::Header;
 use crate::serialization::blockHeader::GenesisHeader as ProtoGenesisHeader;
-use crate::traits::{Encode, Proto};
+use crate::traits::{BlockHeader, Encode, Proto};
 use protobuf::Message;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -72,7 +72,7 @@ impl Proto for GenesisHeader {
         proto_genesis_block_header.set_stateRoot(self.state_root.clone());
         Ok(proto_genesis_block_header)
     }
-    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+    fn from_proto(_prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
         unimplemented!()
     }
 }

@@ -2,11 +2,11 @@ use std::error::Error;
 
 use crate::common::exodus_tx::ExodusTx;
 use crate::common::genesis_header::GenesisHeader;
-use crate::common::header::{BlockHeader, Header};
+use crate::common::header::Header;
 use crate::common::meta::Meta;
 use crate::common::signed_genesis_tx::SignedGenesisTx;
 use crate::common::signed_tx::SignedTx;
-use crate::traits::{Decode, Encode, Exception, Proto};
+use crate::traits::{BlockHeader, Decode, Encode, Exception, Proto};
 
 use crate::serialization::block::{
     Block as ProtoBlock, BlockDB as ProtoBlockDB, ExodusBlock as ProtoExodusBlock,
@@ -17,20 +17,23 @@ use protobuf::{CodedInputStream, Message as ProtoMessage, RepeatedField};
 use std::result::Result;
 
 #[derive(Clone, Debug)]
-pub struct Block<HeaderType, TxType> {
+pub struct Block<HeaderType, TxType>
+where
+    HeaderType: BlockHeader + Encode + Clone + Proto,
+{
     pub header: HeaderType,
     pub txs: Option<Vec<TxType>>,
-    pub meta: Option<Meta>,
+    pub meta: Option<Meta<HeaderType>>,
 }
 
 impl<HeaderType, TxType> Block<HeaderType, TxType>
 where
-    HeaderType: Clone + Encode + BlockHeader,
+    HeaderType: Clone + Encode + BlockHeader + Proto,
 {
     pub fn new(
         header: HeaderType,
         txs: Option<Vec<TxType>>,
-        meta: Option<Meta>,
+        meta: Option<Meta<HeaderType>>,
     ) -> Block<HeaderType, TxType> {
         Block { header, txs, meta }
     }
@@ -179,9 +182,10 @@ impl Proto for Block<Header, SignedTx> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::common::address::{Address, ValidAddress};
+    use crate::common::address::Address;
     use crate::common::block_status::BlockStatus;
     use crate::common::signed_tx::SignedTx;
+    use crate::traits::ValidAddress;
     use rust_base58::FromBase58;
     use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
 
@@ -345,9 +349,10 @@ pub mod tests {
         ]
     }
 
-    fn create_test_meta() -> Meta {
+    fn create_test_meta() -> Meta<Header> {
         Meta::new(
             1,
+            create_test_header(),
             2 as f64,
             3 as f64,
             4 as f64,
@@ -380,7 +385,7 @@ pub mod tests {
         vec![signed_tx]
     }
 
-    fn create_test_header() -> Header {
+    pub fn create_test_header() -> Header {
         let previous_hash = vec![vec![
             74, 248, 206, 224, 124, 114, 100, 237, 205, 62, 60, 165, 198, 225, 77, 241, 138, 87,
             77, 236, 55, 60, 183, 46, 88, 192, 18, 199, 125, 23, 169, 171,

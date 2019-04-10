@@ -2,6 +2,7 @@ use bytes::Bytes;
 use futures::future::{self, Either};
 use futures::stream::Stream;
 use futures::sync::mpsc;
+use rust_base58::ToBase58;
 use slog::{Drain, Logger};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -28,7 +29,9 @@ use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer::Peer;
 use crate::server::peer_database::{DBPeer, PeerDatabase};
 use crate::server::socket_parser::SocketParser;
-use crate::traits::{Encode, Exception, ToDBType};
+use crate::traits::{Encode, ToDBType};
+use crate::util::hash::hash;
+use crate::util::random_bytes;
 
 pub enum NotificationType<T> {
     Inbound(T),
@@ -150,7 +153,7 @@ impl Server {
     ) -> Self {
         Self {
             active_peers: HashMap::new(),
-            guid: String::from("RustyGuid"),
+            guid: hash(&random_bytes(32), 32).to_base58(),
             version: 14,
             peer_channel: transmitter,
             peer_db: None,

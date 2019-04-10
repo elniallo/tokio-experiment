@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use crate::common::address::Address;
-use crate::traits::{Encode, Proto};
+use crate::traits::{BlockHeader, Encode, Proto};
 use crate::util::hash::hash;
 
 use crate::serialization::blockHeader::{BlockHeader as ProtoBlockHeader, HeaderPrehash};
@@ -18,17 +18,6 @@ pub struct Header {
     pub nonce: u64,
     pub miner: Address,
 }
-
-pub trait BlockHeader {
-    fn get_merkle_root(&self) -> &Vec<u8>;
-    fn get_time_stamp(&self) -> u64;
-    fn get_difficulty(&self) -> f64;
-    fn get_state_root(&self) -> &Vec<u8>;
-    fn get_previous_hash(&self) -> Option<&Vec<Vec<u8>>>;
-    fn get_nonce(&self) -> Option<u64>;
-    fn get_miner(&self) -> Option<&Address>;
-}
-
 impl BlockHeader for Header {
     fn get_merkle_root(&self) -> &Vec<u8> {
         &self.merkle_root
@@ -109,14 +98,26 @@ impl Proto for Header {
     }
 
     fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
-        unimplemented!()
+        let mut miner = [0u8; 20];
+        if &prototype.get_miner().len() == &20 {
+            miner.copy_from_slice(&prototype.get_miner().to_vec()[0..20]);
+        }
+        Ok(Self {
+            merkle_root: prototype.get_merkleRoot().to_vec(),
+            time_stamp: prototype.get_timeStamp(),
+            miner: miner,
+            nonce: prototype.get_nonce(),
+            difficulty: prototype.get_difficulty(),
+            previous_hash: prototype.get_previousHash().to_vec(),
+            state_root: prototype.get_stateRoot().to_vec(),
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::address::ValidAddress;
+    use crate::traits::ValidAddress;
     use rust_base58::FromBase58;
 
     #[test]

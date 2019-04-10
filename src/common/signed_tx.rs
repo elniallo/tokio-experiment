@@ -2,9 +2,9 @@ use std::cmp::{Ord, Ordering, PartialOrd};
 use std::error::Error;
 
 use crate::common::address::Address;
-use crate::common::transaction::{verify_tx, Transaction, Valid};
+use crate::common::transaction::verify_tx;
 use crate::common::tx::Tx;
-use crate::traits::{Decode, Encode, Proto};
+use crate::traits::{Decode, Encode, Proto, Transaction, VerifiableTransaction};
 
 use crate::serialization::tx::SignedTx as ProtoSignedTx;
 
@@ -22,7 +22,7 @@ pub struct SignedTx {
     pub recovery: RecoveryId,
 }
 
-impl Transaction for SignedTx {
+impl Transaction<Address, RecoverableSignature, RecoveryId> for SignedTx {
     fn get_from(&self) -> Option<Address> {
         Some(self.from)
     }
@@ -112,7 +112,7 @@ impl Proto for SignedTx {
         proto_signed_tx.set_signature(self.signature.serialize_compact(&secp).1.to_vec());
         Ok(proto_signed_tx)
     }
-    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+    fn from_proto(_prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
         unimplemented!()
     }
 }
@@ -148,7 +148,7 @@ impl Decode for SignedTx {
     }
 }
 
-impl Valid for SignedTx {
+impl VerifiableTransaction for SignedTx {
     fn verify(&self) -> Result<(), Box<Error>> {
         let tx = Tx::new(self.from, self.to, self.amount, self.fee, self.nonce);
         let encoding = tx.encode()?;
@@ -159,7 +159,7 @@ impl Valid for SignedTx {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::address::ValidAddress;
+    use crate::traits::ValidAddress;
     use rand::{thread_rng, Rng};
 
     #[test]

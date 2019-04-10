@@ -41,7 +41,7 @@ impl Proto for Account {
         Ok(proto_account)
     }
 
-    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+    fn from_proto(_prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
         unimplemented!()
     }
 }
@@ -51,6 +51,15 @@ impl Encode for Account {
         let proto_account = self.to_proto()?;
 
         Ok(proto_account.write_to_bytes()?)
+    }
+}
+
+impl Default for Account {
+    fn default() -> Self {
+        Self {
+            balance: 0u64,
+            nonce: 0u32,
+        }
     }
 }
 

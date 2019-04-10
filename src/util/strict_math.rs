@@ -6,7 +6,7 @@ use std::u64::MAX;
 use crate::traits::Exception;
 
 type StrictMathResult<T> = Result<T, Box<Error>>;
-
+/// Strict math to prevent overflow/underflow
 #[derive(Clone, Copy)]
 pub struct StrictU64(u64);
 

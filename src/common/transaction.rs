@@ -1,9 +1,10 @@
 use std::error::Error;
 
-use crate::common::address::{Address, ValidAddress};
+use crate::common::address::Address;
+use crate::traits::ValidAddress;
 use crate::util::hash::hash;
 
-use secp256k1::{Error as SecpError, Message, RecoverableSignature, RecoveryId, Secp256k1};
+use secp256k1::{Error as SecpError, Message, RecoverableSignature, Secp256k1};
 
 pub fn verify_tx(
     encoding: Vec<u8>,
@@ -19,18 +20,4 @@ pub fn verify_tx(
     }
     let standard_signature = signature.to_standard(&secp);
     Ok(secp.verify(&message, &standard_signature, &pubkey)?)
-}
-
-pub trait Transaction {
-    fn get_from(&self) -> Option<Address>;
-    fn get_to(&self) -> Option<Address>;
-    fn get_amount(&self) -> u64;
-    fn get_fee(&self) -> Option<u64>;
-    fn get_nonce(&self) -> Option<u32>;
-    fn get_signature(&self) -> Option<RecoverableSignature>;
-    fn get_recovery(&self) -> Option<RecoveryId>;
-}
-
-pub trait Valid {
-    fn verify(&self) -> Result<(), Box<Error>>;
 }

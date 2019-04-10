@@ -2,26 +2,30 @@ use std::error::Error;
 use std::f64::consts;
 
 use crate::common::block::Block;
-use crate::common::header::BlockHeader;
-use crate::traits::Exception;
+
+use crate::traits::{BlockHeader, Encode, Exception, Proto};
 
 use byteorder::{ByteOrder, LittleEndian};
-
+/// Target Mean Time for Block Production
 pub const TARGET_TIME: f64 = 30000.0 / consts::LN_2;
+/// Normalistation parameter for Difficulty
 pub const MAX_DIFFICULTY: f64 = 1.0;
+/// Minimum value that can be stored in an f64
 pub const MIN_DIFFICULTY: f64 = 8.636e-78; // 1 / 2^256
+/// Weighting Parameter used in Exponential Moving Averages for Difficulty Calculation
 pub const ALPHA: f64 = 0.003;
 
+/// Calculates a new EMA value for a given parameter
 pub fn calc_ema(new_value: f64, previous_value: f64, alpha: f64) -> f64 {
     alpha * new_value + (1.0 - alpha) * previous_value
 }
-
+/// Calculates the next target difficulty for a block
 pub fn adjust_difficulty<HeaderType, TxType>(
     previous_block: Block<HeaderType, TxType>,
     time_stamp: f64,
 ) -> Result<(f64, f64, f64), Box<Error>>
 where
-    HeaderType: BlockHeader,
+    HeaderType: BlockHeader + Proto + Clone + Encode,
 {
     let height: u32;
     let previous_time_ema: f64;
@@ -60,6 +64,7 @@ where
     Ok((next_difficulty, time_ema, difficulty_ema))
 }
 
+/// Gets the target from an f64 difficulty as a byte array
 pub fn get_target(difficulty: f64, length: usize) -> Result<Vec<u8>, Box<Error>> {
     if length < 8 {
         return Err(Box::new(Exception::new("Invalid length")));
@@ -97,26 +102,7 @@ pub fn get_target(difficulty: f64, length: usize) -> Result<Vec<u8>, Box<Error>>
     Ok(target)
 }
 
-// The old version can produce delays of up to 2 hours due to inaccuracies in calculating the target.
-pub fn get_legacy_target(difficulty: f64, length: usize) -> Vec<u8> {
-    let mut adjusted_difficulty = difficulty;
-
-    if difficulty > MAX_DIFFICULTY {
-        adjusted_difficulty = 1.0;
-    } else if difficulty < 256f64.powf(-1.0 * length as f64) {
-        adjusted_difficulty = 256f64.powf(-1.0 * length as f64);
-    }
-
-    let mut target = vec![0x0u8; length];
-    let mut carry = 0.0;
-    for i in (0..length).rev() {
-        carry = (0x100 as f64 * carry) + (adjusted_difficulty * 0xFF as f64);
-        target[i] = (carry.floor() % 256.0) as u8;
-        carry -= target[i] as f64;
-    }
-    target
-}
-
+/// Compares two byte arrays to check if POW difficulty has been satisfied
 pub fn acceptable(hash: Vec<u8>, target: Vec<u8>) -> Result<bool, Box<Error>> {
     if hash.len() != target.len() {
         return Err(Box::new(Exception::new(
@@ -137,6 +123,7 @@ pub fn acceptable(hash: Vec<u8>, target: Vec<u8>) -> Result<bool, Box<Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::block::tests::create_test_header;
     use crate::common::block_status::BlockStatus;
     use crate::common::header::Header;
     use crate::common::meta::Meta;
@@ -157,6 +144,7 @@ mod tests {
         );
         let meta = Meta::new(
             1,
+            create_test_header(),
             0.5,
             0.5,
             0.5,
@@ -206,6 +194,7 @@ mod tests {
         let length = None;
         let mut meta = Meta::new(
             height,
+            create_test_header(),
             t_ema,
             p_ema,
             next_difficulty,
@@ -225,6 +214,7 @@ mod tests {
             p_ema = adjustment.2;
             meta = Meta::new(
                 height,
+                create_test_header(),
                 t_ema,
                 p_ema,
                 next_difficulty,
@@ -336,42 +326,6 @@ mod tests {
                 }
             }
         }
-    }
-
-    #[test]
-    fn it_calculates_a_basic_legacy_target() {
-        let difficulty = 0.5;
-        let length = 32;
-        let target = get_legacy_target(difficulty, length);
-        let expected_target = vec![
-            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 127,
-        ];
-        assert_eq!(target, expected_target);
-    }
-
-    #[test]
-    fn it_calculates_a_simple_legacy_target() {
-        let difficulty = 0.0003;
-        let length = 32;
-        let target = get_legacy_target(difficulty, length);
-        let expected_target = vec![
-            51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 49, 51, 49, 51,
-            51, 53, 97, 50, 85, 48, 42, 169, 19, 0,
-        ];
-        assert_eq!(target, expected_target);
-    }
-
-    #[test]
-    fn it_calculates_a_random_legacy_target() {
-        let difficulty = 0.5817765075630095;
-        let length = 32;
-        let target = get_legacy_target(difficulty, length);
-        let expected_target = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 224, 224, 224,
-            112, 143, 32, 77, 238, 148,
-        ];
-        assert_eq!(target, expected_target);
     }
 
     #[test]

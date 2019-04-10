@@ -2,9 +2,8 @@ use std::cmp::{Ord, Ordering, PartialOrd};
 use std::error::Error;
 
 use crate::common::address::Address;
-use crate::common::transaction::Transaction;
 use crate::serialization::tx::Tx as ProtoTx;
-use crate::traits::{Decode, Encode, Proto};
+use crate::traits::{Decode, Encode, Proto, Transaction};
 
 use protobuf::Message as ProtoMessage;
 use secp256k1::{RecoverableSignature, RecoveryId};
@@ -30,7 +29,7 @@ impl Tx {
     }
 }
 
-impl Transaction for Tx {
+impl Transaction<Address, RecoverableSignature, RecoveryId> for Tx {
     fn get_from(&self) -> Option<Address> {
         Some(self.from)
     }
@@ -66,7 +65,7 @@ impl Proto for Tx {
         Ok(proto_tx)
     }
 
-    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+    fn from_proto(_prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
         unimplemented!()
     }
 }
@@ -118,7 +117,7 @@ impl PartialOrd for Tx {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::address::ValidAddress;
+    use crate::traits::ValidAddress;
     use rand::prelude::*;
     use rand::{Rng, SeedableRng};
 

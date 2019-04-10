@@ -1,7 +1,6 @@
 use crate::common::address::Address;
-use crate::common::transaction::Transaction;
 use crate::serialization::tx::GenesisTx as ProtoGenesisTx;
-use crate::traits::{Decode, Encode, Proto};
+use crate::traits::{Decode, Encode, Proto, Transaction};
 use std::error::Error;
 
 use protobuf::Message as ProtoMessage;
@@ -13,7 +12,7 @@ pub struct GenesisTx {
     amount: u64,
 }
 
-impl Transaction for GenesisTx {
+impl Transaction<Address, RecoverableSignature, RecoveryId> for GenesisTx {
     fn get_from(&self) -> Option<Address> {
         None
     }
@@ -51,7 +50,7 @@ impl Proto for GenesisTx {
         proto_genesis_tx.set_amount(self.amount);
         Ok(proto_genesis_tx)
     }
-        fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+    fn from_proto(_prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
         unimplemented!()
     }
 }

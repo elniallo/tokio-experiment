@@ -49,7 +49,7 @@ impl Proto for GenesisBlock {
         Ok(proto_block)
     }
 
-    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+    fn from_proto(_prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
         unimplemented!()
     }
 }
@@ -64,7 +64,8 @@ impl Encode for GenesisBlock {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::common::address::{Address, ValidAddress};
+    use crate::common::address::Address;
+    use crate::traits::ValidAddress;
 
     use secp256k1::{RecoverableSignature, RecoveryId, Secp256k1};
 

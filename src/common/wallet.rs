@@ -5,7 +5,7 @@ use crate::common::tx::Tx;
 use crate::traits::Encode;
 use crate::util::hash::hash;
 
-use rand::{Rng, thread_rng};
+use rand::{thread_rng, Rng};
 use secp256k1::key::{PublicKey, SecretKey};
 use secp256k1::{Message, RecoverableSignature, Secp256k1};
 
@@ -120,7 +120,8 @@ impl Wallet {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::address::{Address, ValidAddress};
+    use crate::common::address::Address;
+    use crate::traits::ValidAddress;
     use crate::util::hash::hash;
 
     use rand::{thread_rng, Rng};
