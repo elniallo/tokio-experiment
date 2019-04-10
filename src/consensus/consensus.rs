@@ -68,8 +68,10 @@ impl Consensus {
         let map = self
             .state_processor
             .generate_transition(vec![exodus.deref()])?;
-        let _root = self.state_processor.apply_transition(map, None)?;
-        Ok(())
+        let root = self.state_processor.apply_transition(map, None)?;
+        println!("Root after Exodus: {:?}", root);
+        unimplemented!();
+        //Ok(())
     }
 }
 
@@ -319,9 +321,12 @@ mod tests {
     use crate::consensus::worldstate::WorldState;
     use crate::database::block_db::BlockDB;
     use crate::database::dbkeys::DBKeys;
+    use crate::database::merge_function;
     use crate::database::state_db::StateDB;
+    use crate::database::IDB;
     use crate::traits::ValidAddress;
 
+    use rocksdb::DB as RocksDB;
     use rust_base58::FromBase58;
     use std::path::PathBuf;
     #[test]
@@ -341,7 +346,9 @@ mod tests {
         let keys = DBKeys::default();
         let block_db = BlockDB::new(block_path, file_path, keys, None).unwrap();
         let db_wrapper = Arc::new(Mutex::new(block_db));
-        let state_db = StateDB::new(state_path, None).unwrap();
+        let mut options = RocksDB::get_default_option();
+        options.set_merge_operator("Update Ref Count", merge_function, None);
+        let state_db = StateDB::new(state_path, Some(options)).unwrap();
         let world_state = WorldState::new(state_db, 20).unwrap();
         let state_processor = StateProcessor::new(db_wrapper.clone(), world_state);
         let consensus = Consensus::new(state_processor, db_wrapper).unwrap();
@@ -411,5 +418,23 @@ mod tests {
         );
         assert!(Consensus::fork_choice(&tip_meta, &new_meta));
         assert_ne!(Consensus::fork_choice(&new_meta, &tip_meta), true);
+    }
+
+    #[test]
+    fn it_correctly_initialised_exodus() {
+        let state_path = PathBuf::from("state");
+        let block_path = PathBuf::from("blocks");
+        let file_path = PathBuf::from("blockfile");
+        let keys = DBKeys::default();
+        let block_db = BlockDB::new(block_path, file_path, keys, None).unwrap();
+        let db_wrapper = Arc::new(Mutex::new(block_db));
+        let mut options = RocksDB::get_default_option();
+        options.set_merge_operator("Update Ref Count", merge_function, None);
+        let state_db = StateDB::new(state_path, Some(options)).unwrap();
+        let world_state = WorldState::new(state_db, 20).unwrap();
+        let state_processor = StateProcessor::new(db_wrapper.clone(), world_state);
+        let mut consensus = Consensus::new(state_processor, db_wrapper).unwrap();
+        let res = consensus.init_exodus_block();
+        assert!(res.is_ok());
     }
 }
