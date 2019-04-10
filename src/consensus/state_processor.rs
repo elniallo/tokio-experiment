@@ -5,10 +5,10 @@ use crate::common::header::Header;
 use crate::common::signed_tx::SignedTx;
 use crate::consensus::worldstate::{Blake2bHashResult, WorldState};
 use crate::database::block_db::BlockDB;
-use crate::traits::{BlockHeader, Exception, Transaction};
+use crate::traits::{BlockHeader, Encode, Exception, Proto, Transaction};
 use crate::util::strict_math::StrictU64;
 use secp256k1::{RecoverableSignature, RecoveryId};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 
@@ -79,10 +79,14 @@ impl StateProcessor {
         return Err(Box::new(Exception::new("Not Implemented")));
     }
 
-    pub fn generate_transition(
+    pub fn generate_transition<HeaderType, TransactionType>(
         &self,
-        blocks: Vec<&Block<Header, SignedTx>>,
-    ) -> StateProcessorResult<HashMap<Address, ProtoAccount>> {
+        blocks: Vec<&Block<HeaderType, TransactionType>>,
+    ) -> StateProcessorResult<BTreeMap<Address, Account>>
+    where
+        HeaderType: BlockHeader + Encode + Proto + Clone,
+        TransactionType: Transaction<Address, RecoverableSignature, RecoveryId>,
+    {
         let mut address_list: Vec<Address> = Vec::with_capacity(8192);
         let mut address_set = HashSet::new();
 
@@ -116,7 +120,7 @@ impl StateProcessor {
         }
 
         // Insert existing balances into a map
-        let mut account_map = HashMap::new();
+        let mut account_map = BTreeMap::new();
 
         if self.state_cache.len() > 0 {
             let mut accounts = self
@@ -125,6 +129,8 @@ impl StateProcessor {
             for i in (0..accounts.len()).rev() {
                 if let Some(account) = accounts.remove(i) {
                     account_map.insert(address_list[i], account.1);
+                } else {
+                    account_map.insert(address_list[i], Account::default());
                 }
             }
         }
@@ -143,7 +149,7 @@ impl StateProcessor {
                     genesis = true;
                 }
                 for tx in txs {
-                    if let Err(e) =
+                    if let Err(_) =
                         StateProcessor::generate_tx_transition(tx, &mut account_map, miner, genesis)
                     {
                         revert = true;
@@ -154,17 +160,33 @@ impl StateProcessor {
             }
 
             if revert {
+                match block.txs {
+                    Some(ref txs) => {
+                        for i in 0..processed_txs {
+                            StateProcessor::revert_tx_transition(
+                                &txs[i],
+                                &mut account_map,
+                                block.header.get_miner(),
+                            );
+                        }
+                    }
+                    None => {
+                        return Err(Box::new(Exception::new(
+                            "Should be impossible to reach, txs have disappeared",
+                        )));
+                    }
+                }
                 // TODO: Revert the updates in this block and then stop
                 break;
             }
         }
 
-        return Err(Box::new(Exception::new("Not Implemented")));
+        return Ok(account_map);
     }
 
-    pub fn generate_tx_transition<TxType>(
+    fn generate_tx_transition<TxType>(
         tx: &TxType,
-        account_map: &mut HashMap<Address, Account>,
+        account_map: &mut BTreeMap<Address, Account>,
         miner: Option<&Address>,
         genesis: bool,
     ) -> StateProcessorResult<()>
@@ -298,7 +320,7 @@ impl StateProcessor {
 
     pub fn revert_tx_transition<TxType>(
         tx: &TxType,
-        account_map: &mut HashMap<Address, ProtoAccount>,
+        account_map: &mut BTreeMap<Address, Account>,
         miner: Option<&Address>,
     ) -> StateProcessorResult<()>
     where
@@ -317,7 +339,7 @@ impl StateProcessor {
         let fee;
 
         if let Some(a) = account_map.get(miner_address) {
-            prev_miner_balance = StrictU64::new(a.get_balance());
+            prev_miner_balance = StrictU64::new(a.balance);
         } else {
             return Err(Box::new(Exception::new(
                 "Block miner not found in account map",
@@ -328,8 +350,8 @@ impl StateProcessor {
         if let Some(f) = tx.get_from() {
             from = f;
             if let Some(a) = account_map.get(&from) {
-                prev_from_balance = StrictU64::new(a.get_balance());
-                prev_from_nonce = a.get_nonce();
+                prev_from_balance = StrictU64::new(a.balance);
+                prev_from_nonce = a.nonce;
             } else {
                 return Err(Box::new(Exception::new(
                     "Invalid Tx: Tx is missing from account",
@@ -357,12 +379,12 @@ impl StateProcessor {
         // Handle the to account if one is supplied
         if let Some(to) = tx.get_to() {
             if let Some(to_account) = account_map.get_mut(&to) {
-                let prev_to_balance = StrictU64::new(to_account.get_balance());
+                let prev_to_balance = StrictU64::new(to_account.balance);
 
                 let new_to_balance = (prev_to_balance - amount)?;
 
                 // Begin committing updates to account map if the previous line succeeded
-                to_account.set_balance(u64::from(new_to_balance));
+                to_account.balance = u64::from(new_to_balance);
             } else {
                 return Err(Box::new(Exception::new(
                     "Invalid Tx: Tx to account does not exist",
@@ -372,15 +394,15 @@ impl StateProcessor {
 
         // Commit updates for the from address to the account map
         if let Some(from_account) = account_map.get_mut(&from) {
-            from_account.set_balance(u64::from(new_from_balance));
-            from_account.set_nonce(new_from_nonce);
+            from_account.balance = u64::from(new_from_balance);
+            from_account.nonce = new_from_nonce;
         } else {
             return Err(Box::new(Exception::new("Corrupt account map")));
         }
 
         // Commit updates for the miner address to the account map
         if let Some(miner_account) = account_map.get_mut(miner_address) {
-            miner_account.set_balance(u64::from(new_miner_balance));
+            miner_account.balance = u64::from(new_miner_balance);
         } else {
             return Err(Box::new(Exception::new("Corrupt account map")));
         }
@@ -388,11 +410,21 @@ impl StateProcessor {
         return Ok(());
     }
 
-    fn apply_transition(
-        transition: HashMap<Address, ProtoAccount>,
-        root: &[u8],
+    pub fn apply_transition(
+        &mut self,
+        transition: BTreeMap<Address, Account>,
+        root: Option<&[u8]>,
     ) -> StateProcessorResult<Vec<u8>> {
-        return Err(Box::new(Exception::new("Not Implemented")));
+        let mut addresses = Vec::with_capacity(transition.len());
+        let mut accounts = Vec::with_capacity(transition.len());
+        for (key, value) in transition.iter() {
+            addresses.push(key);
+            accounts.push(*value);
+        }
+        let new_root = self
+            .worldstate
+            .insert(root, addresses, accounts.as_slice())?;
+        Ok(new_root)
     }
 }
 
