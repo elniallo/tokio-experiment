@@ -17,7 +17,7 @@ pub type AddressResult<T> = Result<T, Box<Error>>;
 
 pub type Address = [u8; 20];
 
-impl ValidAddress<PublicKey,Address> for Address {
+impl ValidAddress<PublicKey, Address> for Address {
     fn to_string(&self) -> String {
         let base58_address = self.to_base58();
         "H".to_string() + &base58_address + &check_sum(&self)

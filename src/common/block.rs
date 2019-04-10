@@ -17,20 +17,23 @@ use protobuf::{CodedInputStream, Message as ProtoMessage, RepeatedField};
 use std::result::Result;
 
 #[derive(Clone, Debug)]
-pub struct Block<HeaderType, TxType> {
+pub struct Block<HeaderType, TxType>
+where
+    HeaderType: BlockHeader + Encode + Clone + Proto,
+{
     pub header: HeaderType,
     pub txs: Option<Vec<TxType>>,
-    pub meta: Option<Meta>,
+    pub meta: Option<Meta<HeaderType>>,
 }
 
 impl<HeaderType, TxType> Block<HeaderType, TxType>
 where
-    HeaderType: Clone + Encode + BlockHeader,
+    HeaderType: Clone + Encode + BlockHeader + Proto,
 {
     pub fn new(
         header: HeaderType,
         txs: Option<Vec<TxType>>,
-        meta: Option<Meta>,
+        meta: Option<Meta<HeaderType>>,
     ) -> Block<HeaderType, TxType> {
         Block { header, txs, meta }
     }
@@ -346,9 +349,10 @@ pub mod tests {
         ]
     }
 
-    fn create_test_meta() -> Meta {
+    fn create_test_meta() -> Meta<Header> {
         Meta::new(
             1,
+            create_test_header(),
             2 as f64,
             3 as f64,
             4 as f64,
@@ -381,7 +385,7 @@ pub mod tests {
         vec![signed_tx]
     }
 
-    fn create_test_header() -> Header {
+    pub fn create_test_header() -> Header {
         let previous_hash = vec![vec![
             74, 248, 206, 224, 124, 114, 100, 237, 205, 62, 60, 165, 198, 225, 77, 241, 138, 87,
             77, 236, 55, 60, 183, 46, 88, 192, 18, 199, 125, 23, 169, 171,

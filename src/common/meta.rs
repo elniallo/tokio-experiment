@@ -1,13 +1,18 @@
 use crate::common::block_status::BlockStatus;
+use crate::common::header::Header;
 use crate::serialization::block::BlockDB as ProtoBlockDB;
 use crate::traits::EnumConverter;
-use crate::traits::{Decode, Encode, Proto};
+use crate::traits::{BlockHeader, Decode, Encode, Proto};
 use protobuf::Message as ProtoMessage;
 use std::error::Error;
 
 #[derive(Clone, Debug)]
-pub struct Meta {
+pub struct Meta<HeaderType>
+where
+    HeaderType: BlockHeader + Clone + Encode + Proto,
+{
     pub height: u32,
+    pub header: HeaderType,
     pub t_ema: f64,
     pub p_ema: f64,
     pub next_difficulty: f64,
@@ -18,9 +23,13 @@ pub struct Meta {
     pub status: BlockStatus,
 }
 
-impl Meta {
+impl<HeaderType> Meta<HeaderType>
+where
+    HeaderType: BlockHeader + Clone + Encode + Proto,
+{
     pub fn new(
         height: u32,
+        header: HeaderType,
         t_ema: f64,
         p_ema: f64,
         next_difficulty: f64,
@@ -29,9 +38,10 @@ impl Meta {
         offset: Option<u64>,
         length: Option<u32>,
         status: BlockStatus,
-    ) -> Meta {
-        Meta {
+    ) -> Self {
+        Self {
             height,
+            header,
             t_ema,
             p_ema,
             next_difficulty,
@@ -44,7 +54,10 @@ impl Meta {
     }
 }
 
-impl Proto for Meta {
+impl<HeaderType> Proto for Meta<HeaderType>
+where
+    HeaderType: BlockHeader + Clone + Proto + Encode,
+{
     type ProtoType = ProtoBlockDB;
     fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>> {
         let mut proto_meta = Self::ProtoType::new();
@@ -74,20 +87,30 @@ impl Proto for Meta {
     }
 }
 
-impl Encode for Meta {
+impl<HeaderType> Encode for Meta<HeaderType>
+where
+    HeaderType: BlockHeader + Clone + Proto + Encode,
+{
     fn encode(&self) -> Result<Vec<u8>, Box<Error>> {
         let proto_meta = self.to_proto()?;
         Ok(proto_meta.write_to_bytes()?)
     }
 }
 
-impl Decode for Meta {
-    fn decode(buffer: &[u8]) -> Result<Meta, Box<Error>> {
+impl<HeaderType> Decode for Meta<HeaderType>
+where
+    HeaderType: Proto<ProtoType = crate::serialization::blockHeader::BlockHeader>
+        + BlockHeader
+        + Clone
+        + Encode,
+{
+    fn decode(buffer: &[u8]) -> Result<Meta<HeaderType>, Box<Error>> {
         let mut proto_meta = ProtoBlockDB::new();
 
         proto_meta.merge_from_bytes(buffer)?;
         let meta_info = Meta::new(
             proto_meta.height,
+            HeaderType::from_proto(&proto_meta.get_header())?,
             proto_meta.tEMA,
             proto_meta.pEMA,
             proto_meta.nextDifficulty,
@@ -104,6 +127,7 @@ impl Decode for Meta {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::block::tests::create_test_header;
     #[test]
     fn it_makes_meta_without_file_info() {
         let height = 150000;
@@ -113,6 +137,7 @@ mod tests {
         let total_work = 1e15;
         let meta = Meta::new(
             height,
+            create_test_header(),
             t_ema,
             p_ema,
             next_difficulty,
@@ -144,6 +169,7 @@ mod tests {
         let length = 345;
         let meta = Meta::new(
             height,
+            create_test_header(),
             t_ema,
             p_ema,
             next_difficulty,

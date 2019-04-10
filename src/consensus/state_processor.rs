@@ -64,7 +64,7 @@ impl StateProcessor {
             .block_db
             .lock()
             .map_err(|_| Exception::new("Poison error"))?
-            .get_block::<Block<Header, SignedTx>>(&block_tip)?;
+            .get_block::<Block<Header, SignedTx>, Header>(&block_tip)?;
         let tip_height;
         if let Some(m) = block.meta {
             tip_height = m.height;
