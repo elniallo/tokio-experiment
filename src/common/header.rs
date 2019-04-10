@@ -97,8 +97,20 @@ impl Proto for Header {
         Ok(proto_header)
     }
 
-    fn from_proto(_prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
-        unimplemented!()
+    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
+        let mut miner = [0u8; 20];
+        if &prototype.get_miner().len() == &20 {
+            miner.copy_from_slice(&prototype.get_miner().to_vec()[0..20]);
+        }
+        Ok(Self {
+            merkle_root: prototype.get_merkleRoot().to_vec(),
+            time_stamp: prototype.get_timeStamp(),
+            miner: miner,
+            nonce: prototype.get_nonce(),
+            difficulty: prototype.get_difficulty(),
+            previous_hash: prototype.get_previousHash().to_vec(),
+            state_root: prototype.get_stateRoot().to_vec(),
+        })
     }
 }
 

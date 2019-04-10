@@ -1,4 +1,3 @@
-use crate::common::address::Address;
 use crate::common::block::Block;
 use crate::common::block_status::BlockStatus;
 use crate::common::header::Header;
@@ -8,11 +7,10 @@ use crate::consensus::difficulty_adjuster;
 use crate::consensus::state_processor::StateProcessor;
 use crate::consensus::BlockForkChoice;
 use crate::database::block_db::BlockDB;
-use crate::traits::{BlockHeader, Encode, Exception};
+use crate::traits::{BlockHeader, Encode, Exception, Proto};
 use crate::util::hash::{hash, hash_cryptonight};
 use crate::util::init_exodus::{init_exodus_block, init_exodus_meta};
 
-use rust_base58::FromBase58;
 use std::cmp::Ordering;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
@@ -24,8 +22,11 @@ const EMPTY_MERKLE_ROOT: [u8; 32] = [
 
 type PutResult<T> = Result<T, Box<Error>>;
 
-impl BlockForkChoice for Meta {
-    fn fork_choice(&self, other: &Meta) -> Ordering {
+impl<HeaderType> BlockForkChoice for Meta<HeaderType>
+where
+    HeaderType: BlockHeader + Clone + Proto + Encode,
+{
+    fn fork_choice(&self, other: &Meta<HeaderType>) -> Ordering {
         self.total_work.partial_cmp(&other.total_work).unwrap()
     }
 }
@@ -51,6 +52,14 @@ impl Consensus {
     fn init_exodus_block(&mut self) -> Result<(), Box<Error>> {
         let exodus = init_exodus_block()?;
         let (exodus_meta, exodus_hash) = init_exodus_meta()?;
+        self.block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison error"))?
+            .set_block_status(&exodus_hash, exodus_meta.status.clone())?;
+        self.block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison error"))?
+            .set_hash_using_height(exodus_meta.height, &exodus_hash)?;
         Ok(())
     }
 }
@@ -75,7 +84,7 @@ impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
             .block_db
             .lock()
             .map_err(|_| Exception::new("Poison Error"))?
-            .get_meta(&hash)?;
+            .get_meta::<Header>(&hash)?;
 
         Ok(Some(meta.height as usize))
     }
@@ -171,8 +180,11 @@ pub enum UncleResult {
     Failure(Vec<Vec<u8>>),
 }
 
-impl ForkChoice<Meta> for Consensus {
-    fn fork_choice(tip: &Meta, new_block: &Meta) -> bool {
+impl<HeaderType> ForkChoice<Meta<HeaderType>> for Consensus
+where
+    HeaderType: BlockHeader + Proto + Encode + Clone,
+{
+    fn fork_choice(tip: &Meta<HeaderType>, new_block: &Meta<HeaderType>) -> bool {
         match new_block.fork_choice(tip) {
             Ordering::Greater => true,
             _ => false,
@@ -293,6 +305,7 @@ where
 mod tests {
     use super::*;
     use crate::common::address::Address;
+    use crate::common::block::tests::create_test_header;
     use crate::common::block_status::BlockStatus;
     use crate::consensus::worldstate::WorldState;
     use crate::database::block_db::BlockDB;
@@ -364,6 +377,7 @@ mod tests {
         let length = 345;
         let tip_meta = Meta::new(
             height,
+            create_test_header(),
             t_ema,
             p_ema,
             next_difficulty,
@@ -376,6 +390,7 @@ mod tests {
         let second_tw = 1.000000000001e23;
         let new_meta = Meta::new(
             height,
+            create_test_header(),
             t_ema,
             p_ema,
             next_difficulty,
