@@ -3,7 +3,7 @@ use std::f64::consts;
 
 use crate::common::block::Block;
 
-use crate::traits::{BlockHeader, Exception};
+use crate::traits::{BlockHeader, Encode, Exception, Proto};
 
 use byteorder::{ByteOrder, LittleEndian};
 /// Target Mean Time for Block Production
@@ -25,7 +25,7 @@ pub fn adjust_difficulty<HeaderType, TxType>(
     time_stamp: f64,
 ) -> Result<(f64, f64, f64), Box<Error>>
 where
-    HeaderType: BlockHeader,
+    HeaderType: BlockHeader + Proto + Clone + Encode,
 {
     let height: u32;
     let previous_time_ema: f64;
@@ -123,6 +123,7 @@ pub fn acceptable(hash: Vec<u8>, target: Vec<u8>) -> Result<bool, Box<Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::block::tests::create_test_header;
     use crate::common::block_status::BlockStatus;
     use crate::common::header::Header;
     use crate::common::meta::Meta;
@@ -143,6 +144,7 @@ mod tests {
         );
         let meta = Meta::new(
             1,
+            create_test_header(),
             0.5,
             0.5,
             0.5,
@@ -192,6 +194,7 @@ mod tests {
         let length = None;
         let mut meta = Meta::new(
             height,
+            create_test_header(),
             t_ema,
             p_ema,
             next_difficulty,
@@ -211,6 +214,7 @@ mod tests {
             p_ema = adjustment.2;
             meta = Meta::new(
                 height,
+                create_test_header(),
                 t_ema,
                 p_ema,
                 next_difficulty,
