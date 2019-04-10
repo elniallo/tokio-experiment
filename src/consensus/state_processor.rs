@@ -129,6 +129,11 @@ impl StateProcessor {
                     account_map.insert(address_list[i], Account::default());
                 }
             }
+        } else {
+            // fresh start
+            for i in 0..address_list.len() {
+                account_map.insert(address_list[i], Account::default());
+            }
         }
 
         // Process blocks in memory
@@ -163,7 +168,7 @@ impl StateProcessor {
                                 &txs[i],
                                 &mut account_map,
                                 block.header.get_miner(),
-                            );
+                            )?;
                         }
                     }
                     None => {
