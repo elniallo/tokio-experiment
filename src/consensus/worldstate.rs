@@ -267,10 +267,10 @@ impl WorldState {
 
     pub fn get<'a>(
         &self,
-        root: &Blake2bHashResult,
+        root: &[u8],
         keys: &Vec<&'a Address>,
     ) -> Result<Vec<Option<(&'a Address, Account)>>, Box<Error>> {
-        Ok(self.tree.get(root.as_ref(), keys)?)
+        Ok(self.tree.get(root, keys)?)
     }
 
     pub fn insert<'a>(

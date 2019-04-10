@@ -18,14 +18,10 @@ const MAX_STATE_CACHE_SIZE: usize = 5000;
 
 type StateProcessorResult<T> = Result<T, Box<Error>>;
 
-pub struct StateProcessor<
-    BlockDBType = BlockDB,
-    WorldStateType = WorldState,
-    HashresultType = Blake2bHashResult,
-> {
+pub struct StateProcessor<BlockDBType = BlockDB, WorldStateType = WorldState> {
     worldstate: WorldStateType,
     block_db: Arc<Mutex<BlockDBType>>,
-    state_cache: Vec<HashresultType>,
+    state_cache: Vec<Vec<u8>>,
 }
 
 impl StateProcessor {
@@ -424,6 +420,7 @@ impl StateProcessor {
         let new_root = self
             .worldstate
             .insert(root, addresses, accounts.as_slice())?;
+        self.state_cache.push(new_root.clone());
         Ok(new_root)
     }
 }
