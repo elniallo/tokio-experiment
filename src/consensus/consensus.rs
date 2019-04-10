@@ -69,9 +69,7 @@ impl Consensus {
             .state_processor
             .generate_transition(vec![exodus.deref()])?;
         let root = self.state_processor.apply_transition(map, None)?;
-        println!("Root after Exodus: {:?}", root);
-        unimplemented!();
-        //Ok(())
+        Ok(())
     }
 }
 
