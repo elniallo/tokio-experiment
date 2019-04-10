@@ -13,6 +13,7 @@ use crate::util::init_exodus::{init_exodus_block, init_exodus_meta};
 
 use std::cmp::Ordering;
 use std::error::Error;
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
 const EMPTY_MERKLE_ROOT: [u8; 32] = [
@@ -60,6 +61,14 @@ impl Consensus {
             .lock()
             .map_err(|_| Exception::new("Poison error"))?
             .set_hash_using_height(exodus_meta.height, &exodus_hash)?;
+        self.block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison Error"))?
+            .set_meta::<Header>(&exodus_hash, &exodus_meta)?;
+        let map = self
+            .state_processor
+            .generate_transition(vec![exodus.deref()])?;
+        let _root = self.state_processor.apply_transition(map, None)?;
         Ok(())
     }
 }
@@ -89,7 +98,7 @@ impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
         Ok(Some(meta.height as usize))
     }
 
-    fn put(&mut self, header: Header, block: Option<Block<Header, SignedTx>>) -> PutResult<()> {
+    fn put(&mut self, _header: Header, _block: Option<Block<Header, SignedTx>>) -> PutResult<()> {
         Ok(())
     }
 }

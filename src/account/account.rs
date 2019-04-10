@@ -54,6 +54,15 @@ impl Encode for Account {
     }
 }
 
+impl Default for Account {
+    fn default() -> Self {
+        Self {
+            balance: 0u64,
+            nonce: 0u32,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
