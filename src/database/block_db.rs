@@ -93,7 +93,7 @@ where
         self.database._get(&height_buf)
     }
 
-    fn set_meta<HeaderType>(
+    pub fn set_meta<HeaderType>(
         &mut self,
         hash: &HashValue,
         meta_info: &Meta<HeaderType>,
@@ -137,7 +137,7 @@ where
         }
     }
 
-    fn set_block<T>(&mut self, block: &mut T) -> DBResult<WriteLocation>
+    pub fn set_block<T>(&mut self, block: &mut T) -> DBResult<WriteLocation>
     where
         T: Encode + Proto,
     {
@@ -164,7 +164,7 @@ where
         Ok(write_location)
     }
 
-    fn get_blocks<T, HeaderType>(&mut self, from_height: u32, count: u32) -> DBResult<Vec<T>>
+    pub fn get_blocks<T, HeaderType>(&mut self, from_height: u32, count: u32) -> DBResult<Vec<T>>
     where
         T: Decode + Clone,
         HeaderType: BlockHeader

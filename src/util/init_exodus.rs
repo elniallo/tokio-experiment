@@ -4,10 +4,12 @@ use std::env;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
+use std::ops::Deref;
 
 use crate::common::block_status::BlockStatus;
 use crate::common::exodus_block::ExodusBlock;
 use crate::common::genesis_header::GenesisHeader;
+use crate::common::header::Header;
 use crate::common::meta::Meta;
 use crate::traits::{Decode, Exception};
 
@@ -20,7 +22,7 @@ pub fn init_exodus_block() -> Result<ExodusBlock, Box<Error>> {
     ExodusBlock::decode(&exodus_buf)
 }
 
-pub fn init_exodus_meta() -> Result<(Meta<GenesisHeader>, Vec<u8>), Box<Error>> {
+pub fn init_exodus_meta() -> Result<(Meta<Header>, Vec<u8>), Box<Error>> {
     let exodus_hash = "6yt4X2giLv73Jh2b2iGN1Ns7fBUQYUdAS7LpQxdtGQJq"
         .from_base58()
         .map_err(|e| Exception::new(&format!("Error: {:?}", e)))?;
@@ -167,7 +169,9 @@ pub fn init_exodus_meta() -> Result<(Meta<GenesisHeader>, Vec<u8>), Box<Error>> 
     }
     let meta = Meta::new(
         height,
-        GenesisHeader::new(merkle_root, time_stamp, difficulty, state_root),
+        GenesisHeader::new(merkle_root, time_stamp, difficulty, state_root)
+            .deref()
+            .clone(),
         t_ema,
         p_ema,
         next_difficulty,
