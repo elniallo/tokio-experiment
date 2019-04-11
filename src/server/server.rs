@@ -227,6 +227,10 @@ impl Server {
     ) -> Result<(), Box<std::error::Error>> {
         self.consensus.process_header(&block.header)
     }
+
+    pub fn get_consensus(&self) -> &Consensus {
+        &self.consensus
+    }
 }
 
 pub fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
