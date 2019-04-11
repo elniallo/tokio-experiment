@@ -8,12 +8,13 @@ use tokio::io;
 use tokio::prelude::*;
 
 use crate::common::block::Block;
+use crate::consensus::consensus::HyconConsensus;
 use crate::serialization::network::{self, Network_oneof_request};
 use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer_database::DBPeer;
 use crate::server::server::{NotificationType, Server};
-use crate::traits::{Encode, Proto, ToDBType};
+use crate::traits::{Encode, Exception, Proto, ToDBType};
 use crate::util::hash::hash;
 
 type Rx = mpsc::UnboundedReceiver<Bytes>;
@@ -132,15 +133,45 @@ impl Future for Peer {
                             }
                         }
                         Network_oneof_request::getTip(_v) => {
+                            let height;
+                            let hash;
+                            let total_work;
+                            {
+                                height = self
+                                    .srv
+                                    .lock()
+                                    .map_err(|_| {
+                                        io::Error::new(io::ErrorKind::Other, "Poison error")
+                                    })?
+                                    .get_consensus()
+                                    .get_block_tip_height()
+                                    .unwrap_or(0);
+                                hash = self
+                                    .srv
+                                    .lock()
+                                    .map_err(|_| {
+                                        io::Error::new(io::ErrorKind::Other, "Poison error")
+                                    })?
+                                    .get_consensus()
+                                    .get_tip_hash()
+                                    .map_err(|e| {
+                                        io::Error::new(io::ErrorKind::Other, e.to_string())
+                                    })?;
+                                total_work = self
+                                    .srv
+                                    .lock()
+                                    .map_err(|_| {
+                                        io::Error::new(io::ErrorKind::Other, "Poison error")
+                                    })?
+                                    .get_consensus()
+                                    .get_block_tip_total_work()
+                                    .unwrap_or(0.0);
+                            }
                             let mut tip_return = network::GetTipReturn::new();
-                            tip_return.set_height(0);
+                            tip_return.set_height(height as u64);
                             tip_return.set_success(true);
-                            tip_return.set_hash(vec![
-                                167, 196, 139, 41, 65, 52, 154, 132, 218, 236, 238, 209, 119, 24,
-                                195, 185, 74, 193, 125, 161, 51, 205, 18, 11, 115, 28, 81, 195,
-                                181, 95, 204, 235,
-                            ]);
-                            tip_return.set_totalwork(1.5);
+                            tip_return.set_hash(hash);
+                            tip_return.set_totalwork(total_work);
                             let net_msg = NetworkMessage::new(Network_oneof_request::getTipReturn(
                                 tip_return,
                             ));
