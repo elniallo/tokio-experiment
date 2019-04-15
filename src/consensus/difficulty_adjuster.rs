@@ -363,4 +363,5 @@ mod tests {
         ];
         assert_eq!(acceptable(solution, target).unwrap(), false);
     }
+
 }

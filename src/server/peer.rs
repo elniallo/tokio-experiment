@@ -6,6 +6,8 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use tokio::io;
 use tokio::prelude::*;
+use tokio::timer::Interval;
+use std::time::Duration;
 
 use crate::common::block::Block;
 use crate::consensus::consensus::HyconConsensus;
@@ -16,6 +18,8 @@ use crate::server::peer_database::DBPeer;
 use crate::server::server::{NotificationType, Server};
 use crate::traits::{Encode, Exception, Proto, ToDBType};
 use crate::util::hash::hash;
+
+type IntervalStream = tokio::timer::Interval;
 
 type Rx = mpsc::UnboundedReceiver<Bytes>;
 #[derive(Debug, Clone, PartialEq)]
@@ -30,6 +34,7 @@ pub struct Peer {
     receiver: Rx,
     status: PeerStatus,
     logger: Logger,
+    interval: IntervalStream,
 }
 
 impl Peer {
@@ -44,6 +49,7 @@ impl Peer {
         let peer_addr = SocketAddr::new(addr, status.get_port() as u16);
         srv.lock().unwrap().get_peers_mut().insert(peer_addr, tx);
         info!(logger, "Peer Connected: {:?}", &status);
+        let interval = Interval::new_interval(Duration::from_millis(1000));
         Self {
             addr: peer_addr,
             srv,
@@ -51,6 +57,7 @@ impl Peer {
             receiver: rx,
             status: PeerStatus::Connected(status),
             logger,
+            interval
         }
     }
 
