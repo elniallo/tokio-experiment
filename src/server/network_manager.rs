@@ -58,6 +58,9 @@ impl Proto for NetworkMessage {
             Network_oneof_request::putBlockReturn(b) => {
                 proto_message.set_putBlockReturn(b);
             }
+            Network_oneof_request::getTip(t) => {
+                proto_message.set_getTip(t);
+            }
             _ => {}
         }
         Ok(proto_message)

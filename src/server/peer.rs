@@ -110,7 +110,7 @@ impl Future for Peer {
         {
             Async::Ready(_) => {
                 let mut tip_message = network::GetTip::new();
-                tip_message.set_dummy(0);
+                tip_message.set_dummy(1);
                 tip_message.set_header(false);
                 let net_msg = NetworkMessage::new(Network_oneof_request::getTip(tip_message));
                 let bytes = self
@@ -222,9 +222,7 @@ impl Future for Peer {
                                 Err(e) => error!(self.logger, "Error: {}", e),
                             }
                         }
-                        Network_oneof_request::getTipReturn(_) => {
-                            info!(self.logger, "get tip return");
-                        }
+                        Network_oneof_request::getTipReturn(_) => {}
                         Network_oneof_request::putBlock(block) => {
                             let mut put_block_return = network::PutBlockReturn::new();
                             put_block_return
