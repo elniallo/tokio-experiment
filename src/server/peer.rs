@@ -4,10 +4,11 @@ use futures::Future;
 use slog::Logger;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
-use tokio::io;
+use std::time::{Duration, Instant};
 use tokio::prelude::*;
 use tokio::timer::Interval;
-use std::time::Duration;
+
+use std::io;
 
 use crate::common::block::Block;
 use crate::consensus::consensus::HyconConsensus;
@@ -49,7 +50,10 @@ impl Peer {
         let peer_addr = SocketAddr::new(addr, status.get_port() as u16);
         srv.lock().unwrap().get_peers_mut().insert(peer_addr, tx);
         info!(logger, "Peer Connected: {:?}", &status);
-        let interval = Interval::new_interval(Duration::from_millis(1000));
+        let interval = Interval::new(
+            Instant::now() + Duration::from_millis(5000),
+            Duration::from_millis(1000),
+        );
         Self {
             addr: peer_addr,
             srv,
@@ -57,7 +61,7 @@ impl Peer {
             receiver: rx,
             status: PeerStatus::Connected(status),
             logger,
-            interval
+            interval,
         }
     }
 
@@ -96,6 +100,30 @@ impl Future for Peer {
             Async::Ready(Some(v)) => {
                 self.socket.buffer(&v);
                 task::current().notify();
+            }
+            _ => {}
+        }
+        match self
+            .interval
+            .poll()
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "interval broken"))?
+        {
+            Async::Ready(_) => {
+                let mut tip_message = network::GetTip::new();
+                tip_message.set_dummy(0);
+                tip_message.set_header(false);
+                let net_msg = NetworkMessage::new(Network_oneof_request::getTip(tip_message));
+                let bytes = self
+                    .socket
+                    .get_parser_mut()
+                    .prepare_packet(1u32, &net_msg.encode().unwrap());
+                match bytes {
+                    Ok(msg) => {
+                        self.socket.buffer(&msg);
+                        self.socket.poll_flush()?;
+                    }
+                    Err(e) => error!(self.logger, "Error: {}", e),
+                }
             }
             _ => {}
         }

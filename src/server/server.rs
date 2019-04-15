@@ -2,6 +2,7 @@ use bytes::Bytes;
 use futures::future::{self, Either};
 use futures::stream::Stream;
 use futures::sync::mpsc;
+use rocksdb::DB as RocksDB;
 use rust_base58::ToBase58;
 use slog::{Drain, Logger};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -18,11 +19,14 @@ use crate::common::header::Header;
 use crate::common::signed_tx::SignedTx;
 use crate::consensus::consensus::Consensus;
 use crate::consensus::consensus::HeaderProcessor;
+use crate::consensus::consensus::HyconConsensus;
 use crate::consensus::state_processor::StateProcessor;
 use crate::consensus::worldstate::WorldState;
 use crate::database::block_db::BlockDB;
 use crate::database::dbkeys::DBKeys;
+use crate::database::merge_function;
 use crate::database::state_db::StateDB;
+use crate::database::IDB;
 use crate::serialization::network::{self, Network_oneof_request};
 use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
@@ -32,6 +36,7 @@ use crate::server::socket_parser::SocketParser;
 use crate::traits::{Encode, ToDBType};
 use crate::util::hash::hash;
 use crate::util::random_bytes;
+
 
 pub enum NotificationType<T> {
     Inbound(T),
@@ -298,11 +303,13 @@ pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
     let keys = DBKeys::default();
     let block_db = BlockDB::new(block_path, file_path, keys, None).unwrap();
     let db_wrapper = Arc::new(Mutex::new(block_db));
-    let state_db = StateDB::new(state_path, None).unwrap();
+    let mut options = RocksDB::get_default_option();
+    options.set_merge_operator("Update Ref Count", merge_function, None);
+    let state_db = StateDB::new(state_path, Some(options)).unwrap();
     let world_state = WorldState::new(state_db, 20).unwrap();
     let state_processor = StateProcessor::new(db_wrapper.clone(), world_state);
-    let consensus = Consensus::new(state_processor, db_wrapper).unwrap();
-
+    let mut consensus = Consensus::new(state_processor, db_wrapper).unwrap();
+    consensus.init();
     //Set up Blockchain Server
     let (tx, rx) = mpsc::unbounded::<NotificationType<DBPeer>>();
     let srv = Arc::new(Mutex::new(Server::new(tx, root_logger.clone(), consensus)));

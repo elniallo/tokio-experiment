@@ -74,12 +74,21 @@ impl Consensus {
             .state_processor
             .generate_transition(vec![exodus.deref()])?;
         let _root = self.state_processor.apply_transition(map, None)?;
+        self.block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison error"))?
+            .set_block_tip_hash(&exodus_hash)?;
+        self.block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison error"))?
+            .set_header_tip_hash(&exodus_hash)?;
         Ok(())
     }
 }
 
 impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
     fn init(&mut self) -> Result<(), Box<Error>> {
+        let mut exodus = false;
         if let Ok(meta) = self
             .block_db
             .lock()
@@ -88,10 +97,13 @@ impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
         {
             self.header_tip = Some(meta.0);
             self.block_tip = Some(meta.1);
+        } else {
+            exodus = true;
         }
-        if self.block_tip.is_none() {
-            self.init_exodus_block()?;
+        if exodus {
+            self.init_exodus_block();
         }
+
         Ok(())
     }
     fn get_header_tip_height(&self) -> Result<u32, Box<Error>> {
