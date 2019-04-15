@@ -10,7 +10,10 @@ use tokio::timer::Interval;
 
 use std::io;
 
+use std::error::Error;
+
 use crate::common::block::Block;
+use crate::common::block_status::BlockStatus;
 use crate::consensus::consensus::HyconConsensus;
 use crate::serialization::network::{self, Network_oneof_request};
 use crate::server::base_socket::BaseSocket;
@@ -89,6 +92,13 @@ impl Peer {
 
     pub fn get_srv(&self) -> Arc<Mutex<Server>> {
         self.srv.clone()
+    }
+
+    fn common_search(&self, remote_height: &u32, block_status_header: BlockStatus) -> Result<u32,Box<Error>> {
+        let local_height = self.srv.lock().map_err(|_| Exception::new("Poison Error"))?.get_consensus().get_header_tip_height()?;
+        let mut donthave = local_height;
+        let have = 600000;
+        Ok(local_height)
     }
 }
 
