@@ -489,5 +489,6 @@ mod tests {
         let mut consensus = Consensus::new(state_processor, db_wrapper).unwrap();
         let res = consensus.init_exodus_block();
         assert!(res.is_ok());
+        assert_eq!(consensus.get_block_tip_height().unwrap(), 600000);
     }
 }
