@@ -191,7 +191,6 @@ impl HeaderProcessor<Header> for Consensus {
         )? {
             let new_status;
             if header.get_merkle_root() == &EMPTY_MERKLE_ROOT {
-                println!("empty merkle root");
                 new_status = BlockStatus::Block;
             } else {
                 new_status = BlockStatus::Header;
