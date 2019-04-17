@@ -31,8 +31,40 @@ pub enum PeerStatus {
     Connected(crate::serialization::network::Status),
 }
 
+/// Represents the Tip of the remote peer's blockchain
+pub struct Tip {
+    height: u32,
+    total_work: f64,
+    hash: Vec<u8>
+}
+
+impl Proto for Tip {
+    type ProtoType = network::GetTipReturn;
+    fn to_proto(&self) -> Result<Self::ProtoType,Box<Error>>{
+        unimplemented!();
+    }
+
+    fn from_proto(prototype: &Self::ProtoType) -> Result<Self,Box<Error>> {
+        let mut cloned = prototype.clone();
+        Ok(Self {
+            height: prototype.height as u32,
+            total_work: prototype.totalwork,
+            hash: cloned.take_hash(),
+        })
+    }
+}
+
+impl Default for Tip {
+    fn default() -> Self {
+        Self {
+            height: 0,total_work: 0.0,hash: Vec::with_capacity(32)
+        }
+    }
+}
+
+/// The local representation of a remote peer, handles communication and interactions with that peer
 pub struct Peer {
-    remote_height: u32,
+    remote_tip: Tip,
     reply_id: u32,
     reply_map: DelayQueue<u32>,
     key_map: HashMap<u32, tokio::timer::delay_queue::Key>,
@@ -65,7 +97,7 @@ impl Peer {
             Duration::from_millis(1000),
         );
         Self {
-            remote_height: 0u32,
+            remote_tip: Tip::default(),
             reply_id,
             reply_map,
             key_map,
@@ -105,14 +137,15 @@ impl Peer {
         self.srv.clone()
     }
 
-    pub fn get_remote_height(&self) -> &u32 {
-        &self.remote_height
+    pub fn get_remote_tip(&self) -> &Tip {
+        &self.remote_tip
     }
 
-    fn update_remote_height(&mut self, new_height: &u32) {
-        if new_height > &self.remote_height {
-            self.remote_height = *new_height;
+    fn update_remote_tip(&mut self, new_tip: network::GetTipReturn) -> Result<(),Box<Error>> {
+        if new_tip.height as u32 > self.remote_tip.height {
+            self.remote_tip = Tip::from_proto(&new_tip)?;
         }
+        Ok(())
     }
 
     fn get_reply_id(&mut self) -> u32 {
@@ -282,7 +315,7 @@ impl Future for Peer {
                             }
                         }
                         Network_oneof_request::getTipReturn(tip) => {
-                            self.update_remote_height(&(tip.height as u32));
+                            self.update_remote_tip(tip.clone());
                             // Cancel timeout reply received
                             if let Some(key) = &self.key_map.get(&route) {
                                 self.reply_map.remove(key);
