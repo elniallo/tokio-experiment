@@ -34,7 +34,7 @@ pub enum PeerStatus {
 pub struct Peer {
     reply_id: u32,
     reply_map: DelayQueue<u32>,
-    key_map: HashMap<u32,tokio::timer::delay_queue::Key>,
+    key_map: HashMap<u32, tokio::timer::delay_queue::Key>,
     addr: SocketAddr,
     srv: Arc<Mutex<Server>>,
     socket: BaseSocket,
@@ -133,8 +133,10 @@ impl Future for Peer {
     type Error = io::Error;
     fn poll(&mut self) -> Poll<(), Self::Error> {
         match self.reply_map.poll().unwrap() {
-            Async::Ready(_) => {
-                return Ok(Async::Ready(()));
+            Async::Ready(timeout) => {
+                if timeout.is_some() {
+                    return Ok(Async::Ready(()));
+                }
             }
             _ => {}
         }
@@ -157,7 +159,7 @@ impl Future for Peer {
                 tip_message.set_header(false);
                 let net_msg = NetworkMessage::new(Network_oneof_request::getTip(tip_message));
                 let key = self.reply_map.insert(reply, Duration::from_secs(4));
-                self.key_map.insert(reply,key);
+                self.key_map.insert(reply, key);
                 let bytes = self
                     .socket
                     .get_parser_mut()
@@ -270,7 +272,7 @@ impl Future for Peer {
                         Network_oneof_request::getTipReturn(_) => {
                             // Cancel timeout reply received
                             if let Some(key) = &self.key_map.get(&route) {
-                            self.reply_map.remove(key);
+                                self.reply_map.remove(key);
                             }
                             self.key_map.remove(&route);
                         }
