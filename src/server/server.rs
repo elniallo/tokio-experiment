@@ -37,7 +37,6 @@ use crate::traits::{Encode, ToDBType};
 use crate::util::hash::hash;
 use crate::util::random_bytes;
 
-
 pub enum NotificationType<T> {
     Inbound(T),
     Disconnect(T),
@@ -136,7 +135,7 @@ impl Future for PeerDBFuture {
         Ok(Async::NotReady)
     }
 }
-
+/// Blockchain Server
 pub struct Server {
     active_peers: HashMap<SocketAddr, Tx>,
     guid: String,
@@ -237,7 +236,7 @@ impl Server {
         &self.consensus
     }
 }
-
+/// Handles the initial connection logic and processing for TCP sockets
 pub fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
     let base = BaseSocket::new(socket);
     let base_logger = server.lock().unwrap().get_logger().clone();
@@ -289,6 +288,7 @@ pub fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
     tokio::spawn(connection);
 }
 
+/// Application entry point
 pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
     // Set up logger
     let decorator = slog_term::TermDecorator::new().build();
