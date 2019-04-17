@@ -2,15 +2,14 @@ use bytes::Bytes;
 use futures::sync::mpsc;
 use futures::Future;
 use slog::Logger;
+use std::collections::HashMap;
+use std::error::Error;
+use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::prelude::*;
-use tokio::timer::Interval;
-
-use std::io;
-
-use std::error::Error;
+use tokio::timer::{DelayQueue, Interval};
 
 use crate::common::block::Block;
 use crate::common::block_status::BlockStatus;
@@ -31,7 +30,11 @@ pub enum PeerStatus {
     Disconnected,
     Connected(crate::serialization::network::Status),
 }
+
 pub struct Peer {
+    reply_id: u32,
+    reply_map: DelayQueue<u32>,
+    key_map: HashMap<u32,tokio::timer::delay_queue::Key>,
     addr: SocketAddr,
     srv: Arc<Mutex<Server>>,
     socket: BaseSocket,
@@ -48,6 +51,9 @@ impl Peer {
         status: crate::serialization::network::Status,
         logger: Logger,
     ) -> Self {
+        let reply_id = 2u32.pow(30);
+        let reply_map = DelayQueue::new();
+        let key_map = HashMap::new();
         let (tx, rx) = mpsc::unbounded();
         let addr = socket.get_socket().peer_addr().unwrap().ip();
         let peer_addr = SocketAddr::new(addr, status.get_port() as u16);
@@ -58,6 +64,9 @@ impl Peer {
             Duration::from_millis(1000),
         );
         Self {
+            reply_id,
+            reply_map,
+            key_map,
             addr: peer_addr,
             srv,
             socket: socket,
@@ -94,8 +103,25 @@ impl Peer {
         self.srv.clone()
     }
 
-    fn common_search(&self, remote_height: &u32, block_status_header: BlockStatus) -> Result<u32,Box<Error>> {
-        let local_height = self.srv.lock().map_err(|_| Exception::new("Poison Error"))?.get_consensus().get_header_tip_height()?;
+    fn get_reply_id(&mut self) -> u32 {
+        if self.reply_id == u32::max_value() {
+            self.reply_id = 2u32.pow(30);
+        }
+        self.reply_id += 1;
+        self.reply_id - 1
+    }
+
+    fn common_search(
+        &self,
+        remote_height: &u32,
+        block_status_header: BlockStatus,
+    ) -> Result<u32, Box<Error>> {
+        let local_height = self
+            .srv
+            .lock()
+            .map_err(|_| Exception::new("Poison Error"))?
+            .get_consensus()
+            .get_header_tip_height()?;
         let mut donthave = local_height;
         let have = 600000;
         Ok(local_height)
@@ -106,6 +132,12 @@ impl Future for Peer {
     type Item = ();
     type Error = io::Error;
     fn poll(&mut self) -> Poll<(), Self::Error> {
+        match self.reply_map.poll().unwrap() {
+            Async::Ready(_) => {
+                return Ok(Async::Ready(()));
+            }
+            _ => {}
+        }
         match self.receiver.poll().unwrap() {
             Async::Ready(Some(v)) => {
                 self.socket.buffer(&v);
@@ -119,14 +151,17 @@ impl Future for Peer {
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "interval broken"))?
         {
             Async::Ready(_) => {
+                let reply = self.get_reply_id();
                 let mut tip_message = network::GetTip::new();
                 tip_message.set_dummy(1);
                 tip_message.set_header(false);
                 let net_msg = NetworkMessage::new(Network_oneof_request::getTip(tip_message));
+                let key = self.reply_map.insert(reply, Duration::from_secs(4));
+                self.key_map.insert(reply,key);
                 let bytes = self
                     .socket
                     .get_parser_mut()
-                    .prepare_packet(1u32, &net_msg.encode().unwrap());
+                    .prepare_packet(reply, &net_msg.encode().unwrap());
                 match bytes {
                     Ok(msg) => {
                         self.socket.buffer(&msg);
@@ -232,7 +267,13 @@ impl Future for Peer {
                                 Err(e) => error!(self.logger, "Error: {}", e),
                             }
                         }
-                        Network_oneof_request::getTipReturn(_) => {}
+                        Network_oneof_request::getTipReturn(_) => {
+                            // Cancel timeout reply received
+                            if let Some(key) = &self.key_map.get(&route) {
+                            self.reply_map.remove(key);
+                            }
+                            self.key_map.remove(&route);
+                        }
                         Network_oneof_request::putBlock(block) => {
                             let mut put_block_return = network::PutBlockReturn::new();
                             put_block_return
