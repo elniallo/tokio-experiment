@@ -35,21 +35,20 @@ pub enum PeerStatus {
 pub struct Tip {
     height: u32,
     total_work: f64,
-    hash: Vec<u8>
+    hash: Vec<u8>,
 }
 
 impl Proto for Tip {
     type ProtoType = network::GetTipReturn;
-    fn to_proto(&self) -> Result<Self::ProtoType,Box<Error>>{
+    fn to_proto(&self) -> Result<Self::ProtoType, Box<Error>> {
         unimplemented!();
     }
 
-    fn from_proto(prototype: &Self::ProtoType) -> Result<Self,Box<Error>> {
-        let mut cloned = prototype.clone();
+    fn from_proto(prototype: &Self::ProtoType) -> Result<Self, Box<Error>> {
         Ok(Self {
             height: prototype.height as u32,
             total_work: prototype.totalwork,
-            hash: cloned.take_hash(),
+            hash: prototype.get_hash().to_vec(),
         })
     }
 }
@@ -57,7 +56,9 @@ impl Proto for Tip {
 impl Default for Tip {
     fn default() -> Self {
         Self {
-            height: 0,total_work: 0.0,hash: Vec::with_capacity(32)
+            height: 0,
+            total_work: 0.0,
+            hash: Vec::with_capacity(32),
         }
     }
 }
@@ -65,6 +66,7 @@ impl Default for Tip {
 /// The local representation of a remote peer, handles communication and interactions with that peer
 pub struct Peer {
     remote_tip: Tip,
+    local_tip: Tip,
     reply_id: u32,
     reply_map: DelayQueue<u32>,
     key_map: HashMap<u32, tokio::timer::delay_queue::Key>,
@@ -98,6 +100,7 @@ impl Peer {
         );
         Self {
             remote_tip: Tip::default(),
+            local_tip: Tip::default(),
             reply_id,
             reply_map,
             key_map,
@@ -141,9 +144,16 @@ impl Peer {
         &self.remote_tip
     }
 
-    fn update_remote_tip(&mut self, new_tip: network::GetTipReturn) -> Result<(),Box<Error>> {
+    fn update_remote_tip(&mut self, new_tip: network::GetTipReturn) -> Result<(), Box<Error>> {
         if new_tip.height as u32 > self.remote_tip.height {
             self.remote_tip = Tip::from_proto(&new_tip)?;
+        }
+        Ok(())
+    }
+
+    fn update_local_tip(&mut self, new_tip: &network::GetTipReturn) -> Result<(), Box<Error>> {
+        if new_tip.height as u32 > self.local_tip.height {
+            self.local_tip = Tip::from_proto(&new_tip)?;
         }
         Ok(())
     }
@@ -299,6 +309,8 @@ impl Future for Peer {
                             tip_return.set_success(true);
                             tip_return.set_hash(hash);
                             tip_return.set_totalwork(total_work);
+                            self.update_local_tip(&tip_return)
+                                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
                             let net_msg = NetworkMessage::new(Network_oneof_request::getTipReturn(
                                 tip_return,
                             ));
@@ -315,7 +327,8 @@ impl Future for Peer {
                             }
                         }
                         Network_oneof_request::getTipReturn(tip) => {
-                            self.update_remote_tip(tip.clone());
+                            self.update_remote_tip(tip.clone())
+                                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
                             // Cancel timeout reply received
                             if let Some(key) = &self.key_map.get(&route) {
                                 self.reply_map.remove(key);
