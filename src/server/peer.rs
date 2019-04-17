@@ -32,6 +32,7 @@ pub enum PeerStatus {
 }
 
 pub struct Peer {
+    remote_height: u32,
     reply_id: u32,
     reply_map: DelayQueue<u32>,
     key_map: HashMap<u32, tokio::timer::delay_queue::Key>,
@@ -64,6 +65,7 @@ impl Peer {
             Duration::from_millis(1000),
         );
         Self {
+            remote_height: 0u32,
             reply_id,
             reply_map,
             key_map,
@@ -101,6 +103,16 @@ impl Peer {
 
     pub fn get_srv(&self) -> Arc<Mutex<Server>> {
         self.srv.clone()
+    }
+
+    pub fn get_remote_height(&self) -> &u32 {
+        &self.remote_height
+    }
+
+    fn update_remote_height(&mut self, new_height: &u32) {
+        if new_height > &self.remote_height {
+            self.remote_height = *new_height;
+        }
     }
 
     fn get_reply_id(&mut self) -> u32 {
@@ -269,7 +281,8 @@ impl Future for Peer {
                                 Err(e) => error!(self.logger, "Error: {}", e),
                             }
                         }
-                        Network_oneof_request::getTipReturn(_) => {
+                        Network_oneof_request::getTipReturn(tip) => {
+                            self.update_remote_height(&(tip.height as u32));
                             // Cancel timeout reply received
                             if let Some(key) = &self.key_map.get(&route) {
                                 self.reply_map.remove(key);
