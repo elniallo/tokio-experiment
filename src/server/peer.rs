@@ -19,6 +19,7 @@ use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer_database::DBPeer;
 use crate::server::server::{NotificationType, Server};
+use crate::server::sync::Sync;
 use crate::traits::{Encode, Exception, Proto, ToDBType};
 use crate::util::hash::hash;
 
@@ -334,6 +335,10 @@ impl Future for Peer {
                                 self.reply_map.remove(key);
                             }
                             self.key_map.remove(&route);
+                            if self.remote_tip.total_work > self.local_tip.total_work {
+                                // need to sync
+                                info!(self.logger, "Need to sync");
+                            }
                         }
                         Network_oneof_request::putBlock(block) => {
                             let mut put_block_return = network::PutBlockReturn::new();
