@@ -7,7 +7,7 @@ use tokio::prelude::*;
 const START_HEIGHT: u32 = 600000u32;
 
 /// State Machine for Sync operation
-pub struct Sync {
+pub struct SyncManager {
     common_height: Option<u32>,
     local_height: u32,
     height_to_check: u32,
@@ -16,7 +16,7 @@ pub struct Sync {
     in_flight: bool,
 }
 
-impl Sync {
+impl SyncManager {
     pub fn new(local_height: u32, remote_height: u32) -> Self {
         Self {
             common_height: None,
@@ -38,6 +38,14 @@ impl Sync {
 
     pub fn set_common_height(&mut self, new_height: u32) {
         self.common_height = Some(new_height);
+    }
+
+    pub fn update_local_height(&mut self, new_height: u32) {
+        self.local_height = new_height;
+    }
+
+    pub fn update_remote_height(&mut self, new_height: u32) {
+        self.remote_height = new_height;
     }
 
     pub fn is_syncing(&self) -> bool {
@@ -64,7 +72,7 @@ impl Sync {
     }
 }
 
-impl Stream for Sync {
+impl Stream for SyncManager {
     type Item = u32;
     type Error = Box<Error>;
     fn poll(&mut self) -> Poll<Option<u32>, Self::Error> {

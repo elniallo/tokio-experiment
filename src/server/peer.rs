@@ -20,7 +20,7 @@ use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer_database::DBPeer;
 use crate::server::server::{NotificationType, Server};
-use crate::server::sync::Sync;
+use crate::server::sync::SyncManager;
 use crate::traits::{Encode, Exception, Proto, ToDBType};
 use crate::util::hash::hash;
 
@@ -79,6 +79,7 @@ pub struct Peer {
     status: PeerStatus,
     logger: Logger,
     interval: IntervalStream,
+    sync_manager: SyncManager,
 }
 
 impl Peer {
@@ -113,6 +114,7 @@ impl Peer {
             status: PeerStatus::Connected(status),
             logger,
             interval,
+            sync_manager: SyncManager::new(0, 0),
         }
     }
 
@@ -149,6 +151,8 @@ impl Peer {
     fn update_remote_tip(&mut self, new_tip: network::GetTipReturn) -> Result<(), Box<Error>> {
         if new_tip.height as u32 > self.remote_tip.height {
             self.remote_tip = Tip::from_proto(&new_tip)?;
+            self.sync_manager
+                .update_remote_height(new_tip.height as u32);
         }
         Ok(())
     }
@@ -156,7 +160,9 @@ impl Peer {
     fn update_local_tip(&mut self, new_tip: &network::GetTipReturn) -> Result<(), Box<Error>> {
         if new_tip.height as u32 > self.local_tip.height {
             self.local_tip = Tip::from_proto(&new_tip)?;
+            self.sync_manager.update_local_height(new_tip.height as u32);
         }
+
         Ok(())
     }
 
