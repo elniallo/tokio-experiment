@@ -2,6 +2,7 @@ use bytes::Bytes;
 use futures::sync::mpsc;
 use futures::Future;
 use slog::Logger;
+use std::cmp::{Ord, Ordering};
 use std::collections::HashMap;
 use std::error::Error;
 use std::io;
@@ -337,7 +338,7 @@ impl Future for Peer {
                             self.key_map.remove(&route);
                             if self.remote_tip.total_work > self.local_tip.total_work {
                                 // need to sync
-                                info!(self.logger, "Need to sync");
+
                             }
                         }
                         Network_oneof_request::putBlock(block) => {
