@@ -48,8 +48,10 @@ impl Sync {
         &self.height_to_check
     }
 
-    pub fn sync(&mut self) {
+    pub fn sync(&mut self, local_height: u32, remote_height: u32) {
         self.reset_sync();
+        self.local_height = local_height;
+        self.remote_height = remote_height;
         self.active = true;
     }
 
