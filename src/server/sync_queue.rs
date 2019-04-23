@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::error::Error;
 
 use crate::traits::Exception;
@@ -10,14 +9,12 @@ pub struct SyncJob {
 }
 
 pub struct SyncQueue {
-    queue: VecDeque<SyncJob>,
+    queue: Vec<SyncJob>,
 }
 
 impl SyncQueue {
     pub fn new() -> Self {
-        Self {
-            queue: VecDeque::new(),
-        }
+        Self { queue: Vec::new() }
     }
     /// Inserts or updates an entry corresponding to the given GUID
     pub fn insert(&mut self, guid: String, total_work: f64) -> Result<(), Box<Error>> {
@@ -48,12 +45,9 @@ impl SyncQueue {
             idx = self.queue.len()
         }
         if matched.0 {
-            if let Some(mut job) = self.queue.remove(matched.1) {
-                job.total_work = total_work;
-                self.queue.insert(idx, job);
-            } else {
-                return Err(Box::new(Exception::new("Error updating job")));
-            }
+            let mut job = self.queue.remove(matched.1);
+            job.total_work = total_work;
+            self.queue.insert(idx, job);
         } else {
             let sync_job = SyncJob {
                 guid,
@@ -63,6 +57,23 @@ impl SyncQueue {
             self.queue.insert(idx, sync_job);
         }
         Ok(())
+    }
+
+    pub fn get_sync_permission(&mut self, guid: &str) -> Result<bool, Box<Error>> {
+        if let Some(job) = self.queue.get_mut(0) {
+            if &job.guid == guid {
+                job.active = true;
+                return Ok(true);
+            } else {
+                return Ok(false);
+            }
+        } else {
+            return Err(Box::new(Exception::new("No jobs in queue")));
+        }
+    }
+
+    pub fn end_sync_operation(&mut self) {
+        self.queue.remove(0);
     }
 }
 #[cfg(test)]
@@ -75,9 +86,23 @@ mod tests {
         let _ = sync_queue.insert(String::from("abc"), 1.123);
         assert!(sync_queue.queue.len() == 1);
         let _ = sync_queue.insert(String::from("abc"), 1.124);
-        if let Some(job) = sync_queue.queue.pop_front() {
+        if let Some(job) = sync_queue.queue.first() {
             assert!(!(job.total_work < 1.124));
             assert!(!(job.total_work > 1.124));
         }
+    }
+
+    #[test]
+    fn it_receives_sync_permission_correctly() {
+        let mut sync_queue = SyncQueue::new();
+        let mut permission = sync_queue.get_sync_permission("abc");
+        assert!(permission.is_err());
+        let _ = sync_queue.insert(String::from("abc"), 1.123);
+        permission = sync_queue.get_sync_permission("abc");
+        assert!(permission.is_ok());
+        assert!(permission.unwrap());
+        let no_permission = sync_queue.get_sync_permission("abd");
+        assert!(no_permission.is_ok());
+        assert!(!no_permission.unwrap());
     }
 }
