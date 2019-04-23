@@ -342,9 +342,11 @@ impl Future for Peer {
                                 self.reply_map.remove(key);
                             }
                             self.key_map.remove(&route);
-                            if self.remote_tip.total_work > self.local_tip.total_work {
-                                // need to sync
-
+                            if self.remote_tip.total_work > self.local_tip.total_work
+                                && !self.sync_manager.is_syncing()
+                            {
+                                self.sync_manager
+                                    .sync(self.local_tip.height, self.remote_tip.height);
                             }
                         }
                         Network_oneof_request::putBlock(block) => {
