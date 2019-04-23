@@ -140,6 +140,13 @@ impl Peer {
         &self.status
     }
 
+    fn get_guid(&self) -> Result<String, Box<Error>> {
+        match &self.status {
+            PeerStatus::Connected(status) => Ok(status.guid.clone()),
+            _ => Err(Box::new(Exception::new("Peer is not connected"))),
+        }
+    }
+
     pub fn get_srv(&self) -> Arc<Mutex<Server>> {
         self.srv.clone()
     }
@@ -345,8 +352,36 @@ impl Future for Peer {
                             if self.remote_tip.total_work > self.local_tip.total_work
                                 && !self.sync_manager.is_syncing()
                             {
-                                self.sync_manager
-                                    .sync(self.local_tip.height, self.remote_tip.height);
+                                self.srv
+                                    .lock()
+                                    .map_err(|_| {
+                                        io::Error::new(io::ErrorKind::Other, "Poison error")
+                                    })?
+                                    .update_sync_info(
+                                        self.get_guid().map_err(|e| {
+                                            io::Error::new(io::ErrorKind::Other, e.to_string())
+                                        })?,
+                                        self.remote_tip.total_work,
+                                    )
+                                    .map_err(|e| {
+                                        io::Error::new(io::ErrorKind::Other, e.to_string())
+                                    })?;
+                                if self
+                                    .srv
+                                    .lock()
+                                    .map_err(|_| {
+                                        io::Error::new(io::ErrorKind::Other, "Poison error")
+                                    })?
+                                    .get_sync_permission(&self.get_guid().map_err(|e| {
+                                        io::Error::new(io::ErrorKind::Other, e.to_string())
+                                    })?)
+                                    .map_err(|e| {
+                                        io::Error::new(io::ErrorKind::Other, e.to_string())
+                                    })?
+                                {
+                                    self.sync_manager
+                                        .sync(self.local_tip.height, self.remote_tip.height);
+                                }
                             }
                         }
                         Network_oneof_request::putBlock(block) => {

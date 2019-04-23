@@ -97,12 +97,17 @@ mod tests {
         let mut sync_queue = SyncQueue::new();
         let mut permission = sync_queue.get_sync_permission("abc");
         assert!(permission.is_err());
-        let _ = sync_queue.insert(String::from("abc"), 1.123);
+        let _ = sync_queue.insert(String::from("abd"), 1.123);
+        let _ = sync_queue.insert(String::from("abc"), 1.125);
         permission = sync_queue.get_sync_permission("abc");
         assert!(permission.is_ok());
         assert!(permission.unwrap());
         let no_permission = sync_queue.get_sync_permission("abd");
         assert!(no_permission.is_ok());
         assert!(!no_permission.unwrap());
+        sync_queue.end_sync_operation();
+        let new_permission = sync_queue.get_sync_permission("abd");
+        assert!(new_permission.is_ok());
+        assert!(new_permission.unwrap());
     }
 }

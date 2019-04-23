@@ -6,6 +6,7 @@ use rocksdb::DB as RocksDB;
 use rust_base58::ToBase58;
 use slog::{Drain, Logger};
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::error::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -33,6 +34,7 @@ use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer::Peer;
 use crate::server::peer_database::{DBPeer, PeerDatabase};
 use crate::server::socket_parser::SocketParser;
+use crate::server::sync_queue::SyncQueue;
 use crate::traits::{Encode, ToDBType};
 use crate::util::hash::hash;
 use crate::util::random_bytes;
@@ -147,6 +149,7 @@ pub struct Server {
     seen_message_vec: VecDeque<Vec<u8>>,
     logger: Logger,
     consensus: Consensus,
+    sync_queue: SyncQueue,
 }
 
 impl Server {
@@ -166,6 +169,7 @@ impl Server {
             seen_message_vec: VecDeque::with_capacity(1000),
             logger,
             consensus,
+            sync_queue: SyncQueue::new(),
         }
     }
 
@@ -234,6 +238,18 @@ impl Server {
 
     pub fn get_consensus(&self) -> &Consensus {
         &self.consensus
+    }
+
+    pub fn update_sync_info(&mut self, guid: String, total_work: f64) -> Result<(), Box<Error>> {
+        self.sync_queue.insert(guid, total_work)
+    }
+
+    pub fn get_sync_permission(&mut self, guid: &str) -> Result<bool, Box<Error>> {
+        self.sync_queue.get_sync_permission(guid)
+    }
+
+    pub fn sync_operation_complete(&mut self) {
+        self.sync_queue.end_sync_operation()
     }
 }
 /// Handles the initial connection logic and processing for TCP sockets
