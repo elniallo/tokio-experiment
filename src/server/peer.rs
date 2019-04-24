@@ -405,19 +405,20 @@ impl Future for Peer {
                             if self.srv.lock().unwrap().new_data(msg_vec) {
                                 self.srv.lock().unwrap().increment_block_count();
                                 for block in block.clone().take_blocks().into_iter() {
-                                    match self
-                                        .srv
-                                        .lock()
-                                        .unwrap()
-                                        .process_block(&Block::from_proto(&block).unwrap())
-                                    {
+                                    let blk = Block::from_proto(&block).unwrap();
+                                    match self.srv.lock().unwrap().process_block(&blk) {
                                         Ok(_) => {}
                                         Err(e) => {
                                             error!(self.logger, "Header Processing Error: {:?}", e)
                                         }
                                     }
+                                    info!(
+                                        self.logger,
+                                        "Block Received: Hash: {:?}, Block: {:?}",
+                                        hash(&blk.header.encode().unwrap(), 32),
+                                        &block
+                                    );
                                 }
-                                info!(self.logger, "Block Received: {:?}", &block);
                             }
                         }
                         Network_oneof_request::putBlockReturn(_) => {
@@ -528,6 +529,10 @@ impl Drop for Peer {
                 .lock()
                 .unwrap()
                 .remove_peer(self.to_db_type().clone());
+            self.srv
+                .lock()
+                .unwrap()
+                .clear_sync_job(&self.get_guid().unwrap_or("".to_string()));
         }
         error!(self.logger, "Socket Dropped: {:?}", &self.status);
     }

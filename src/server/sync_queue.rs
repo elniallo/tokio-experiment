@@ -47,13 +47,18 @@ impl SyncQueue {
         if matched.0 {
             let mut job = self.queue.remove(matched.1);
             job.total_work = total_work;
-            self.queue.insert(idx, job);
+            if idx <= matched.1 {
+                self.queue.insert(idx, job);
+            } else {
+                self.queue.insert(idx - 1, job);
+            }
         } else {
             let sync_job = SyncJob {
                 guid,
                 active: false,
                 total_work,
             };
+
             self.queue.insert(idx, sync_job);
         }
         Ok(())
@@ -62,6 +67,7 @@ impl SyncQueue {
     pub fn get_sync_permission(&mut self, guid: &str) -> Result<bool, Box<Error>> {
         if let Some(job) = self.queue.get_mut(0) {
             if &job.guid == guid {
+                println!("{:?} has the ball", &guid);
                 job.active = true;
                 return Ok(true);
             } else {
@@ -74,6 +80,10 @@ impl SyncQueue {
 
     pub fn end_sync_operation(&mut self) {
         self.queue.remove(0);
+    }
+
+    pub fn clear_job(&mut self, guid: &str) {
+        self.queue.retain(|job| &job.guid != guid)
     }
 }
 #[cfg(test)]

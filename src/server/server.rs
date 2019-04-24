@@ -196,6 +196,7 @@ impl Server {
 
     pub fn remove_peer(&mut self, peer: DBPeer) {
         self.active_peers.remove(peer.get_addr());
+
         info!(self.logger, "Active Peers: {:?}", self.active_peers.len());
         self.notify_channel(NotificationType::Disconnect(peer));
     }
@@ -250,6 +251,10 @@ impl Server {
 
     pub fn sync_operation_complete(&mut self) {
         self.sync_queue.end_sync_operation()
+    }
+
+    pub fn clear_sync_job(&mut self, guid: &str) {
+        self.sync_queue.clear_job(guid)
     }
 }
 /// Handles the initial connection logic and processing for TCP sockets
