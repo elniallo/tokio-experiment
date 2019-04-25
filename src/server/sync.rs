@@ -1,5 +1,3 @@
-use crate::traits::Exception;
-use futures::future;
 use futures::stream::Stream;
 use std::error::Error;
 use tokio::prelude::*;
