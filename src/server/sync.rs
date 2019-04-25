@@ -83,6 +83,10 @@ impl Stream for SyncManager {
         if !self.active {
             return Ok(Async::Ready(None));
         }
-        Ok(Async::Ready(self.common_height))
+        if self.common_height.is_some() {
+            Ok(Async::Ready(self.common_height))
+        } else {
+            Ok(Async::Ready(Some(self.height_to_check)))
+        }
     }
 }

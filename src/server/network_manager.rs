@@ -61,6 +61,9 @@ impl Proto for NetworkMessage {
             Network_oneof_request::getTip(t) => {
                 proto_message.set_getTip(t);
             }
+            Network_oneof_request::getHash(h) => {
+                proto_message.set_getHash(h);
+            }
             _ => {}
         }
         Ok(proto_message)

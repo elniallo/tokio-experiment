@@ -263,6 +263,10 @@ impl Future for Peer {
                 for (bytes, route) in messages {
                     let msg_vec = hash(&bytes.to_vec(), 32);
                     let parsed = NetworkManager::decode(&bytes.to_vec()).unwrap();
+                    if let Some(key) = &self.key_map.get(&route) {
+                        self.reply_map.remove(key);
+                    }
+                    self.key_map.remove(&route);
                     match &parsed.message_type {
                         Network_oneof_request::getPeers(_n) => {
                             let mut peer_return = network::GetPeersReturn::new();
@@ -357,11 +361,6 @@ impl Future for Peer {
                         Network_oneof_request::getTipReturn(tip) => {
                             self.update_remote_tip(tip.clone())
                                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-                            // Cancel timeout reply received
-                            if let Some(key) = &self.key_map.get(&route) {
-                                self.reply_map.remove(key);
-                            }
-                            self.key_map.remove(&route);
                             if self.remote_tip.total_work > self.local_tip.total_work
                                 && !self.sync_manager.is_syncing()
                             {
@@ -394,6 +393,37 @@ impl Future for Peer {
                                 {
                                     self.sync_manager
                                         .sync(self.local_tip.height, self.remote_tip.height);
+                                    match self.sync_manager.poll().map_err(|e| {
+                                        io::Error::new(io::ErrorKind::Other, e.to_string())
+                                    })? {
+                                        Async::Ready(height_to_check) => {
+                                            if let Some(height) = height_to_check {
+                                                let mut hash_request = network::GetHash::new();
+                                                hash_request.set_height(height as u64);
+                                                let net_msg = NetworkMessage::new(
+                                                    Network_oneof_request::getHash(hash_request),
+                                                );
+                                                let reply = self.get_reply_id();
+                                                let key = self
+                                                    .reply_map
+                                                    .insert(reply, Duration::from_secs(30));
+                                                self.key_map.insert(reply, key);
+                                                let bytes =
+                                                    self.socket.get_parser_mut().prepare_packet(
+                                                        reply,
+                                                        &net_msg.encode().unwrap(),
+                                                    );
+                                                match bytes {
+                                                    Ok(msg) => {
+                                                        self.socket.buffer(&msg);
+                                                        self.socket.poll_flush()?;
+                                                    }
+                                                    Err(e) => error!(self.logger, "Error: {}", e),
+                                                }
+                                            }
+                                        }
+                                        _ => {}
+                                    }
                                     self.reply_map.insert(0, Duration::from_secs(30));
                                 }
                             }
@@ -447,8 +477,8 @@ impl Future for Peer {
                         Network_oneof_request::getHash(_h) => {
                             info!(self.logger, "Get Hash");
                         }
-                        Network_oneof_request::getHashReturn(_h) => {
-                            info!(self.logger, "Get hash return");
+                        Network_oneof_request::getHashReturn(h) => {
+                            info!(self.logger, "Hash Return: {:?}", &h);
                         }
                         Network_oneof_request::getBlockTxs(_) => {
                             info!(self.logger, "Get block txs");
