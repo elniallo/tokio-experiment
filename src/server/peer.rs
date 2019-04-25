@@ -204,8 +204,21 @@ impl Future for Peer {
     fn poll(&mut self) -> Poll<(), Self::Error> {
         match self.reply_map.poll().unwrap() {
             Async::Ready(timeout) => {
-                if timeout.is_some() {
-                    return Ok(Async::Ready(()));
+                if let Some(num) = timeout {
+                    if num.into_inner() == 0u32 {
+                        self.sync_manager.response_received();
+                        self.srv
+                            .lock()
+                            .map_err(|_| io::Error::new(io::ErrorKind::Other, "Poison Error"))?
+                            .clear_sync_job(&self.get_guid().map_err(|e| {
+                                io::Error::new(io::ErrorKind::Other, e.to_string())
+                            })?);
+                        self.sync_manager.reset_sync();
+                        info!(self.logger, "Timeout Called");
+                    } else {
+                        warn!(self.logger, "Timeout on message, should disconnect");
+                        return Ok(Async::Ready(()));
+                    }
                 }
             }
             _ => {}
@@ -381,6 +394,7 @@ impl Future for Peer {
                                 {
                                     self.sync_manager
                                         .sync(self.local_tip.height, self.remote_tip.height);
+                                    self.reply_map.insert(0, Duration::from_secs(30));
                                 }
                             }
                         }

@@ -101,7 +101,7 @@ impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
             exodus = true;
         }
         if exodus {
-            self.init_exodus_block();
+            self.init_exodus_block()?;
         }
 
         Ok(())

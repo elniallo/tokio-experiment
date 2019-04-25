@@ -27,9 +27,10 @@ impl SyncManager {
             in_flight: false,
         }
     }
-    fn reset_sync(&mut self) {
+    pub fn reset_sync(&mut self) {
         self.common_height = None;
         self.in_flight = false;
+        self.active = false;
     }
 
     pub fn get_common_height(&self) -> &Option<u32> {

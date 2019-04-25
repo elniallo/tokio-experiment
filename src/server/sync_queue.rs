@@ -2,6 +2,7 @@ use std::error::Error;
 
 use crate::traits::Exception;
 
+#[derive(Debug)]
 pub struct SyncJob {
     guid: String,
     active: bool,
@@ -65,6 +66,7 @@ impl SyncQueue {
     }
 
     pub fn get_sync_permission(&mut self, guid: &str) -> Result<bool, Box<Error>> {
+        let len = self.queue.len();
         if let Some(job) = self.queue.get_mut(0) {
             if &job.guid == guid {
                 println!("{:?} has the ball", &guid);

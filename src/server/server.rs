@@ -330,7 +330,7 @@ pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
     let world_state = WorldState::new(state_db, 20).unwrap();
     let state_processor = StateProcessor::new(db_wrapper.clone(), world_state);
     let mut consensus = Consensus::new(state_processor, db_wrapper).unwrap();
-    consensus.init();
+    consensus.init().unwrap();
     //Set up Blockchain Server
     let (tx, rx) = mpsc::unbounded::<NotificationType<DBPeer>>();
     let srv = Arc::new(Mutex::new(Server::new(tx, root_logger.clone(), consensus)));
