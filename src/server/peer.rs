@@ -1,8 +1,8 @@
 use bytes::Bytes;
 use futures::sync::mpsc;
 use futures::Future;
+use rand::{thread_rng, Rng};
 use slog::Logger;
-use std::cmp::{Ord, Ordering};
 use std::collections::HashMap;
 use std::error::Error;
 use std::io;
@@ -20,6 +20,7 @@ use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer_database::DBPeer;
 use crate::server::server::{NotificationType, Server};
+use crate::server::socket_parser::SocketParser;
 use crate::server::sync::SyncManager;
 use crate::traits::{Encode, Exception, Proto, ToDBType};
 use crate::util::hash::hash;
@@ -89,7 +90,7 @@ impl Peer {
         status: crate::serialization::network::Status,
         logger: Logger,
     ) -> Self {
-        let reply_id = 2u32.pow(30);
+        let reply_id = 2u32.pow(16);
         let reply_map = DelayQueue::new();
         let key_map = HashMap::new();
         let (tx, rx) = mpsc::unbounded();
@@ -174,11 +175,7 @@ impl Peer {
     }
 
     fn get_reply_id(&mut self) -> u32 {
-        if self.reply_id == u32::max_value() {
-            self.reply_id = 2u32.pow(30);
-        }
-        self.reply_id += 1;
-        self.reply_id - 1
+        thread_rng().gen_range(2u32.pow(30), u32::max_value())
     }
 
     fn common_search(
@@ -205,7 +202,8 @@ impl Future for Peer {
         match self.reply_map.poll().unwrap() {
             Async::Ready(timeout) => {
                 if let Some(num) = timeout {
-                    if num.into_inner() == 0u32 {
+                    let route = num.into_inner();
+                    if route == 0u32 {
                         self.sync_manager.response_received();
                         self.srv
                             .lock()
@@ -216,7 +214,10 @@ impl Future for Peer {
                         self.sync_manager.reset_sync();
                         info!(self.logger, "Timeout Called");
                     } else {
-                        warn!(self.logger, "Timeout on message, should disconnect");
+                        warn!(
+                            self.logger,
+                            "Timeout on message: {}, should disconnect", route
+                        );
                         return Ok(Async::Ready(()));
                     }
                 }
@@ -238,19 +239,15 @@ impl Future for Peer {
             Async::Ready(_) => {
                 let reply = self.get_reply_id();
                 let mut tip_message = network::GetTip::new();
-                tip_message.set_dummy(1);
                 tip_message.set_header(false);
                 let net_msg = NetworkMessage::new(Network_oneof_request::getTip(tip_message));
-                let key = self.reply_map.insert(reply, Duration::from_secs(4));
-                self.key_map.insert(reply, key);
-                let bytes = self
-                    .socket
-                    .get_parser_mut()
-                    .prepare_packet(reply, &net_msg.encode().unwrap());
+                let bytes = SocketParser::prepare_packet_default(reply, &net_msg.encode().unwrap());
                 match bytes {
                     Ok(msg) => {
                         self.socket.buffer(&msg);
                         self.socket.poll_flush()?;
+                        let key = self.reply_map.insert(reply, Duration::from_secs(4));
+                        self.key_map.insert(reply, key);
                     }
                     Err(e) => error!(self.logger, "Error: {}", e),
                 }
@@ -262,12 +259,8 @@ impl Future for Peer {
             if let Some(messages) = data {
                 for (bytes, route) in messages {
                     let msg_vec = hash(&bytes.to_vec(), 32);
-                    let parsed = NetworkManager::decode(&bytes.to_vec()).unwrap();
-                    if let Some(key) = &self.key_map.get(&route) {
-                        self.reply_map.remove(key);
-                    }
-                    self.key_map.remove(&route);
-                    match &parsed.message_type {
+                    let mut parsed = NetworkManager::decode(&bytes.to_vec()).unwrap();
+                    match parsed.message_type {
                         Network_oneof_request::getPeers(_n) => {
                             let mut peer_return = network::GetPeersReturn::new();
                             peer_return.set_success(true);
@@ -275,10 +268,10 @@ impl Future for Peer {
                             let net_msg = NetworkMessage::new(
                                 Network_oneof_request::getPeersReturn(peer_return),
                             );
-                            let bytes = self
-                                .socket
-                                .get_parser_mut()
-                                .prepare_packet(route, &net_msg.encode().unwrap());
+                            let bytes = SocketParser::prepare_packet_default(
+                                route,
+                                &net_msg.encode().unwrap(),
+                            );
                             match bytes {
                                 Ok(msg) => {
                                     self.socket.buffer(&msg);
@@ -346,10 +339,10 @@ impl Future for Peer {
                             let net_msg = NetworkMessage::new(Network_oneof_request::getTipReturn(
                                 tip_return,
                             ));
-                            let bytes = self
-                                .socket
-                                .get_parser_mut()
-                                .prepare_packet(route, &net_msg.encode().unwrap());
+                            let bytes = SocketParser::prepare_packet_default(
+                                route,
+                                &net_msg.encode().unwrap(),
+                            );
                             match bytes {
                                 Ok(msg) => {
                                     self.socket.buffer(&msg);
@@ -359,6 +352,9 @@ impl Future for Peer {
                             }
                         }
                         Network_oneof_request::getTipReturn(tip) => {
+                            if let Some(key) = &self.key_map.remove(&route) {
+                                self.reply_map.remove(key);
+                            }
                             self.update_remote_tip(tip.clone())
                                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
                             if self.remote_tip.total_work > self.local_tip.total_work
@@ -408,11 +404,10 @@ impl Future for Peer {
                                                     .reply_map
                                                     .insert(reply, Duration::from_secs(30));
                                                 self.key_map.insert(reply, key);
-                                                let bytes =
-                                                    self.socket.get_parser_mut().prepare_packet(
-                                                        reply,
-                                                        &net_msg.encode().unwrap(),
-                                                    );
+                                                let bytes = SocketParser::prepare_packet_default(
+                                                    reply,
+                                                    &net_msg.encode().unwrap(),
+                                                );
                                                 match bytes {
                                                     Ok(msg) => {
                                                         self.socket.buffer(&msg);
@@ -426,6 +421,7 @@ impl Future for Peer {
                                     }
                                     self.reply_map.insert(0, Duration::from_secs(30));
                                 }
+                                task::current().notify();
                             }
                         }
                         Network_oneof_request::putBlock(block) => {
@@ -435,10 +431,10 @@ impl Future for Peer {
                             let net_msg = NetworkMessage::new(
                                 Network_oneof_request::putBlockReturn(put_block_return),
                             );
-                            let bytes = self
-                                .socket
-                                .get_parser_mut()
-                                .prepare_packet(route, &net_msg.encode().unwrap());
+                            let bytes = SocketParser::prepare_packet_default(
+                                route,
+                                &net_msg.encode().unwrap(),
+                            );
                             match bytes {
                                 Ok(msg) => {
                                     self.socket.buffer(&msg);
@@ -477,8 +473,42 @@ impl Future for Peer {
                         Network_oneof_request::getHash(_h) => {
                             info!(self.logger, "Get Hash");
                         }
-                        Network_oneof_request::getHashReturn(h) => {
-                            info!(self.logger, "Hash Return: {:?}", &h);
+                        Network_oneof_request::getHashReturn(mut h) => {
+                            if let Some(key) = &self.key_map.remove(&route) {
+                                self.reply_map.remove(key);
+                            }
+                            let returned_hash = h.take_hash();
+                            let height = self.sync_manager.next_height();
+                            let status = self
+                                .srv
+                                .lock()
+                                .map_err(|_| io::Error::new(io::ErrorKind::Other, "Poison error"))?
+                                .get_consensus()
+                                .check_hash_at_height(&returned_hash, *height)
+                                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+                            if status == BlockStatus::MainChain && height == &self.local_tip.height
+                            {
+                                let mut sync_request = network::GetHeadersByRange::new();
+                                sync_request.set_fromHeight(*height as u64);
+                                sync_request.set_count(500);
+                                let net_msg = NetworkMessage::new(
+                                    Network_oneof_request::getHeadersByRange(sync_request),
+                                );
+                                let reply = self.get_reply_id();
+                                let key = self.reply_map.insert(reply, Duration::from_secs(30));
+                                self.key_map.insert(reply, key);
+                                let bytes = SocketParser::prepare_packet_default(
+                                    reply,
+                                    &net_msg.encode().unwrap(),
+                                );
+                                match bytes {
+                                    Ok(msg) => {
+                                        self.socket.buffer(&msg);
+                                        self.socket.poll_flush()?;
+                                    }
+                                    Err(e) => error!(self.logger, "Error: {}", e),
+                                }
+                            }
                         }
                         Network_oneof_request::getBlockTxs(_) => {
                             info!(self.logger, "Get block txs");
@@ -514,6 +544,9 @@ impl Future for Peer {
                             info!(self.logger, "Get headers by range");
                         }
                         Network_oneof_request::getHeadersByRangeReturn(_) => {
+                            if let Some(key) = &self.key_map.remove(&route) {
+                                self.reply_map.remove(key);
+                            }
                             info!(self.logger, "Get Headers by range return");
                         }
                         Network_oneof_request::ping(_) => {
@@ -534,10 +567,10 @@ impl Future for Peer {
                             let net_msg = NetworkMessage::new(Network_oneof_request::putTxReturn(
                                 put_tx_return,
                             ));
-                            let bytes = self
-                                .socket
-                                .get_parser_mut()
-                                .prepare_packet(route, &net_msg.encode().unwrap());
+                            let bytes = SocketParser::prepare_packet_default(
+                                route,
+                                &net_msg.encode().unwrap(),
+                            );
                             match bytes {
                                 Ok(msg) => {
                                     self.socket.buffer(&msg);

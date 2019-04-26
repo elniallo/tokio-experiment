@@ -90,8 +90,10 @@ impl Future for PeerDBFuture {
                         get_status_message.set_networkid("hycon".to_string());
                         let msg =
                             NetworkMessage::new(Network_oneof_request::status(get_status_message));
-                        let parsed =
-                            SocketParser::prepare_packet_default(0, &msg.encode().unwrap());
+                        let parsed = SocketParser::prepare_packet_default(
+                            2u32.pow(30),
+                            &msg.encode().unwrap(),
+                        );
                         match parsed {
                             Ok(message) => {
                                 stream.poll_write(&message).unwrap();
@@ -116,7 +118,10 @@ impl Future for PeerDBFuture {
                     info!(self.logger, "Peers Count: {}", peer_count);
                     let msg =
                         NetworkMessage::new(Network_oneof_request::getPeers(get_peers_message));
-                    let parsed = SocketParser::prepare_packet_default(0, &msg.encode().unwrap());
+                    let parsed = SocketParser::prepare_packet_default(
+                        2u32.pow(30) + 1,
+                        &msg.encode().unwrap(),
+                    );
                     match parsed {
                         Ok(message) => {
                             for tx in self.srv.lock().unwrap().get_peers_mut().values() {

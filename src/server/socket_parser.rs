@@ -201,7 +201,7 @@ impl SocketParser {
         }
         let mut route_buffer = vec![0; HEADER_ROUTE_LENGTH];
         let mut length_buffer = vec![0; HEADER_POSTFIX_LENGTH];
-        LittleEndian::write_u32(&mut route_buffer, route + 2u32.pow(31));
+        LittleEndian::write_u32(&mut route_buffer, route);
         LittleEndian::write_u32(&mut length_buffer, buf.len() as u32);
         let mut bytes = Vec::with_capacity(buf.len() + 12);
         bytes.extend_from_slice(&HEADER_PREFIX);

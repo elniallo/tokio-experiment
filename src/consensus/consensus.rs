@@ -149,6 +149,29 @@ impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
     fn put(&mut self, _header: Header, _block: Option<Block<Header, SignedTx>>) -> PutResult<()> {
         Ok(())
     }
+
+    fn check_hash_at_height(&self, hash: &Vec<u8>, height: u32) -> Result<BlockStatus, Box<Error>> {
+        let block_status = self
+            .block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison Error"))?
+            .get_block_status(hash)?;
+        match block_status {
+            BlockStatus::Nothing | BlockStatus::Rejected => return Ok(block_status),
+            _ => {
+                let meta = self
+                    .block_db
+                    .lock()
+                    .map_err(|_| Exception::new("Poison Error"))?
+                    .get_meta::<Header>(hash)?;
+                if meta.height == height {
+                    Ok(block_status)
+                } else {
+                    Err(Box::new(Exception::new("Block height does not match")))
+                }
+            }
+        }
+    }
 }
 
 impl HeaderProcessor<Header> for Consensus {
@@ -374,6 +397,16 @@ where
     ///
     ///
     fn put(&mut self, header: HeaderType, block: Option<BlockType>) -> Result<(), Box<Error>>;
+    ///
+    /// Checks the hash at a particular height agains a provided hash
+    ///
+    /// #### Arguments
+    /// - `hash` - a hash received from the network
+    /// - `height` - the corresponding hash for that height
+    ///
+    /// #### Return Value
+    /// A result containing a Blockstatus
+    fn check_hash_at_height(&self, hash: &Vec<u8>, height: u32) -> Result<BlockStatus, Box<Error>>;
 }
 
 #[cfg(test)]

@@ -40,7 +40,7 @@ impl BaseSocket {
 
     pub fn fill_read_buf(&mut self) -> Poll<(), io::Error> {
         loop {
-            self.rd.reserve(1024);
+            self.rd.reserve(1024 * 1024);
             let n = try_ready!(self.socket.read_buf(&mut self.rd));
             if n == 0 || self.rd.len() > 0 {
                 return Ok(Async::Ready(()));
