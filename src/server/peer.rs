@@ -90,7 +90,7 @@ impl Peer {
         status: crate::serialization::network::Status,
         logger: Logger,
     ) -> Self {
-        let reply_id = 2u32.pow(16);
+        let reply_id = 2u32.pow(30);
         let reply_map = DelayQueue::new();
         let key_map = HashMap::new();
         let (tx, rx) = mpsc::unbounded();
