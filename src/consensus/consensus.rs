@@ -57,7 +57,6 @@ impl Consensus {
         let (exodus_meta, exodus_hash) = init_exodus_meta()?;
         self.block_tip = Some(exodus_meta.clone());
         self.header_tip = Some(exodus_meta.clone());
-
         self.block_db
             .lock()
             .map_err(|_| Exception::new("Poison error"))?
@@ -106,6 +105,7 @@ impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
 
         Ok(())
     }
+  
     fn get_header_tip_height(&self) -> Result<u32, Box<Error>> {
         if let Some(h_meta) = &self.header_tip {
             Ok(h_meta.height)
@@ -360,6 +360,7 @@ where
     ///
     fn init(&mut self) -> Result<(), Box<Error>>;
     ///
+
     /// The height of the current block tip, essentially how many blocks have been added to the main chain since genesis
     ///
     /// #### Return Value
