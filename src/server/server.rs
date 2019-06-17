@@ -2,9 +2,11 @@ use bytes::Bytes;
 use futures::future::{self, Either};
 use futures::stream::Stream;
 use futures::sync::mpsc;
+use rocksdb::DB as RocksDB;
 use rust_base58::ToBase58;
 use slog::{Drain, Logger};
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::error::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -18,17 +20,21 @@ use crate::common::header::Header;
 use crate::common::signed_tx::SignedTx;
 use crate::consensus::consensus::Consensus;
 use crate::consensus::consensus::HeaderProcessor;
+use crate::consensus::consensus::HyconConsensus;
 use crate::consensus::state_processor::StateProcessor;
 use crate::consensus::worldstate::WorldState;
 use crate::database::block_db::BlockDB;
 use crate::database::dbkeys::DBKeys;
+use crate::database::merge_function;
 use crate::database::state_db::StateDB;
+use crate::database::IDB;
 use crate::serialization::network::{self, Network_oneof_request};
 use crate::server::base_socket::BaseSocket;
 use crate::server::network_manager::{NetworkManager, NetworkMessage};
 use crate::server::peer::Peer;
 use crate::server::peer_database::{DBPeer, PeerDatabase};
 use crate::server::socket_parser::SocketParser;
+use crate::server::sync_queue::SyncQueue;
 use crate::traits::{Encode, ToDBType};
 use crate::util::hash::hash;
 use crate::util::random_bytes;
@@ -84,8 +90,10 @@ impl Future for PeerDBFuture {
                         get_status_message.set_networkid("hycon".to_string());
                         let msg =
                             NetworkMessage::new(Network_oneof_request::status(get_status_message));
-                        let parsed =
-                            SocketParser::prepare_packet_default(0, &msg.encode().unwrap());
+                        let parsed = SocketParser::prepare_packet_default(
+                            2u32.pow(30),
+                            &msg.encode().unwrap(),
+                        );
                         match parsed {
                             Ok(message) => {
                                 stream.poll_write(&message).unwrap();
@@ -110,7 +118,10 @@ impl Future for PeerDBFuture {
                     info!(self.logger, "Peers Count: {}", peer_count);
                     let msg =
                         NetworkMessage::new(Network_oneof_request::getPeers(get_peers_message));
-                    let parsed = SocketParser::prepare_packet_default(0, &msg.encode().unwrap());
+                    let parsed = SocketParser::prepare_packet_default(
+                        2u32.pow(30) + 1,
+                        &msg.encode().unwrap(),
+                    );
                     match parsed {
                         Ok(message) => {
                             for tx in self.srv.lock().unwrap().get_peers_mut().values() {
@@ -131,7 +142,7 @@ impl Future for PeerDBFuture {
         Ok(Async::NotReady)
     }
 }
-
+/// Blockchain Server
 pub struct Server {
     active_peers: HashMap<SocketAddr, Tx>,
     guid: String,
@@ -143,6 +154,7 @@ pub struct Server {
     seen_message_vec: VecDeque<Vec<u8>>,
     logger: Logger,
     consensus: Consensus,
+    sync_queue: SyncQueue,
 }
 
 impl Server {
@@ -162,6 +174,7 @@ impl Server {
             seen_message_vec: VecDeque::with_capacity(1000),
             logger,
             consensus,
+            sync_queue: SyncQueue::new(),
         }
     }
 
@@ -188,6 +201,7 @@ impl Server {
 
     pub fn remove_peer(&mut self, peer: DBPeer) {
         self.active_peers.remove(peer.get_addr());
+
         info!(self.logger, "Active Peers: {:?}", self.active_peers.len());
         self.notify_channel(NotificationType::Disconnect(peer));
     }
@@ -227,8 +241,28 @@ impl Server {
     ) -> Result<(), Box<std::error::Error>> {
         self.consensus.process_header(&block.header)
     }
-}
 
+    pub fn get_consensus(&self) -> &Consensus {
+        &self.consensus
+    }
+
+    pub fn update_sync_info(&mut self, guid: String, total_work: f64) -> Result<(), Box<Error>> {
+        self.sync_queue.insert(guid, total_work)
+    }
+
+    pub fn get_sync_permission(&mut self, guid: &str) -> Result<bool, Box<Error>> {
+        self.sync_queue.get_sync_permission(guid)
+    }
+
+    pub fn sync_operation_complete(&mut self) {
+        self.sync_queue.end_sync_operation()
+    }
+
+    pub fn clear_sync_job(&mut self, guid: &str) {
+        self.sync_queue.clear_job(guid)
+    }
+}
+/// Handles the initial connection logic and processing for TCP sockets
 pub fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
     let base = BaseSocket::new(socket);
     let base_logger = server.lock().unwrap().get_logger().clone();
@@ -280,6 +314,7 @@ pub fn process_socket(socket: TcpStream, server: Arc<Mutex<Server>>) {
     tokio::spawn(connection);
 }
 
+/// Application entry point
 pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
     // Set up logger
     let decorator = slog_term::TermDecorator::new().build();
@@ -294,11 +329,13 @@ pub fn run(args: Vec<String>) -> Result<(), Box<std::error::Error>> {
     let keys = DBKeys::default();
     let block_db = BlockDB::new(block_path, file_path, keys, None).unwrap();
     let db_wrapper = Arc::new(Mutex::new(block_db));
-    let state_db = StateDB::new(state_path, None).unwrap();
+    let mut options = RocksDB::get_default_option();
+    options.set_merge_operator("Update Ref Count", merge_function, None);
+    let state_db = StateDB::new(state_path, Some(options)).unwrap();
     let world_state = WorldState::new(state_db, 20).unwrap();
     let state_processor = StateProcessor::new(db_wrapper.clone(), world_state);
-    let consensus = Consensus::new(state_processor, db_wrapper).unwrap();
-
+    let mut consensus = Consensus::new(state_processor, db_wrapper).unwrap();
+    consensus.init().unwrap();
     //Set up Blockchain Server
     let (tx, rx) = mpsc::unbounded::<NotificationType<DBPeer>>();
     let srv = Arc::new(Mutex::new(Server::new(tx, root_logger.clone(), consensus)));

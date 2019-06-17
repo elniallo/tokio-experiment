@@ -70,6 +70,18 @@ where
         self.database._get(&self.db_keys.header_tip)
     }
 
+    pub fn get_tip_meta<HeaderType>(&self) -> DBResult<(Meta<HeaderType>, Meta<HeaderType>)>
+    where
+        HeaderType: BlockHeader
+            + Clone
+            + Proto<ProtoType = crate::serialization::blockHeader::BlockHeader>
+            + Encode,
+    {
+        let b_tip = self.get_meta(&self.get_block_tip_hash()?)?;
+        let h_tip = self.get_meta(&self.get_header_tip_hash()?)?;
+        Ok((h_tip, b_tip))
+    }
+
     pub fn set_header_tip_hash(&mut self, hash: &HashValue) -> DBResult<()> {
         self.database.set(&self.db_keys.header_tip, hash)
     }

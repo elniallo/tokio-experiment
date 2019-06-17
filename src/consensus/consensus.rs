@@ -33,7 +33,8 @@ where
 }
 /// Entry Point for Consensus related functionality
 pub struct Consensus {
-    tip_height: Option<usize>,
+    block_tip: Option<Meta<Header>>,
+    header_tip: Option<Meta<Header>>,
     block_db: Arc<Mutex<BlockDB>>,
     state_processor: StateProcessor,
 }
@@ -46,13 +47,16 @@ impl Consensus {
         Ok(Self {
             block_db,
             state_processor,
-            tip_height: None,
+            block_tip: None,
+            header_tip: None,
         })
     }
 
     fn init_exodus_block(&mut self) -> Result<(), Box<Error>> {
         let exodus = init_exodus_block()?;
         let (exodus_meta, exodus_hash) = init_exodus_meta()?;
+        self.block_tip = Some(exodus_meta.clone());
+        self.header_tip = Some(exodus_meta.clone());
         self.block_db
             .lock()
             .map_err(|_| Exception::new("Poison error"))?
@@ -68,38 +72,105 @@ impl Consensus {
         let map = self
             .state_processor
             .generate_transition(vec![exodus.deref()])?;
-        let root = self.state_processor.apply_transition(map, None)?;
+        let _root = self.state_processor.apply_transition(map, None)?;
+        self.block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison error"))?
+            .set_block_tip_hash(&exodus_hash)?;
+        self.block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison error"))?
+            .set_header_tip_hash(&exodus_hash)?;
         Ok(())
     }
 }
 
 impl HyconConsensus<Header, Block<Header, SignedTx>> for Consensus {
     fn init(&mut self) -> Result<(), Box<Error>> {
-        if let Some(tip_height) = self.get_tip_height()? {
-            self.tip_height = Some(tip_height)
+        let mut exodus = false;
+        if let Ok(meta) = self
+            .block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison Error"))?
+            .get_tip_meta::<Header>()
+        {
+            self.header_tip = Some(meta.0);
+            self.block_tip = Some(meta.1);
         } else {
+            exodus = true;
+        }
+        if exodus {
             self.init_exodus_block()?;
         }
 
         Ok(())
     }
-    fn get_tip_height(&self) -> Result<Option<usize>, Box<Error>> {
-        let hash = self
-            .block_db
-            .lock()
-            .map_err(|_| Exception::new("Poison Error"))?
-            .get_block_tip_hash()?;
-        let meta = self
-            .block_db
-            .lock()
-            .map_err(|_| Exception::new("Poison Error"))?
-            .get_meta::<Header>(&hash)?;
+  
+    fn get_header_tip_height(&self) -> Result<u32, Box<Error>> {
+        if let Some(h_meta) = &self.header_tip {
+            Ok(h_meta.height)
+        } else {
+            Err(Box::new(Exception::new("No header tip")))
+        }
+    }
 
-        Ok(Some(meta.height as usize))
+    fn get_block_tip_height(&self) -> Result<u32, Box<Error>> {
+        if let Some(b_meta) = &self.block_tip {
+            Ok(b_meta.height)
+        } else {
+            Err(Box::new(Exception::new("No block tip")))
+        }
+    }
+
+    fn get_block_tip_total_work(&self) -> Result<f64, Box<Error>> {
+        if let Some(b_meta) = &self.block_tip {
+            Ok(b_meta.total_work)
+        } else {
+            Err(Box::new(Exception::new("No block tip")))
+        }
+    }
+
+    fn get_header_tip_total_work(&self) -> Result<f64, Box<Error>> {
+        if let Some(h_meta) = &self.header_tip {
+            Ok(h_meta.total_work)
+        } else {
+            Err(Box::new(Exception::new("No block tip")))
+        }
+    }
+
+    fn get_tip_hash(&self) -> Result<Vec<u8>, Box<Error>> {
+        Ok(self
+            .block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison Error"))?
+            .get_block_tip_hash()?)
     }
 
     fn put(&mut self, _header: Header, _block: Option<Block<Header, SignedTx>>) -> PutResult<()> {
         Ok(())
+    }
+
+    fn check_hash_at_height(&self, hash: &Vec<u8>, height: u32) -> Result<BlockStatus, Box<Error>> {
+        let block_status = self
+            .block_db
+            .lock()
+            .map_err(|_| Exception::new("Poison Error"))?
+            .get_block_status(hash)?;
+        match block_status {
+            BlockStatus::Nothing | BlockStatus::Rejected => return Ok(block_status),
+            _ => {
+                let meta = self
+                    .block_db
+                    .lock()
+                    .map_err(|_| Exception::new("Poison Error"))?
+                    .get_meta::<Header>(hash)?;
+                if meta.height == height {
+                    Ok(block_status)
+                } else {
+                    Err(Box::new(Exception::new("Block height does not match")))
+                }
+            }
+        }
     }
 }
 
@@ -143,7 +214,6 @@ impl HeaderProcessor<Header> for Consensus {
         )? {
             let new_status;
             if header.get_merkle_root() == &EMPTY_MERKLE_ROOT {
-                println!("empty merkle root");
                 new_status = BlockStatus::Block;
             } else {
                 new_status = BlockStatus::Header;
@@ -290,12 +360,32 @@ where
     ///
     fn init(&mut self) -> Result<(), Box<Error>>;
     ///
-    /// The height of the current tip, essentially how many blocks have been added to the main chain since genesis
+
+    /// The height of the current block tip, essentially how many blocks have been added to the main chain since genesis
     ///
     /// #### Return Value
-    /// An `Option` containing the current height, or `None` if this is a cold startup with an unitialised consensus
+    /// An `Result` containing the current height, or `Box<Error>` if this is a cold startup with an unitialised consensus
     ///
-    fn get_tip_height(&self) -> Result<Option<usize>, Box<Error>>;
+    fn get_block_tip_height(&self) -> Result<u32, Box<Error>>;
+    ///
+    /// The height of the current header tip, essentially how many headers have been added to the main chain since genesis
+    ///
+    /// #### Return Value
+    /// An `Result` containing the current height, or `Box<Error>` if this is a cold startup with an unitialised consensus
+    ///
+    fn get_header_tip_height(&self) -> Result<u32, Box<Error>>;
+    ///
+    /// Returns the total_work of the current block tip
+    fn get_block_tip_total_work(&self) -> Result<f64, Box<Error>>;
+    ///
+    /// Returns the total_work of the current header tip
+    fn get_header_tip_total_work(&self) -> Result<f64, Box<Error>>;
+    ///
+    /// Gets the hash of the curent tip
+    ///
+    /// #### Return Value
+    /// An `Option` containing the hash of the current tip
+    fn get_tip_hash(&self) -> Result<Vec<u8>, Box<Error>>;
     ///
     /// Entry point for putting a block (or just a header) onto the chain
     ///
@@ -308,6 +398,16 @@ where
     ///
     ///
     fn put(&mut self, header: HeaderType, block: Option<BlockType>) -> Result<(), Box<Error>>;
+    ///
+    /// Checks the hash at a particular height agains a provided hash
+    ///
+    /// #### Arguments
+    /// - `hash` - a hash received from the network
+    /// - `height` - the corresponding hash for that height
+    ///
+    /// #### Return Value
+    /// A result containing a Blockstatus
+    fn check_hash_at_height(&self, hash: &Vec<u8>, height: u32) -> Result<BlockStatus, Box<Error>>;
 }
 
 #[cfg(test)]
@@ -434,5 +534,6 @@ mod tests {
         let mut consensus = Consensus::new(state_processor, db_wrapper).unwrap();
         let res = consensus.init_exodus_block();
         assert!(res.is_ok());
+        assert_eq!(consensus.get_block_tip_height().unwrap(), 600000);
     }
 }

@@ -3,16 +3,14 @@ use crate::common::address::Address;
 use crate::common::block::Block;
 use crate::common::header::Header;
 use crate::common::signed_tx::SignedTx;
-use crate::consensus::worldstate::{Blake2bHashResult, WorldState};
+use crate::consensus::worldstate::WorldState;
 use crate::database::block_db::BlockDB;
 use crate::traits::{BlockHeader, Encode, Exception, Proto, Transaction};
 use crate::util::strict_math::StrictU64;
 use secp256k1::{RecoverableSignature, RecoveryId};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::error::Error;
 use std::sync::{Arc, Mutex};
-
-use crate::serialization::state::Account as ProtoAccount;
 
 const MAX_STATE_CACHE_SIZE: usize = 5000;
 
@@ -144,7 +142,7 @@ impl StateProcessor {
             if let Some(ref txs) = block.txs {
                 let miner = block.header.get_miner();
                 let genesis;
-                if let Some(m) = miner {
+                if let Some(_) = miner {
                     genesis = false;
                 } else {
                     genesis = true;
@@ -431,12 +429,4 @@ impl StateProcessor {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::common::tx::Tx;
-
-    fn it_applies_a_tx_transition() {
-        let from_addr = "H27McLosW8psFMbQ8VPQwXxnUY8QAHBHr".to_string();
-        //        let tx = Tx::new();
-    }
-}
+mod tests {}

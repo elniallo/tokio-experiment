@@ -2,6 +2,7 @@ use crate::serialization::network::{Network as ProtoNetwork, Network_oneof_reque
 use crate::traits::{Decode, Encode, Exception, Proto};
 use protobuf::{CodedInputStream, Message as ProtoMessage};
 use std::error::Error;
+
 pub struct NetworkMessage {
     pub message_type: Network_oneof_request,
 }
@@ -57,6 +58,15 @@ impl Proto for NetworkMessage {
             }
             Network_oneof_request::putBlockReturn(b) => {
                 proto_message.set_putBlockReturn(b);
+            }
+            Network_oneof_request::getTip(t) => {
+                proto_message.set_getTip(t);
+            }
+            Network_oneof_request::getHash(h) => {
+                proto_message.set_getHash(h);
+            }
+            Network_oneof_request::getHeadersByRange(r) => {
+                proto_message.set_getHeadersByRange(r);
             }
             _ => {}
         }
